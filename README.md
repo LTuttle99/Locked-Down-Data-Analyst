@@ -57,9 +57,9 @@ Previewer is the only text-based tool with an external dependency (`marked`).
   rest. Edit the `VIEW_CODES` object in the `<script>` at the bottom of the
   root `index.html` to add, rename, or change codes — each entry maps a
   code to a label and a list of `data-tool` ids (visible as a
-  `data-tool="..."` attribute on every card in the HTML). A code also works
-  as a shareable link (`index.html?code=1234`) and is remembered per
-  browser via `localStorage` so it doesn't need to be retyped.
+  `data-tool="..."` attribute on every card in the HTML). The code is not
+  remembered — every fresh visit or page refresh resets to locked (no
+  tools shown) and the code has to be re-entered.
 
   **This is a convenience filter, not access control.** It only hides cards
   on the landing page — anyone who knows or guesses a tool's direct URL

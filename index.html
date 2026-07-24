@@ -415,11 +415,6 @@
 
             viewCodeError.classList.add('hidden');
             activeViewCode = code;
-            localStorage.setItem('hub_view_code', code);
-
-            const url = new URL(window.location.href);
-            url.searchParams.set('code', code);
-            window.history.replaceState({}, '', url);
 
             viewCodeStatusEl.innerText = `Showing tools for "${entry.label}".`;
             lockedMessageEl.classList.add('hidden');
@@ -435,17 +430,6 @@
         });
 
         searchInput.addEventListener('input', filterTools);
-
-        // On load: a ?code= in the URL wins (so a shared link works immediately),
-        // otherwise fall back to whatever code this browser last used.
-        (function initViewCode() {
-            const urlCode = new URL(window.location.href).searchParams.get('code');
-            const savedCode = localStorage.getItem('hub_view_code');
-            const initialCode = urlCode || savedCode;
-            if (initialCode && VIEW_CODES[initialCode.toLowerCase()]) {
-                applyViewCode(initialCode);
-            }
-        })();
     </script>
 
 </body>
