@@ -344,8 +344,6 @@
         // data-tool="..." attribute in this file, e.g. "data-analyzer",
         // "json-formatter").
         //
-        // Placeholder below — swap in real numeric codes and tool ids.
-        //
         // This is a convenience filter, not security: it only hides cards
         // on this page, and there is no "show all" control once a code is
         // entered. Anyone who has (or guesses) a tool's direct URL — e.g.
@@ -353,7 +351,15 @@
         // any code, since nothing here checks credentials server-side.
         // -------------------------------------------------------------- //
         const VIEW_CODES = {
-            '1234': { label: 'Example Access', tools: ['json-formatter', 'text-diff'] }
+            '1159': {
+                label: 'Data Analyst',
+                tools: [
+                    'data-analyzer', 'file-diff', 'pivot-explorer', 'data-cleaner',
+                    'converter', 'column-stats', 'json-formatter', 'timestamp-converter',
+                    'regex-tester', 'text-diff', 'color-tools', 'text-analyzer',
+                    'qr-generator', 'markdown-preview', 'encode-decode', 'unit-converter'
+                ]
+            }
         };
 
         const searchInput = document.getElementById('tool-search');
