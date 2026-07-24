@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Data and Analytics Hub</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600;700&display=swap" rel="stylesheet">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2300133C'/%3E%3Ctext x='16' y='23' font-family='Georgia,serif' font-size='19' fill='%230062F1' text-anchor='middle'%3EH%3C/text%3E%3C/svg%3E">
+    <style>
+        .font-serif-brand { font-family: 'Lora', ui-serif, Georgia, serif; }
+    </style>
+</head>
+
+<body class="bg-slate-50 text-slate-900 min-h-screen font-sans">
+
+    <header class="border-b border-slate-200 bg-white px-8 py-4 flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+            <div class="h-9 w-9 rounded bg-[#00133C] flex items-center justify-center font-bold text-white" aria-hidden="true">H</div>
+            <h1 class="text-xl font-semibold tracking-wide text-[#00133C]">
+                Data<span class="text-[#0062F1] font-normal">Hub</span>
+            </h1>
+        </div>
+
+        <div class="text-xs font-medium text-[#00133C] bg-slate-100 px-3 py-1.5 rounded-full border border-slate-200">
+            Internal Tools
+        </div>
+    </header>
+
+    <main class="max-w-6xl mx-auto p-8 space-y-10">
+
+        <section class="bg-[#00133C] rounded-xl px-6 py-5 flex flex-wrap items-center gap-4 justify-between">
+            <div class="flex-1 min-w-[240px]">
+                <p class="text-xs font-semibold uppercase tracking-wider text-blue-300 mb-1">Enter your code</p>
+                <p id="view-code-status" class="text-sm text-white">
+                    Enter your code to see your tools.
+                </p>
+                <p id="view-code-error" class="hidden text-xs text-red-300 mt-1"></p>
+            </div>
+
+            <form id="view-code-form" class="flex items-center gap-2 shrink-0">
+                <label for="view-code-input" class="sr-only">Enter your code</label>
+                <input type="text" id="view-code-input" placeholder="e.g. 5823" inputmode="numeric"
+                    class="w-40 bg-white/10 border border-white/20 placeholder-slate-400 rounded-lg text-sm px-3 py-2.5 text-white focus:border-[#0062F1] focus:ring-2 focus:ring-[#0062F1]/40 focus:outline-none">
+                <button type="submit" class="bg-[#0062F1] hover:bg-[#0050C7] text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition-colors whitespace-nowrap">Go</button>
+            </form>
+        </section>
+
+        <section class="max-w-2xl pt-4">
+            <span class="inline-block text-xs font-semibold text-[#0062F1] bg-blue-50 border border-blue-100 rounded-full px-3 py-1 mb-4">
+                Built for the team
+            </span>
+            <h2 class="font-serif-brand text-4xl leading-tight text-[#00133C] mb-4">
+                Welcome to the Data and <span class="text-[#DC6803]">Analytics</span> Hub
+            </h2>
+            <p class="text-base text-slate-600 leading-relaxed">
+                Enter your code above to see your tools. Everything here runs entirely in your browser —
+                nothing you upload is sent to a server, so every tool is free to use, has no login,
+                and your files never leave your machine.
+            </p>
+        </section>
+
+        <!--
+            "What's New in Data" — edit the headline/blurb below whenever there's something
+            worth calling out, and update the href if you switch to a different newsletter.
+            This is a plain static link (not a live feed): newsletter platforms don't allow
+            fetching their RSS/Atom feeds from browser JavaScript (no CORS support), and
+            routing around that with a third-party proxy would mean this hub — which
+            otherwise makes zero external calls — pings a proxy server on every page load.
+            A hand-updated card keeps that "nothing leaves your browser" property intact.
+        -->
+        <a href="https://tldr.tech" target="_blank" rel="noopener noreferrer"
+           class="group block max-w-2xl bg-white border border-slate-200 hover:border-[#DC6803] rounded-xl p-5 shadow-sm hover:shadow-md transition-all">
+            <div class="flex items-center gap-4">
+                <div class="h-10 w-10 shrink-0 rounded-lg bg-[#DC6803]/10 text-[#DC6803] flex items-center justify-center text-lg" aria-hidden="true">&#128240;</div>
+                <div class="flex-1 min-w-0">
+                    <p class="text-xs font-semibold uppercase tracking-wider text-[#DC6803] mb-0.5">What's New in Data</p>
+                    <p class="text-sm text-slate-700">
+                        <span class="font-semibold text-[#00133C]">TLDR Data</span> — a free 5-minute daily
+                        read on data science, analytics, and engineering trends.
+                    </p>
+                </div>
+                <span class="shrink-0 text-xs font-semibold text-[#0062F1] group-hover:text-[#00133C] inline-flex items-center gap-1">
+                    Read the newsletter <span aria-hidden="true">&rarr;</span>
+                </span>
+            </div>
+        </a>
+
+        <section id="locked-message" class="max-w-2xl bg-slate-100/60 border border-dashed border-slate-300 rounded-xl p-6">
+            <p class="text-sm text-slate-500">
+                No tools to show yet — enter your code above to unlock them.
+            </p>
+        </section>
+
+        <div id="tools-area" class="hidden space-y-10">
+
+        <section>
+            <div class="relative max-w-md">
+                <label for="tool-search" class="sr-only">Search tools</label>
+                <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden="true">&#128269;</span>
+                <input type="text" id="tool-search" placeholder="Search tools by name or description..."
+                    class="w-full bg-white border border-slate-300 rounded-lg text-sm pl-9 pr-3 py-2.5 text-slate-900 focus:border-[#0062F1] focus:ring-2 focus:ring-[#0062F1]/20 focus:outline-none">
+            </div>
+
+            <p id="no-results" class="hidden text-sm text-slate-500 italic mt-4">No tools match "<span id="no-results-query"></span>".</p>
+        </section>
+
+        <section data-category-section>
+            <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-4">Data &amp; Files</h3>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+
+                <a href="tools/data-analyzer/index.html" data-tool="data-analyzer" class="tool-card group bg-white border border-slate-200 hover:border-[#0062F1] hover:shadow-md rounded-xl p-6 shadow-sm transition-all flex flex-col">
+                    <div class="h-10 w-10 rounded-lg bg-[#00133C] text-white flex items-center justify-center text-lg font-bold mb-4" aria-hidden="true">D</div>
+                    <h4 class="text-base font-semibold text-[#00133C] mb-1.5">Data Analyzer</h4>
+                    <p class="text-sm text-slate-600 leading-relaxed flex-1">
+                        Upload one or more CSV or Excel files for KPIs, seasonality-aware forecasting, goal
+                        pacing, concentration &amp; anomaly detection, and AI-generated insights.
+                    </p>
+                    <span class="mt-4 text-xs font-semibold text-[#0062F1] group-hover:text-[#00133C] inline-flex items-center gap-1">
+                        Open tool <span aria-hidden="true">&rarr;</span>
+                    </span>
+                </a>
+
+                <a href="tools/file-diff/index.html" data-tool="file-diff" class="tool-card group bg-white border border-slate-200 hover:border-[#0062F1] hover:shadow-md rounded-xl p-6 shadow-sm transition-all flex flex-col">
+                    <div class="h-10 w-10 rounded-lg bg-[#00133C] text-white flex items-center justify-center text-lg font-bold mb-4" aria-hidden="true">F</div>
+                    <h4 class="text-base font-semibold text-[#00133C] mb-1.5">File Diff</h4>
+                    <p class="text-sm text-slate-600 leading-relaxed flex-1">
+                        Compare two CSV or Excel files by a key column — see exactly what rows were
+                        added, removed, or changed between them.
+                    </p>
+                    <span class="mt-4 text-xs font-semibold text-[#0062F1] group-hover:text-[#00133C] inline-flex items-center gap-1">
+                        Open tool <span aria-hidden="true">&rarr;</span>
+                    </span>
+                </a>
+
+                <a href="tools/pivot-explorer/index.html" data-tool="pivot-explorer" class="tool-card group bg-white border border-slate-200 hover:border-[#0062F1] hover:shadow-md rounded-xl p-6 shadow-sm transition-all flex flex-col">
+                    <div class="h-10 w-10 rounded-lg bg-[#00133C] text-white flex items-center justify-center text-lg font-bold mb-4" aria-hidden="true">P</div>
+                    <h4 class="text-base font-semibold text-[#00133C] mb-1.5">Pivot &amp; Chart Explorer</h4>
+                    <p class="text-sm text-slate-600 leading-relaxed flex-1">
+                        Upload any file, pick rows/columns/values fields, and get an instant pivot
+                        table and chart — no fixed schema required.
+                    </p>
+                    <span class="mt-4 text-xs font-semibold text-[#0062F1] group-hover:text-[#00133C] inline-flex items-center gap-1">
+                        Open tool <span aria-hidden="true">&rarr;</span>
+                    </span>
+                </a>
+
+                <a href="tools/data-cleaner/index.html" data-tool="data-cleaner" class="tool-card group bg-white border border-slate-200 hover:border-[#0062F1] hover:shadow-md rounded-xl p-6 shadow-sm transition-all flex flex-col">
+                    <div class="h-10 w-10 rounded-lg bg-[#00133C] text-white flex items-center justify-center text-lg font-bold mb-4" aria-hidden="true">C</div>
+                    <h4 class="text-base font-semibold text-[#00133C] mb-1.5">Data Cleaner</h4>
+                    <p class="text-sm text-slate-600 leading-relaxed flex-1">
+                        Spot duplicate rows, blank cells, and messy headers, then trim, dedupe, and
+                        standardize before downloading the cleaned file.
+                    </p>
+                    <span class="mt-4 text-xs font-semibold text-[#0062F1] group-hover:text-[#00133C] inline-flex items-center gap-1">
+                        Open tool <span aria-hidden="true">&rarr;</span>
+                    </span>
+                </a>
+
+                <a href="tools/converter/index.html" data-tool="converter" class="tool-card group bg-white border border-slate-200 hover:border-[#0062F1] hover:shadow-md rounded-xl p-6 shadow-sm transition-all flex flex-col">
+                    <div class="h-10 w-10 rounded-lg bg-[#00133C] text-white flex items-center justify-center text-lg font-bold mb-4" aria-hidden="true">&harr;</div>
+                    <h4 class="text-base font-semibold text-[#00133C] mb-1.5">Format Converter</h4>
+                    <p class="text-sm text-slate-600 leading-relaxed flex-1">
+                        Convert between CSV, Excel, and JSON in either direction — upload one format,
+                        download another.
+                    </p>
+                    <span class="mt-4 text-xs font-semibold text-[#0062F1] group-hover:text-[#00133C] inline-flex items-center gap-1">
+                        Open tool <span aria-hidden="true">&rarr;</span>
+                    </span>
+                </a>
+
+                <a href="tools/column-stats/index.html" data-tool="column-stats" class="tool-card group bg-white border border-slate-200 hover:border-[#0062F1] hover:shadow-md rounded-xl p-6 shadow-sm transition-all flex flex-col">
+                    <div class="h-10 w-10 rounded-lg bg-[#00133C] text-white flex items-center justify-center text-lg font-bold mb-4" aria-hidden="true">&Sigma;</div>
+                    <h4 class="text-base font-semibold text-[#00133C] mb-1.5">Column Statistics</h4>
+                    <p class="text-sm text-slate-600 leading-relaxed flex-1">
+                        Upload any file and get instant per-column min/max/mean/median/nulls —
+                        a fast data profile with no mapping step.
+                    </p>
+                    <span class="mt-4 text-xs font-semibold text-[#0062F1] group-hover:text-[#00133C] inline-flex items-center gap-1">
+                        Open tool <span aria-hidden="true">&rarr;</span>
+                    </span>
+                </a>
+
+            </div>
+        </section>
+
+        <section data-category-section>
+            <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-4">Text &amp; Dev Utilities</h3>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+
+                <a href="tools/json-formatter/index.html" data-tool="json-formatter" class="tool-card group bg-white border border-slate-200 hover:border-[#0062F1] hover:shadow-md rounded-xl p-6 shadow-sm transition-all flex flex-col">
+                    <div class="h-10 w-10 rounded-lg bg-[#00133C] text-white flex items-center justify-center text-lg font-bold mb-4" aria-hidden="true">J</div>
+                    <h4 class="text-base font-semibold text-[#00133C] mb-1.5">JSON Formatter</h4>
+                    <p class="text-sm text-slate-600 leading-relaxed flex-1">
+                        Validate, pretty-print, and minify JSON with clear error locations —
+                        paste, upload, or drop in a file.
+                    </p>
+                    <span class="mt-4 text-xs font-semibold text-[#0062F1] group-hover:text-[#00133C] inline-flex items-center gap-1">
+                        Open tool <span aria-hidden="true">&rarr;</span>
+                    </span>
+                </a>
+
+                <a href="tools/timestamp-converter/index.html" data-tool="timestamp-converter" class="tool-card group bg-white border border-slate-200 hover:border-[#0062F1] hover:shadow-md rounded-xl p-6 shadow-sm transition-all flex flex-col">
+                    <div class="h-10 w-10 rounded-lg bg-[#00133C] text-white flex items-center justify-center text-lg font-bold mb-4" aria-hidden="true">T</div>
+                    <h4 class="text-base font-semibold text-[#00133C] mb-1.5">Timestamp Converter</h4>
+                    <p class="text-sm text-slate-600 leading-relaxed flex-1">
+                        Convert Unix timestamps and date strings to ISO 8601, relative time, and
+                        common timezones at a glance.
+                    </p>
+                    <span class="mt-4 text-xs font-semibold text-[#0062F1] group-hover:text-[#00133C] inline-flex items-center gap-1">
+                        Open tool <span aria-hidden="true">&rarr;</span>
+                    </span>
+                </a>
+
+                <a href="tools/regex-tester/index.html" data-tool="regex-tester" class="tool-card group bg-white border border-slate-200 hover:border-[#0062F1] hover:shadow-md rounded-xl p-6 shadow-sm transition-all flex flex-col">
+                    <div class="h-10 w-10 rounded-lg bg-[#00133C] text-white flex items-center justify-center text-lg font-bold mb-4" aria-hidden="true">.*</div>
+                    <h4 class="text-base font-semibold text-[#00133C] mb-1.5">Regex Tester</h4>
+                    <p class="text-sm text-slate-600 leading-relaxed flex-1">
+                        Test a pattern against sample text with live-highlighted matches and
+                        capture groups.
+                    </p>
+                    <span class="mt-4 text-xs font-semibold text-[#0062F1] group-hover:text-[#00133C] inline-flex items-center gap-1">
+                        Open tool <span aria-hidden="true">&rarr;</span>
+                    </span>
+                </a>
+
+                <a href="tools/text-diff/index.html" data-tool="text-diff" class="tool-card group bg-white border border-slate-200 hover:border-[#0062F1] hover:shadow-md rounded-xl p-6 shadow-sm transition-all flex flex-col">
+                    <div class="h-10 w-10 rounded-lg bg-[#00133C] text-white flex items-center justify-center text-lg font-bold mb-4" aria-hidden="true">&ne;</div>
+                    <h4 class="text-base font-semibold text-[#00133C] mb-1.5">Text Diff</h4>
+                    <p class="text-sm text-slate-600 leading-relaxed flex-1">
+                        Compare two blocks of text line-by-line — configs, emails, document
+                        revisions — and see what changed.
+                    </p>
+                    <span class="mt-4 text-xs font-semibold text-[#0062F1] group-hover:text-[#00133C] inline-flex items-center gap-1">
+                        Open tool <span aria-hidden="true">&rarr;</span>
+                    </span>
+                </a>
+
+                <a href="tools/color-tools/index.html" data-tool="color-tools" class="tool-card group bg-white border border-slate-200 hover:border-[#0062F1] hover:shadow-md rounded-xl p-6 shadow-sm transition-all flex flex-col">
+                    <div class="h-10 w-10 rounded-lg bg-[#00133C] text-white flex items-center justify-center text-lg font-bold mb-4" aria-hidden="true">&#9681;</div>
+                    <h4 class="text-base font-semibold text-[#00133C] mb-1.5">Color Tools</h4>
+                    <p class="text-sm text-slate-600 leading-relaxed flex-1">
+                        Generate a shade palette from any base color, plus a WCAG contrast
+                        checker for text/background pairs.
+                    </p>
+                    <span class="mt-4 text-xs font-semibold text-[#0062F1] group-hover:text-[#00133C] inline-flex items-center gap-1">
+                        Open tool <span aria-hidden="true">&rarr;</span>
+                    </span>
+                </a>
+
+                <a href="tools/text-analyzer/index.html" data-tool="text-analyzer" class="tool-card group bg-white border border-slate-200 hover:border-[#0062F1] hover:shadow-md rounded-xl p-6 shadow-sm transition-all flex flex-col">
+                    <div class="h-10 w-10 rounded-lg bg-[#00133C] text-white flex items-center justify-center text-lg font-bold mb-4" aria-hidden="true">Aa</div>
+                    <h4 class="text-base font-semibold text-[#00133C] mb-1.5">Text Analyzer</h4>
+                    <p class="text-sm text-slate-600 leading-relaxed flex-1">
+                        Word count, character count, reading time, and the most frequent words
+                        in any pasted text.
+                    </p>
+                    <span class="mt-4 text-xs font-semibold text-[#0062F1] group-hover:text-[#00133C] inline-flex items-center gap-1">
+                        Open tool <span aria-hidden="true">&rarr;</span>
+                    </span>
+                </a>
+
+                <a href="tools/qr-generator/index.html" data-tool="qr-generator" class="tool-card group bg-white border border-slate-200 hover:border-[#0062F1] hover:shadow-md rounded-xl p-6 shadow-sm transition-all flex flex-col">
+                    <div class="h-10 w-10 rounded-lg bg-[#00133C] text-white flex items-center justify-center text-lg font-bold mb-4" aria-hidden="true">&#9638;</div>
+                    <h4 class="text-base font-semibold text-[#00133C] mb-1.5">QR Code Generator</h4>
+                    <p class="text-sm text-slate-600 leading-relaxed flex-1">
+                        Turn any URL or text into a downloadable QR code — handy for sharing a
+                        link to a specific tool.
+                    </p>
+                    <span class="mt-4 text-xs font-semibold text-[#0062F1] group-hover:text-[#00133C] inline-flex items-center gap-1">
+                        Open tool <span aria-hidden="true">&rarr;</span>
+                    </span>
+                </a>
+
+                <a href="tools/markdown-preview/index.html" data-tool="markdown-preview" class="tool-card group bg-white border border-slate-200 hover:border-[#0062F1] hover:shadow-md rounded-xl p-6 shadow-sm transition-all flex flex-col">
+                    <div class="h-10 w-10 rounded-lg bg-[#00133C] text-white flex items-center justify-center text-lg font-bold mb-4" aria-hidden="true">M&darr;</div>
+                    <h4 class="text-base font-semibold text-[#00133C] mb-1.5">Markdown Previewer</h4>
+                    <p class="text-sm text-slate-600 leading-relaxed flex-1">
+                        Type or paste Markdown and see it rendered live, then copy or download
+                        the resulting HTML.
+                    </p>
+                    <span class="mt-4 text-xs font-semibold text-[#0062F1] group-hover:text-[#00133C] inline-flex items-center gap-1">
+                        Open tool <span aria-hidden="true">&rarr;</span>
+                    </span>
+                </a>
+
+                <a href="tools/encode-decode/index.html" data-tool="encode-decode" class="tool-card group bg-white border border-slate-200 hover:border-[#0062F1] hover:shadow-md rounded-xl p-6 shadow-sm transition-all flex flex-col">
+                    <div class="h-10 w-10 rounded-lg bg-[#00133C] text-white flex items-center justify-center text-lg font-bold mb-4" aria-hidden="true">64</div>
+                    <h4 class="text-base font-semibold text-[#00133C] mb-1.5">Base64 / URL Encoder</h4>
+                    <p class="text-sm text-slate-600 leading-relaxed flex-1">
+                        Encode or decode text as Base64 or a URL-safe string, with one click to
+                        chain the output back into the input.
+                    </p>
+                    <span class="mt-4 text-xs font-semibold text-[#0062F1] group-hover:text-[#00133C] inline-flex items-center gap-1">
+                        Open tool <span aria-hidden="true">&rarr;</span>
+                    </span>
+                </a>
+
+                <a href="tools/unit-converter/index.html" data-tool="unit-converter" class="tool-card group bg-white border border-slate-200 hover:border-[#0062F1] hover:shadow-md rounded-xl p-6 shadow-sm transition-all flex flex-col">
+                    <div class="h-10 w-10 rounded-lg bg-[#00133C] text-white flex items-center justify-center text-lg font-bold mb-4" aria-hidden="true">&#8646;</div>
+                    <h4 class="text-base font-semibold text-[#00133C] mb-1.5">Unit Converter</h4>
+                    <p class="text-sm text-slate-600 leading-relaxed flex-1">
+                        Convert between length, weight, and temperature units, with a quick
+                        reference table for the current unit.
+                    </p>
+                    <span class="mt-4 text-xs font-semibold text-[#0062F1] group-hover:text-[#00133C] inline-flex items-center gap-1">
+                        Open tool <span aria-hidden="true">&rarr;</span>
+                    </span>
+                </a>
+
+            </div>
+        </section>
+
+        <section>
+            <div class="bg-slate-100/60 border border-dashed border-slate-300 rounded-xl p-6 max-w-md">
+                <div class="h-10 w-10 rounded-lg bg-slate-200 text-slate-500 flex items-center justify-center text-lg font-bold mb-4" aria-hidden="true">+</div>
+                <h4 class="text-base font-semibold text-slate-500 mb-1.5">More tools coming soon</h4>
+                <p class="text-sm text-slate-500 leading-relaxed">
+                    This hub is built to grow — add a new folder under <code class="text-slate-600">tools/</code>
+                    and a card here to bring another tool online.
+                </p>
+            </div>
+        </section>
+
+        </div>
+
+    </main>
+
+    <footer class="max-w-6xl mx-auto px-8 py-8 text-xs text-slate-500 border-t border-slate-200 mt-4">
+        Hosted as a static site — no backend, no accounts, no cost. Your data stays in your own browser tab.
+    </footer>
+
+    <script>
+        // -------------------------------------------------------------- //
+        // Access codes: nobody sees any tools until they enter a valid
+        // code. Each code unlocks only the tools listed for it. Edit
+        // VIEW_CODES to add, rename, or change codes — each key is what
+        // gets typed (not case-sensitive), "label" is shown in the status
+        // text, and "tools" is a list of data-tool ids (see each card's
+        // data-tool="..." attribute in this file, e.g. "data-analyzer",
+        // "json-formatter").
+        //
+        // Placeholder below — swap in real numeric codes and tool ids.
+        //
+        // This is a convenience filter, not security: it only hides cards
+        // on this page, and there is no "show all" control once a code is
+        // entered. Anyone who has (or guesses) a tool's direct URL — e.g.
+        // tools/data-analyzer/index.html — can still open it regardless of
+        // any code, since nothing here checks credentials server-side.
+        // -------------------------------------------------------------- //
+        const VIEW_CODES = {
+            '1234': { label: 'Example Access', tools: ['json-formatter', 'text-diff'] }
+        };
+
+        const searchInput = document.getElementById('tool-search');
+        const noResultsEl = document.getElementById('no-results');
+        const noResultsQueryEl = document.getElementById('no-results-query');
+        const categorySections = Array.from(document.querySelectorAll('[data-category-section]'));
+
+        const viewCodeForm = document.getElementById('view-code-form');
+        const viewCodeInput = document.getElementById('view-code-input');
+        const viewCodeError = document.getElementById('view-code-error');
+        const viewCodeStatusEl = document.getElementById('view-code-status');
+        const lockedMessageEl = document.getElementById('locked-message');
+        const toolsAreaEl = document.getElementById('tools-area');
+
+        let activeViewCode = null;
+
+        function filterTools() {
+            const query = searchInput.value.trim().toLowerCase();
+            const allowedTools = activeViewCode ? new Set(VIEW_CODES[activeViewCode].tools) : new Set();
+            let anyVisible = false;
+
+            categorySections.forEach((section) => {
+                const sectionCards = Array.from(section.querySelectorAll('.tool-card'));
+                let visibleInSection = 0;
+
+                sectionCards.forEach((card) => {
+                    const text = card.innerText.toLowerCase();
+                    const matchesQuery = query === '' || text.includes(query);
+                    const matchesCode = allowedTools.has(card.dataset.tool);
+                    const matches = matchesQuery && matchesCode;
+                    card.classList.toggle('hidden', !matches);
+                    if (matches) visibleInSection++;
+                });
+
+                section.classList.toggle('hidden', visibleInSection === 0);
+                if (visibleInSection > 0) anyVisible = true;
+            });
+
+            noResultsEl.classList.toggle('hidden', anyVisible || query === '');
+            noResultsQueryEl.innerText = query;
+        }
+
+        function applyViewCode(rawCode) {
+            const code = rawCode.trim().toLowerCase();
+            if (!code) return;
+
+            const entry = VIEW_CODES[code];
+            if (!entry) {
+                viewCodeError.innerText = `"${rawCode}" isn't a recognized code.`;
+                viewCodeError.classList.remove('hidden');
+                return;
+            }
+
+            viewCodeError.classList.add('hidden');
+            activeViewCode = code;
+            localStorage.setItem('hub_view_code', code);
+
+            const url = new URL(window.location.href);
+            url.searchParams.set('code', code);
+            window.history.replaceState({}, '', url);
+
+            viewCodeStatusEl.innerText = `Showing tools for "${entry.label}".`;
+            lockedMessageEl.classList.add('hidden');
+            toolsAreaEl.classList.remove('hidden');
+            viewCodeInput.value = '';
+
+            filterTools();
+        }
+
+        viewCodeForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            applyViewCode(viewCodeInput.value);
+        });
+
+        searchInput.addEventListener('input', filterTools);
+
+        // On load: a ?code= in the URL wins (so a shared link works immediately),
+        // otherwise fall back to whatever code this browser last used.
+        (function initViewCode() {
+            const urlCode = new URL(window.location.href).searchParams.get('code');
+            const savedCode = localStorage.getItem('hub_view_code');
+            const initialCode = urlCode || savedCode;
+            if (initialCode && VIEW_CODES[initialCode.toLowerCase()]) {
+                applyViewCode(initialCode);
+            }
+        })();
+    </script>
+
+</body>
+</html>

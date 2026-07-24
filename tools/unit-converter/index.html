@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Unit Converter — Data and Analytics Hub</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2300133C'/%3E%3Ctext x='16' y='23' font-family='Georgia,serif' font-size='19' fill='%230062F1' text-anchor='middle'%3EH%3C/text%3E%3C/svg%3E">
+</head>
+
+<body class="bg-slate-50 text-slate-900 min-h-screen font-sans">
+    <header class="border-b border-slate-200 bg-white px-8 py-4 flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+            <a href="../../index.html" class="text-xs text-slate-500 hover:text-[#0062F1]">&larr; Hub</a>
+            <div class="h-6 w-px bg-slate-100"></div>
+            <h1 class="text-lg font-semibold text-[#00133C]">Unit Converter</h1>
+        </div>
+        <div class="text-xs text-slate-600 bg-slate-50 px-3 py-1 rounded-full border border-slate-200">Length &middot; Weight &middot; Temperature</div>
+    </header>
+
+    <main class="max-w-2xl mx-auto p-6 space-y-6">
+        <div class="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
+            <div>
+                <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2">Category</label>
+                <div class="inline-flex rounded-lg border border-slate-300 p-0.5 bg-slate-50">
+                    <button id="cat-length" onclick="setCategory('length')" class="px-4 py-1.5 text-sm font-medium rounded-md transition-colors">Length</button>
+                    <button id="cat-weight" onclick="setCategory('weight')" class="px-4 py-1.5 text-sm font-medium rounded-md transition-colors">Weight</button>
+                    <button id="cat-temperature" onclick="setCategory('temperature')" class="px-4 py-1.5 text-sm font-medium rounded-md transition-colors">Temperature</button>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-[1fr_auto_1fr] gap-4 items-end">
+                <div class="min-w-0">
+                    <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">From</label>
+                    <div class="flex flex-wrap gap-2">
+                        <input type="number" id="from-value" value="1" class="flex-1 min-w-[5rem] bg-slate-50 border border-slate-300 rounded-lg text-sm p-2.5 text-slate-900 focus:border-[#0062F1] focus:ring-2 focus:ring-[#0062F1]/20 focus:outline-none">
+                        <select id="from-unit" class="min-w-0 flex-1 bg-slate-50 border border-slate-300 rounded-lg text-sm p-2.5 text-slate-900"></select>
+                    </div>
+                </div>
+
+                <button onclick="swapUnits()" title="Swap" aria-label="Swap from and to units" class="h-10 w-10 rounded-lg border border-slate-300 hover:border-[#0062F1] text-slate-500 hover:text-[#0062F1] flex items-center justify-center mx-auto shrink-0">
+                    &#8646;
+                </button>
+
+                <div class="min-w-0">
+                    <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">To</label>
+                    <div class="flex flex-wrap gap-2">
+                        <input type="text" id="to-value" readonly class="flex-1 min-w-[5rem] bg-slate-100 border border-slate-300 rounded-lg text-sm p-2.5 text-slate-900 font-semibold">
+                        <select id="to-unit" class="min-w-0 flex-1 bg-slate-50 border border-slate-300 rounded-lg text-sm p-2.5 text-slate-900"></select>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white border border-slate-200 rounded-xl p-4">
+            <h3 class="text-sm font-medium text-slate-700 mb-3">Quick Reference</h3>
+            <div id="quick-reference" class="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs"></div>
+        </div>
+    </main>
+
+    <script>
+        const UNITS = {
+            length: {
+                base: 'm',
+                units: { mm: 0.001, cm: 0.01, m: 1, km: 1000, in: 0.0254, ft: 0.3048, yd: 0.9144, mi: 1609.344 },
+                labels: { mm: 'Millimeters', cm: 'Centimeters', m: 'Meters', km: 'Kilometers', in: 'Inches', ft: 'Feet', yd: 'Yards', mi: 'Miles' },
+                defaultFrom: 'm', defaultTo: 'ft'
+            },
+            weight: {
+                base: 'g',
+                units: { mg: 0.001, g: 1, kg: 1000, oz: 28.349523125, lb: 453.59237, t: 1000000 },
+                labels: { mg: 'Milligrams', g: 'Grams', kg: 'Kilograms', oz: 'Ounces', lb: 'Pounds', t: 'Metric Tons' },
+                defaultFrom: 'kg', defaultTo: 'lb'
+            },
+            temperature: {
+                base: 'C',
+                units: { C: null, F: null, K: null },
+                labels: { C: 'Celsius', F: 'Fahrenheit', K: 'Kelvin' },
+                defaultFrom: 'C', defaultTo: 'F'
+            }
+        };
+
+        let currentCategory = 'length';
+
+        function tempToCelsius(v, unit) {
+            if (unit === 'C') return v;
+            if (unit === 'F') return (v - 32) * 5 / 9;
+            return v - 273.15;
+        }
+
+        function celsiusToTemp(v, unit) {
+            if (unit === 'C') return v;
+            if (unit === 'F') return v * 9 / 5 + 32;
+            return v + 273.15;
+        }
+
+        function convert(value, fromUnit, toUnit, category) {
+            if (category === 'temperature') {
+                return celsiusToTemp(tempToCelsius(value, fromUnit), toUnit);
+            }
+            const def = UNITS[category];
+            const baseValue = value * def.units[fromUnit];
+            return baseValue / def.units[toUnit];
+        }
+
+        function populateUnitSelect(selectEl, category, selected) {
+            const def = UNITS[category];
+            selectEl.innerHTML = Object.keys(def.units).map(u =>
+                `<option value="${u}" ${u === selected ? 'selected' : ''}>${def.labels[u]} (${u})</option>`
+            ).join('');
+        }
+
+        function setCategory(category) {
+            currentCategory = category;
+
+            ['length', 'weight', 'temperature'].forEach(c => {
+                const btn = document.getElementById(`cat-${c}`);
+                btn.className = c === category
+                    ? 'px-4 py-1.5 text-sm font-medium rounded-md bg-[#0062F1] text-white transition-colors'
+                    : 'px-4 py-1.5 text-sm font-medium rounded-md text-slate-600 hover:text-slate-900 transition-colors';
+            });
+
+            const def = UNITS[category];
+            populateUnitSelect(document.getElementById('from-unit'), category, def.defaultFrom);
+            populateUnitSelect(document.getElementById('to-unit'), category, def.defaultTo);
+
+            render();
+            renderQuickReference();
+        }
+
+        function render() {
+            const fromValue = parseFloat(document.getElementById('from-value').value);
+            const fromUnit = document.getElementById('from-unit').value;
+            const toUnit = document.getElementById('to-unit').value;
+
+            if (Number.isNaN(fromValue)) {
+                document.getElementById('to-value').value = '';
+                return;
+            }
+
+            const result = convert(fromValue, fromUnit, toUnit, currentCategory);
+            document.getElementById('to-value').value = Number.isFinite(result)
+                ? result.toLocaleString(undefined, { maximumFractionDigits: 6 })
+                : '';
+        }
+
+        function renderQuickReference() {
+            const def = UNITS[currentCategory];
+            const fromUnit = document.getElementById('from-unit').value;
+            const container = document.getElementById('quick-reference');
+
+            container.innerHTML = Object.keys(def.units).filter(u => u !== fromUnit).map(u => {
+                const result = convert(1, fromUnit, u, currentCategory);
+                return `
+                    <div class="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+                        <span class="text-slate-500">1 ${fromUnit} =</span>
+                        <span class="font-semibold text-[#00133C]">${result.toLocaleString(undefined, { maximumFractionDigits: 4 })} ${u}</span>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function swapUnits() {
+            const fromUnit = document.getElementById('from-unit');
+            const toUnit = document.getElementById('to-unit');
+            const tmp = fromUnit.value;
+            fromUnit.value = toUnit.value;
+            toUnit.value = tmp;
+            render();
+            renderQuickReference();
+        }
+
+        document.getElementById('from-value').addEventListener('input', render);
+        document.getElementById('from-unit').addEventListener('change', () => { render(); renderQuickReference(); });
+        document.getElementById('to-unit').addEventListener('change', render);
+
+        setCategory('length');
+    </script>
+</body>
+</html>
