@@ -1,22 +1,3 @@
-/*
- * Client-side port of analyzer.py's BookOfBusinessAnalyzer — constants, generic
- * coercion/math helpers, CSV/Excel parsing, and the class shell.
- *
- * Design notes vs. the Python original:
- * - Rows are plain JS objects (array-of-objects instead of a DataFrame).
- * - Column dtype is never pre-inferred; every value is coerced on demand via
- *   toNumber()/toDate(), which is behaviorally equivalent to the Python code's
- *   fraction-based fallback path (see _detectColumnRoles below) for every
- *   column that matters, without needing to replicate pandas' CSV dtype
- *   inference.
- * - "Working rows" (the JS analog of working_df) carry canonical fields
- *   `_time` (Date), `_metric` (number), `_entity` (raw value or "Unknown"),
- *   plus each mapped dimension column normalized to a string under its own
- *   original column name — mirroring working_df's in-place column overwrites.
- * - Date parsing is best-effort (ISO / MM-DD-YYYY / native Date fallback),
- *   not a full port of dateutil — good enough for typical exports.
- */
-
 const ANALYTICAL_BASELINE = new Date(Date.UTC(2020, 0, 1));
 
 const METRIC_NAME_HINTS = [
@@ -45,10 +26,6 @@ const MONTH_NAMES = [
   "July", "August", "September", "October", "November", "December"
 ];
 
-// --------------------------------------------------------------------------- //
-// Generic coercion / math helpers
-// --------------------------------------------------------------------------- //
-
 function isMissing(v) {
   if (v === null || v === undefined) return true;
   if (typeof v === "number" && Number.isNaN(v)) return true;
@@ -72,7 +49,6 @@ function toDate(v) {
   if (v instanceof Date) return Number.isNaN(v.getTime()) ? null : dateOnlyUTC(v);
 
   if (typeof v === "number") {
-    // Excel serial date fallback (epoch 1899-12-30), only for a plausible range.
     if (v > 20000 && v < 80000) {
       const ms = Math.round((v - 25569) * 86400 * 1000);
       return dateOnlyUTC(new Date(ms));
@@ -167,10 +143,6 @@ function linearRegression(xs, ys) {
   return { slope, intercept, r2, predict: (x) => slope * x + intercept };
 }
 
-// --------------------------------------------------------------------------- //
-// Month-ordinal helpers (JS analog of pandas Period[M] arithmetic)
-// --------------------------------------------------------------------------- //
-
 function toMonthOrdinal(date) {
   return date.getUTCFullYear() * 12 + date.getUTCMonth();
 }
@@ -216,10 +188,6 @@ function daysBetweenInclusive(start, end) {
   return Math.round((end - start) / 86400000) + 1;
 }
 
-// --------------------------------------------------------------------------- //
-// Formatting helpers used by the AI-insights text templates
-// --------------------------------------------------------------------------- //
-
 function fmt0(v) {
   return Number(v || 0).toLocaleString("en-US", { maximumFractionDigits: 0 });
 }
@@ -227,10 +195,6 @@ function fmt0(v) {
 function fmt1(v) {
   return Number(v || 0).toFixed(1);
 }
-
-// --------------------------------------------------------------------------- //
-// CSV / Excel parsing -> {columns, rows}
-// --------------------------------------------------------------------------- //
 
 function parseCSVText(text) {
   const rows = [];
@@ -347,7 +311,6 @@ async function parseFileToRows(file) {
     const result = parseCSVText(await file.text());
     if (result.columns.length > 0) return result;
   } catch (e) {
-    /* fall through to Excel */
   }
   return parseExcelFile(file);
 }
@@ -362,13 +325,6 @@ function countDuplicateRows(rows, columns) {
   }
   return dupCount;
 }
-
-// --------------------------------------------------------------------------- //
-// The analyzer class shell — constructor + the handful of simple methods that
-// don't belong to any one section of the original file. Every other method is
-// attached to BookOfBusinessAnalyzer.prototype from the other js/*.js files,
-// which must be loaded after this one.
-// --------------------------------------------------------------------------- //
 
 class BookOfBusinessAnalyzer {
   constructor(rows, columns, fileName) {
@@ -394,9 +350,6 @@ class BookOfBusinessAnalyzer {
     return { min_date: formatDateISO(minD), max_date: formatDateISO(maxD) };
   }
 
-  // JS analog of the working_df construction shared by run_analysis and
-  // suggest_goal_candidates: coerce time/metric, drop null time, filter to
-  // the analytical baseline, normalize dimension columns, fill missing entity.
   buildWorkingRows(metricCol, timeCol, entityCol, dimensionCols) {
     const out = [];
     for (const r of this.rows) {

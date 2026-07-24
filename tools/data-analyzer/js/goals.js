@@ -1,9 +1,3 @@
-/*
- * Port of analyzer.py's goals section: _reference_period_bounds,
- * _period_actual, _estimate_growth_rate, _round_target, compute_goals,
- * _build_goal_trend, suggest_goal_candidates.
- */
-
 BookOfBusinessAnalyzer.prototype.referencePeriodBounds = function (period, anchor) {
   const [start, end] = periodBounds(period, anchor);
   return [addYears(start, -1), addYears(end, -1)];

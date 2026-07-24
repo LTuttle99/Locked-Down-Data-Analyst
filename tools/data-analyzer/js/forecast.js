@@ -1,9 +1,3 @@
-/*
- * Port of analyzer.py's forecasting section: _build_monthly_series,
- * _seasonal_trend_forecast, _compute_forecast_outlook (+ empty),
- * _compute_long_range_forecast (+ empty).
- */
-
 BookOfBusinessAnalyzer.prototype.buildMonthlySeries = function (rows, entityCol) {
   if (!rows || rows.length === 0) return [];
 

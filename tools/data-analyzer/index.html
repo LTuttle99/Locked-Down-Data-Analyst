@@ -712,9 +712,6 @@
         </div>
     </main>
 
-    <!-- Client-side port of analyzer.py — runs the entire analysis engine in
-         the browser so this page works as static-only GitHub Pages hosting,
-         no backend required. See js/core.js for the design notes. -->
     <script src="js/core.js"></script>
     <script src="js/schema.js"></script>
     <script src="js/forecast.js"></script>
@@ -1070,8 +1067,6 @@
                     return;
                 }
 
-                // A new file took over as active (the removed one was the active dataset) —
-                // re-confirm its mapping, since a different file can have a different schema.
                 if (data.file_id) {
                     document.getElementById('data-files-panel').classList.add('hidden');
                     showMappingForSchema(data);
@@ -1348,7 +1343,6 @@
                 return;
             }
 
-            // scopeType is a dimension column name directly here.
             container.classList.remove('hidden');
             select.innerHTML = '<option>Loading...</option>';
 
@@ -1854,8 +1848,6 @@
 
                 if (elapsedEl) elapsedEl.innerText = `${elapsedSeconds}s elapsed`;
 
-                // Advance roughly every couple seconds, but don't run past the last message —
-                // these are illustrative stages, not a real progress signal from the server.
                 const targetIndex = Math.min(LOADING_STAGE_MESSAGES.length - 1, Math.floor(elapsedSeconds / 2));
 
                 if (targetIndex !== stageIndex) {
@@ -2089,9 +2081,6 @@
                 return;
             }
 
-            // Apply the what-if annual growth adjustment (compounded monthly) on top of the
-            // model's own trend/seasonal forecast — always recomputed from the original
-            // server response, never compounded on a previously-adjusted value.
             const adjustmentPct = currentScenarioAdjustment;
 
             const monthly = rawMonthly.map(m => {
@@ -2310,9 +2299,6 @@
             const goals = lastResults.goal_progress || [];
             const trendAnomalies = lastResults.trend_anomalies || [];
 
-            // Does the question mention a specific dimension value by name?
-            // (checked first/most specific — "North's revenue" shouldn't fall through
-            // to a generic "total" answer)
             const dimEntries = Object.entries(dimDist);
             let mentionedEntry = null;
 

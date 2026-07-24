@@ -1,16 +1,3 @@
-/*
- * Port of analyzer.py's schema-inference section: _detect_column_roles,
- * _pick_metric_column, _pick_timeline_column, _pick_entity_column,
- * infer_schema, assess_data_quality.
- *
- * The Python original has two code paths per column: a fast path for columns
- * pandas already parsed as numeric/datetime dtype, and a fraction-based
- * fallback for everything else. Both paths apply the same thresholds for
- * numeric-vs-id-like and date-vs-not, so this port always takes the
- * fraction-based path (see classifyNumericIdLike below) — same end
- * classification, one code path instead of two.
- */
-
 function classifyNumericIdLike(numericVals, uniqueRatio, looksIdLikeName) {
   const isIntLike = numericVals.filter((v) => Number.isInteger(v)).length / numericVals.length > 0.99;
 
@@ -51,8 +38,6 @@ BookOfBusinessAnalyzer.prototype._detectColumnRoles = function () {
     const looksIdLikeName = ID_LIKE_EXCLUDE_HINTS.some((kw) => colLower.includes(kw));
     const uniqueRatio = countUnique(nonNullVals) / nonNullVals.length;
 
-    // Numeric dtype columns are never date candidates — avoids pd.to_datetime
-    // reinterpreting a numeric metric column as epoch timestamps.
     const numericVals = nonNullVals.map(toNumber);
     const isFullyNumeric = numericVals.every((v) => v !== null);
 

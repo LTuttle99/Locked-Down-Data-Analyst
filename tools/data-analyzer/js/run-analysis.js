@@ -1,8 +1,3 @@
-/*
- * Port of analyzer.py's main pipeline: run_analysis. Ties together every
- * other section into the single result object the dashboard renders.
- */
-
 BookOfBusinessAnalyzer.prototype.runAnalysis = function (opts) {
   const mapping = opts.mapping || {};
   const dimensionFilters = opts.dimension_filters || {};
@@ -182,10 +177,6 @@ BookOfBusinessAnalyzer.prototype.runAnalysis = function (opts) {
     return Number.isFinite(pct) ? pct : 0;
   });
 
-  // New/Repeat monthly series aligned to workingRows (post entity-view filter),
-  // matching run_analysis's variable reuse: new_df/repeat_df above feed
-  // entity_split only; these lines re-derive from the (possibly entity-view
-  // filtered) workingRows, so the chart lines reflect the current view.
   const newMonthly = this.buildMonthlySeries(workingRows.filter((r) => r.EntityStatus === "New"), entityCol);
   const repeatMonthly = this.buildMonthlySeries(workingRows.filter((r) => r.EntityStatus === "Repeat"), entityCol);
   const newByOrd = new Map(newMonthly.map((m) => [m.ord, seriesVal(m)]));
@@ -193,10 +184,6 @@ BookOfBusinessAnalyzer.prototype.runAnalysis = function (opts) {
   const newValues = monthlyRaw.map((m) => newByOrd.get(m.ord) || 0);
   const repeatValues = monthlyRaw.map((m) => repeatByOrd.get(m.ord) || 0);
 
-  // Mirrors analyzer.py: value mode sums the metric per dimension value; count
-  // mode counts distinct entities per dimension value, falling back to
-  // distinct metric values when there's no entity column (same quirky
-  // fallback the Python original has via dim_metric_col).
   let dimensionData = {};
   if (primaryDimension) {
     const dimAggIsSum = projectionTarget === "value";

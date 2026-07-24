@@ -62,15 +62,6 @@
             </p>
         </section>
 
-        <!--
-            "What's New in Data" — edit the headline/blurb below whenever there's something
-            worth calling out, and update the href if you switch to a different newsletter.
-            This is a plain static link (not a live feed): newsletter platforms don't allow
-            fetching their RSS/Atom feeds from browser JavaScript (no CORS support), and
-            routing around that with a third-party proxy would mean this hub — which
-            otherwise makes zero external calls — pings a proxy server on every page load.
-            A hand-updated card keeps that "nothing leaves your browser" property intact.
-        -->
         <a href="https://tldr.tech" target="_blank" rel="noopener noreferrer"
            class="group block max-w-2xl bg-white border border-slate-200 hover:border-[#DC6803] rounded-xl p-5 shadow-sm hover:shadow-md transition-all">
             <div class="flex items-center gap-4">
@@ -335,21 +326,6 @@
     </footer>
 
     <script>
-        // -------------------------------------------------------------- //
-        // Access codes: nobody sees any tools until they enter a valid
-        // code. Each code unlocks only the tools listed for it. Edit
-        // VIEW_CODES to add, rename, or change codes — each key is what
-        // gets typed (not case-sensitive), "label" is shown in the status
-        // text, and "tools" is a list of data-tool ids (see each card's
-        // data-tool="..." attribute in this file, e.g. "data-analyzer",
-        // "json-formatter").
-        //
-        // This is a convenience filter, not security: it only hides cards
-        // on this page, and there is no "show all" control once a code is
-        // entered. Anyone who has (or guesses) a tool's direct URL — e.g.
-        // tools/data-analyzer/index.html — can still open it regardless of
-        // any code, since nothing here checks credentials server-side.
-        // -------------------------------------------------------------- //
         const VIEW_CODES = {
             '1159': {
                 label: 'Data Analyst',

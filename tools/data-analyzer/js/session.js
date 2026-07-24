@@ -1,12 +1,4 @@
-/*
- * In-browser replacement for app.py's session state + /api/* endpoints.
- * Same JSON contracts as the FastAPI backend, so index.html's existing UI
- * code barely has to change — it just calls these instead of fetch().
- * All state lives in plain JS variables for the lifetime of the tab; there's
- * no server, so there's nothing to persist across a reload by design.
- */
-
-const FILES = new Map(); // file_id -> BookOfBusinessAnalyzer
+const FILES = new Map();
 let ACTIVE_FILE_ID = null;
 let COMPARE_ANALYZER = null;
 
@@ -45,7 +37,6 @@ async function apiUpload(file) {
   FILES.set(fileId, analyzer);
   ACTIVE_FILE_ID = fileId;
 
-  // A fresh upload invalidates any prior comparison snapshot, same as the backend.
   COMPARE_ANALYZER = null;
 
   return { ...schema, file_id: fileId, loaded_files: serializeFileList() };

@@ -1,9 +1,3 @@
-/*
- * Port of analyzer.py's entity-recurrence, trend-anomaly, dimension-driver,
- * and AI-insights sections: _classify_entity_recurrence,
- * _detect_trend_anomalies, compute_dimension_drivers, _generate_ai_insights.
- */
-
 BookOfBusinessAnalyzer.prototype.classifyEntityRecurrence = function (workingRows, entityCol, entityFirstDates) {
   if (!entityCol) return workingRows.map((r) => ({ ...r, EntityStatus: "Unclassified" }));
 

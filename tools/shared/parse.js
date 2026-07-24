@@ -1,9 +1,3 @@
-/*
- * Shared file-parsing and download helpers, reused across the hub's tools.
- * Same CSV/Excel parsing behavior as tools/data-analyzer/js/core.js, kept as
- * a separate copy there intentionally (that tool stays fully self-contained).
- */
-
 function parseCSVText(text) {
   const rows = [];
   let row = [];
@@ -121,7 +115,6 @@ async function parseFileToRows(file) {
     const result = parseCSVText(await file.text());
     if (result.columns.length > 0) return result;
   } catch (e) {
-    /* fall through to Excel */
   }
   return parseExcelFile(file);
 }
