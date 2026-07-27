@@ -11,10 +11,43 @@
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2300133C'/%3E%3Ctext x='16' y='23' font-family='Georgia,serif' font-size='19' fill='%230062F1' text-anchor='middle'%3EH%3C/text%3E%3C/svg%3E">
     <style>
         .font-serif-brand { font-family: 'Lora', ui-serif, Georgia, serif; }
+        @keyframes pin-shake {
+            0%, 100% { transform: translateX(0); }
+            20%, 60% { transform: translateX(-10px); }
+            40%, 80% { transform: translateX(10px); }
+        }
+        .pin-shake { animation: pin-shake 0.4s ease-in-out; }
     </style>
 </head>
 
 <body class="bg-slate-50 text-slate-900 min-h-screen font-sans">
+
+    <div id="access-gate" class="fixed inset-0 z-50 bg-black flex items-center justify-center px-6">
+        <div id="pin-panel" class="w-full max-w-xs text-center">
+            <div class="h-12 w-12 mx-auto rounded-lg bg-[#0062F1] flex items-center justify-center font-bold text-white text-xl mb-8" aria-hidden="true">H</div>
+
+            <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-6">Enter Access Code</p>
+
+            <div id="pin-dots" class="flex items-center justify-center gap-4 mb-3"></div>
+
+            <p id="pin-error" class="hidden text-xs text-red-400 mb-6">Incorrect code</p>
+
+            <div id="pin-pad" class="grid grid-cols-3 gap-3">
+                <button type="button" data-digit="1" class="pin-key h-16 w-16 mx-auto rounded-full bg-white/5 hover:bg-white/10 active:bg-white/20 text-white text-xl font-medium transition-colors border border-white/10">1</button>
+                <button type="button" data-digit="2" class="pin-key h-16 w-16 mx-auto rounded-full bg-white/5 hover:bg-white/10 active:bg-white/20 text-white text-xl font-medium transition-colors border border-white/10">2</button>
+                <button type="button" data-digit="3" class="pin-key h-16 w-16 mx-auto rounded-full bg-white/5 hover:bg-white/10 active:bg-white/20 text-white text-xl font-medium transition-colors border border-white/10">3</button>
+                <button type="button" data-digit="4" class="pin-key h-16 w-16 mx-auto rounded-full bg-white/5 hover:bg-white/10 active:bg-white/20 text-white text-xl font-medium transition-colors border border-white/10">4</button>
+                <button type="button" data-digit="5" class="pin-key h-16 w-16 mx-auto rounded-full bg-white/5 hover:bg-white/10 active:bg-white/20 text-white text-xl font-medium transition-colors border border-white/10">5</button>
+                <button type="button" data-digit="6" class="pin-key h-16 w-16 mx-auto rounded-full bg-white/5 hover:bg-white/10 active:bg-white/20 text-white text-xl font-medium transition-colors border border-white/10">6</button>
+                <button type="button" data-digit="7" class="pin-key h-16 w-16 mx-auto rounded-full bg-white/5 hover:bg-white/10 active:bg-white/20 text-white text-xl font-medium transition-colors border border-white/10">7</button>
+                <button type="button" data-digit="8" class="pin-key h-16 w-16 mx-auto rounded-full bg-white/5 hover:bg-white/10 active:bg-white/20 text-white text-xl font-medium transition-colors border border-white/10">8</button>
+                <button type="button" data-digit="9" class="pin-key h-16 w-16 mx-auto rounded-full bg-white/5 hover:bg-white/10 active:bg-white/20 text-white text-xl font-medium transition-colors border border-white/10">9</button>
+                <button type="button" data-action="clear" class="pin-key h-16 w-16 mx-auto rounded-full bg-transparent hover:bg-white/10 active:bg-white/20 text-slate-400 text-xs font-semibold transition-colors">Clear</button>
+                <button type="button" data-digit="0" class="pin-key h-16 w-16 mx-auto rounded-full bg-white/5 hover:bg-white/10 active:bg-white/20 text-white text-xl font-medium transition-colors border border-white/10">0</button>
+                <button type="button" data-action="back" class="pin-key h-16 w-16 mx-auto rounded-full bg-transparent hover:bg-white/10 active:bg-white/20 text-slate-400 text-xl transition-colors" aria-label="Backspace">&#9003;</button>
+            </div>
+        </div>
+    </div>
 
     <header class="border-b border-slate-200 bg-white px-8 py-4 flex items-center justify-between">
         <div class="flex items-center space-x-3">
@@ -31,23 +64,6 @@
 
     <main class="max-w-6xl mx-auto p-8 space-y-10">
 
-        <section class="bg-[#00133C] rounded-xl px-6 py-5 flex flex-wrap items-center gap-4 justify-between">
-            <div class="flex-1 min-w-[240px]">
-                <p class="text-xs font-semibold uppercase tracking-wider text-blue-300 mb-1">Enter your code</p>
-                <p id="view-code-status" class="text-sm text-white">
-                    Enter your code to see your tools.
-                </p>
-                <p id="view-code-error" class="hidden text-xs text-red-300 mt-1"></p>
-            </div>
-
-            <form id="view-code-form" class="flex items-center gap-2 shrink-0">
-                <label for="view-code-input" class="sr-only">Enter your code</label>
-                <input type="text" id="view-code-input" placeholder="e.g. 5823" inputmode="numeric"
-                    class="w-40 bg-white/10 border border-white/20 placeholder-slate-400 rounded-lg text-sm px-3 py-2.5 text-white focus:border-[#0062F1] focus:ring-2 focus:ring-[#0062F1]/40 focus:outline-none">
-                <button type="submit" class="bg-[#0062F1] hover:bg-[#0050C7] text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition-colors whitespace-nowrap">Go</button>
-            </form>
-        </section>
-
         <section class="max-w-2xl pt-4">
             <span class="inline-block text-xs font-semibold text-[#0062F1] bg-blue-50 border border-blue-100 rounded-full px-3 py-1 mb-4">
                 Built for the team
@@ -56,7 +72,7 @@
                 Welcome to the Data and <span class="text-[#DC6803]">Analytics</span> Hub
             </h2>
             <p class="text-base text-slate-600 leading-relaxed">
-                Enter your code above to see your tools. Everything here runs entirely in your browser —
+                Please select a tool to get started. Everything here runs entirely in your browser —
                 nothing you upload is sent to a server, so every tool is free to use, has no login,
                 and your files never leave your machine.
             </p>
@@ -79,13 +95,7 @@
             </div>
         </a>
 
-        <section id="locked-message" class="max-w-2xl bg-slate-100/60 border border-dashed border-slate-300 rounded-xl p-6">
-            <p class="text-sm text-slate-500">
-                No tools to show yet — enter your code above to unlock them.
-            </p>
-        </section>
-
-        <div id="tools-area" class="hidden space-y-10">
+        <div class="space-y-10">
 
         <section>
             <div class="relative max-w-md">
@@ -326,35 +336,15 @@
     </footer>
 
     <script>
-        const VIEW_CODES = {
-            '1159': {
-                label: 'Data Analyst',
-                tools: [
-                    'data-analyzer', 'file-diff', 'pivot-explorer', 'data-cleaner',
-                    'converter', 'column-stats', 'json-formatter', 'timestamp-converter',
-                    'regex-tester', 'text-diff', 'color-tools', 'text-analyzer',
-                    'qr-generator', 'markdown-preview', 'encode-decode', 'unit-converter'
-                ]
-            }
-        };
+        const ACCESS_CODE = '1159';
 
         const searchInput = document.getElementById('tool-search');
         const noResultsEl = document.getElementById('no-results');
         const noResultsQueryEl = document.getElementById('no-results-query');
         const categorySections = Array.from(document.querySelectorAll('[data-category-section]'));
 
-        const viewCodeForm = document.getElementById('view-code-form');
-        const viewCodeInput = document.getElementById('view-code-input');
-        const viewCodeError = document.getElementById('view-code-error');
-        const viewCodeStatusEl = document.getElementById('view-code-status');
-        const lockedMessageEl = document.getElementById('locked-message');
-        const toolsAreaEl = document.getElementById('tools-area');
-
-        let activeViewCode = null;
-
         function filterTools() {
             const query = searchInput.value.trim().toLowerCase();
-            const allowedTools = activeViewCode ? new Set(VIEW_CODES[activeViewCode].tools) : new Set();
             let anyVisible = false;
 
             categorySections.forEach((section) => {
@@ -363,9 +353,7 @@
 
                 sectionCards.forEach((card) => {
                     const text = card.innerText.toLowerCase();
-                    const matchesQuery = query === '' || text.includes(query);
-                    const matchesCode = allowedTools.has(card.dataset.tool);
-                    const matches = matchesQuery && matchesCode;
+                    const matches = query === '' || text.includes(query);
                     card.classList.toggle('hidden', !matches);
                     if (matches) visibleInSection++;
                 });
@@ -378,34 +366,82 @@
             noResultsQueryEl.innerText = query;
         }
 
-        function applyViewCode(rawCode) {
-            const code = rawCode.trim().toLowerCase();
-            if (!code) return;
+        searchInput.addEventListener('input', filterTools);
 
-            const entry = VIEW_CODES[code];
-            if (!entry) {
-                viewCodeError.innerText = `"${rawCode}" isn't a recognized code.`;
-                viewCodeError.classList.remove('hidden');
+        const gateEl = document.getElementById('access-gate');
+        const pinPanelEl = document.getElementById('pin-panel');
+        const pinDotsEl = document.getElementById('pin-dots');
+        const pinErrorEl = document.getElementById('pin-error');
+        const pinPadEl = document.getElementById('pin-pad');
+
+        let enteredPin = '';
+
+        function renderPinDots() {
+            pinDotsEl.innerHTML = '';
+            for (let i = 0; i < ACCESS_CODE.length; i++) {
+                const dot = document.createElement('div');
+                const filled = i < enteredPin.length;
+                dot.className = 'h-3 w-3 rounded-full border border-slate-500' + (filled ? ' bg-white border-white' : '');
+                pinDotsEl.appendChild(dot);
+            }
+        }
+
+        function submitPin() {
+            if (enteredPin === ACCESS_CODE) {
+                gateEl.style.opacity = '0';
+                setTimeout(() => {
+                    gateEl.classList.add('hidden');
+                    document.body.classList.remove('overflow-hidden');
+                }, 200);
                 return;
             }
 
-            viewCodeError.classList.add('hidden');
-            activeViewCode = code;
-
-            viewCodeStatusEl.innerText = `Showing tools for "${entry.label}".`;
-            lockedMessageEl.classList.add('hidden');
-            toolsAreaEl.classList.remove('hidden');
-            viewCodeInput.value = '';
-
-            filterTools();
+            pinErrorEl.classList.remove('hidden');
+            pinPanelEl.classList.remove('pin-shake');
+            void pinPanelEl.offsetWidth;
+            pinPanelEl.classList.add('pin-shake');
+            enteredPin = '';
+            renderPinDots();
         }
 
-        viewCodeForm.addEventListener('submit', (e) => {
-            e.preventDefault();
-            applyViewCode(viewCodeInput.value);
+        function pressDigit(digit) {
+            if (enteredPin.length >= ACCESS_CODE.length) return;
+            pinErrorEl.classList.add('hidden');
+            enteredPin += digit;
+            renderPinDots();
+            if (enteredPin.length === ACCESS_CODE.length) submitPin();
+        }
+
+        function pressBackspace() {
+            pinErrorEl.classList.add('hidden');
+            enteredPin = enteredPin.slice(0, -1);
+            renderPinDots();
+        }
+
+        function pressClear() {
+            pinErrorEl.classList.add('hidden');
+            enteredPin = '';
+            renderPinDots();
+        }
+
+        pinPadEl.addEventListener('click', (e) => {
+            const button = e.target.closest('button');
+            if (!button) return;
+            if (button.dataset.digit !== undefined) pressDigit(button.dataset.digit);
+            else if (button.dataset.action === 'back') pressBackspace();
+            else if (button.dataset.action === 'clear') pressClear();
         });
 
-        searchInput.addEventListener('input', filterTools);
+        document.addEventListener('keydown', (e) => {
+            if (gateEl.classList.contains('hidden')) return;
+            if (/^[0-9]$/.test(e.key)) pressDigit(e.key);
+            else if (e.key === 'Backspace') pressBackspace();
+            else if (e.key === 'Escape') pressClear();
+        });
+
+        document.body.classList.add('overflow-hidden');
+        renderPinDots();
+        gateEl.style.transition = 'opacity 0.2s ease-out';
     </script>
 
 </body>

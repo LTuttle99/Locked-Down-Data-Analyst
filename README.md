@@ -51,22 +51,21 @@ Previewer is the only text-based tool with an external dependency (`marked`).
   calls — pings a proxy server on every page load. Update the headline/blurb
   and `href` directly in the root `index.html` whenever you want to change
   what it points to.
-- **Access codes** — the landing page shows no tools at all until someone
-  enters a valid code in the "Enter your code" box; each code unlocks only
-  the tools listed for it, and there's no "show all" control to see the
-  rest. Edit the `VIEW_CODES` object in the `<script>` at the bottom of the
-  root `index.html` to add, rename, or change codes — each entry maps a
-  code to a label and a list of `data-tool` ids (visible as a
-  `data-tool="..."` attribute on every card in the HTML). The code is not
-  remembered — every fresh visit or page refresh resets to locked (no
-  tools shown) and the code has to be re-entered.
+- **Access code gate** — every visit (and every refresh) opens on a
+  full-screen black keypad ("Enter Access Code") that covers the whole hub;
+  nothing behind it is reachable until the correct numeric code is entered.
+  Wrong codes shake and clear; there's no "skip" or "show all" control.
+  The code is set in the `ACCESS_CODE` constant in the `<script>` at the
+  bottom of the root `index.html` — change that one value to change the
+  code. It's not remembered anywhere (no `localStorage`, no URL param), so
+  it has to be re-entered on every fresh load by design.
 
-  **This is a convenience filter, not access control.** It only hides cards
-  on the landing page — anyone who knows or guesses a tool's direct URL
-  (e.g. `tools/data-analyzer/index.html`) can open it regardless of any
-  code, since there's no backend to actually check credentials against.
-  Real per-person restriction would need a server with authentication,
-  which is a different architecture than this static site.
+  **This is a convenience filter, not access control.** It only covers the
+  landing page — anyone who knows or guesses a tool's direct URL (e.g.
+  `tools/data-analyzer/index.html`) can open it directly, bypassing the
+  gate entirely, since there's no backend to actually check credentials
+  against. Real per-person restriction would need a server with
+  authentication, which is a different architecture than this static site.
 
 ## Data Analyzer (`tools/data-analyzer/`)
 
