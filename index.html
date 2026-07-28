@@ -60,7 +60,7 @@
         </div>
     </div>
 
-    <header id="hub-header" inert class="border-b border-slate-200 bg-white px-8 py-4 flex items-center justify-between">
+    <header id="hub-header" inert class="border-b border-slate-200 bg-white px-8 py-4 flex flex-wrap items-center justify-between gap-3">
         <div class="flex items-center space-x-3">
             <div class="h-9 w-9 rounded bg-[#00133C] flex items-center justify-center font-bold text-white" aria-hidden="true">H</div>
             <h1 class="text-xl font-semibold tracking-wide text-[#00133C]">
@@ -68,7 +68,14 @@
             </h1>
         </div>
 
-        <div class="flex items-center gap-3">
+        <div class="flex flex-wrap items-center gap-3">
+            <div id="hub-status-badge" class="flex items-center gap-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-full border border-emerald-200">
+                <span class="relative flex h-2 w-2" aria-hidden="true">
+                    <span class="ping-dot animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span class="solid-dot relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
+                <span id="hub-status-text">Data Hub Online</span>
+            </div>
             <a href="getting-started.html" class="text-xs font-medium text-[#0062F1] hover:text-[#00133C] bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-full border border-blue-100 transition-colors">
                 Getting Started Guide
             </a>
@@ -407,6 +414,87 @@
 
         searchInput.addEventListener('input', filterTools);
 
+        // -------------------------------------------------------------- //
+        // Tool status badges: each card gets a real reachability check
+        // (a same-origin HEAD request to that tool's own page), not a
+        // decorative always-green light. "Offline" means the request
+        // failed or timed out — a genuinely broken link, a missing file,
+        // or a bad deploy would show up here.
+        // -------------------------------------------------------------- //
+        const allCards = Array.from(document.querySelectorAll('.tool-card'));
+
+        function initStatusBadges() {
+            allCards.forEach((card) => {
+                card.classList.add('relative');
+                const badge = document.createElement('span');
+                badge.className = 'tool-status absolute top-3 right-3 flex items-center gap-1 text-[10px] font-medium';
+                badge.innerHTML = `
+                    <span class="status-dot h-1.5 w-1.5 rounded-full bg-slate-300"></span>
+                    <span class="status-label text-slate-400">Checking</span>
+                `;
+                card.appendChild(badge);
+            });
+        }
+
+        function setCardStatus(card, online) {
+            const dot = card.querySelector('.status-dot');
+            const label = card.querySelector('.status-label');
+            if (online) {
+                dot.className = 'status-dot h-1.5 w-1.5 rounded-full bg-emerald-500';
+                label.className = 'status-label text-emerald-600';
+                label.innerText = 'Tool Online';
+            } else {
+                dot.className = 'status-dot h-1.5 w-1.5 rounded-full bg-red-500';
+                label.className = 'status-label text-red-600';
+                label.innerText = 'Tool Offline';
+            }
+        }
+
+        async function checkToolStatus(card) {
+            const url = card.getAttribute('href');
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 6000);
+            try {
+                const resp = await fetch(url, { method: 'HEAD', cache: 'no-store', signal: controller.signal });
+                clearTimeout(timeout);
+                const online = resp.ok;
+                setCardStatus(card, online);
+                return online;
+            } catch (err) {
+                clearTimeout(timeout);
+                setCardStatus(card, false);
+                return false;
+            }
+        }
+
+        function updateHubStatusBadge(allOnline, issueCount) {
+            const badge = document.getElementById('hub-status-badge');
+            const text = document.getElementById('hub-status-text');
+            const pingDot = badge.querySelector('.ping-dot');
+            const solidDot = badge.querySelector('.solid-dot');
+
+            if (allOnline) {
+                badge.className = 'flex items-center gap-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-full border border-emerald-200';
+                pingDot.className = 'ping-dot animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75';
+                solidDot.className = 'solid-dot relative inline-flex rounded-full h-2 w-2 bg-emerald-500';
+                text.innerText = 'Data Hub Online';
+            } else {
+                badge.className = 'flex items-center gap-1.5 text-xs font-medium text-red-700 bg-red-50 px-3 py-1.5 rounded-full border border-red-200';
+                pingDot.className = 'ping-dot animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75';
+                solidDot.className = 'solid-dot relative inline-flex rounded-full h-2 w-2 bg-red-500';
+                text.innerText = `${issueCount} Tool${issueCount > 1 ? 's' : ''} Unreachable`;
+            }
+        }
+
+        async function runStatusChecks() {
+            const visibleCards = allCards.filter((card) => !card.classList.contains('hidden'));
+            if (visibleCards.length === 0) return;
+
+            const results = await Promise.all(visibleCards.map(checkToolStatus));
+            const issueCount = results.filter((ok) => !ok).length;
+            updateHubStatusBadge(issueCount === 0, issueCount);
+        }
+
         const gateEl = document.getElementById('access-gate');
         const pinPanelEl = document.getElementById('pin-panel');
         const pinDotsEl = document.getElementById('pin-dots');
@@ -433,6 +521,7 @@
             if (entry) {
                 activeViewCode = enteredPin;
                 filterTools();
+                runStatusChecks();
 
                 pinPanelEl.classList.add('hidden');
                 pinWelcomeTextEl.innerText = entry.welcome || `Welcome, ${entry.label} team member`;
@@ -498,6 +587,7 @@
         });
 
         document.body.classList.add('overflow-hidden');
+        initStatusBadges();
         filterTools();
         renderPinDots();
         gateEl.style.transition = 'opacity 0.2s ease-out';
