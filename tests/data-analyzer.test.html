@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Data Analyzer — Test Suite</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2300133C'/%3E%3Ctext x='16' y='23' font-family='Georgia,serif' font-size='19' fill='%230062F1' text-anchor='middle'%3EH%3C/text%3E%3C/svg%3E">
+</head>
+<body class="bg-slate-50 text-slate-900 min-h-screen font-sans">
+
+    <header class="border-b border-slate-200 bg-white px-8 py-4">
+        <h1 class="text-xl font-semibold tracking-wide text-[#00133C]">Data Analyzer <span class="text-[#0062F1] font-normal">Test Suite</span></h1>
+        <p class="text-xs text-slate-500 mt-1">
+            A self-contained, in-browser check of the math and logic behind the Data Analyzer —
+            regression, forecasting, goal pacing, entity classification, anomaly detection, schema
+            inference, and CSV parsing. No build step, no dependencies beyond what the tool itself
+            already loads. Open this file directly (via <code>./serve.sh</code> or a double-click)
+            to run it; results render below and are also logged to the console.
+        </p>
+    </header>
+
+    <main class="max-w-4xl mx-auto p-6 space-y-4">
+        <div id="summary" class="bg-white border border-slate-200 rounded-xl p-5"></div>
+        <div id="results" class="space-y-2"></div>
+    </main>
+
+    <!-- Same engine files the Data Analyzer itself loads, in the same order. -->
+    <script src="../tools/data-analyzer/js/core.js"></script>
+    <script src="../tools/data-analyzer/js/schema.js"></script>
+    <script src="../tools/data-analyzer/js/forecast.js"></script>
+    <script src="../tools/data-analyzer/js/goals.js"></script>
+    <script src="../tools/data-analyzer/js/insights.js"></script>
+    <script src="../tools/data-analyzer/js/run-analysis.js"></script>
+
+    <script>
+        const results = [];
+
+        function test(name, fn) {
+            try {
+                fn();
+                results.push({ name, pass: true });
+            } catch (e) {
+                results.push({ name, pass: false, error: e.message });
+            }
+        }
+
+        function assertEqual(actual, expected, label) {
+            if (actual !== expected) {
+                throw new Error(`${label || 'assertEqual'}: expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
+            }
+        }
+
+        function assertClose(actual, expected, tolerance, label) {
+            if (typeof actual !== 'number' || Number.isNaN(actual) || Math.abs(actual - expected) > tolerance) {
+                throw new Error(`${label || 'assertClose'}: expected ~${expected} (±${tolerance}), got ${actual}`);
+            }
+        }
+
+        function assertTrue(cond, label) {
+            if (!cond) throw new Error(label || 'assertTrue failed');
+        }
+
+        function d(iso) {
+            const [y, m, day] = iso.split('-').map(Number);
+            return new Date(Date.UTC(y, m - 1, day));
+        }
+
+        // ============================================================
+        // Core helpers: coercion, stats, regression, dates
+        // ============================================================
+
+        test('toNumber parses numeric strings and rejects junk', () => {
+            assertEqual(toNumber('123.45'), 123.45);
+            assertEqual(toNumber('  42  '), 42);
+            assertEqual(toNumber(''), null);
+            assertEqual(toNumber('abc'), null);
+            assertEqual(toNumber(null), null);
+            assertEqual(toNumber(7), 7);
+        });
+
+        test('toDate parses ISO and rejects unparseable strings', () => {
+            assertEqual(toDate('2024-03-15').getTime(), d('2024-03-15').getTime());
+            assertEqual(toDate(''), null);
+            assertEqual(toDate('not a date at all'), null);
+        });
+
+        test('isMissing treats null, undefined, NaN, and blank strings as missing', () => {
+            assertTrue(isMissing(null));
+            assertTrue(isMissing(undefined));
+            assertTrue(isMissing(NaN));
+            assertTrue(isMissing('   '));
+            assertTrue(!isMissing(0));
+            assertTrue(!isMissing('x'));
+        });
+
+        test('mean and std match hand-computed values', () => {
+            assertClose(mean([1, 2, 3, 4]), 2.5, 1e-9);
+            assertClose(std([2, 4, 4, 4, 5, 5, 7, 9]), 2, 1e-9);
+        });
+
+        test('clamp bounds a value on both sides', () => {
+            assertEqual(clamp(5, 0, 10), 5);
+            assertEqual(clamp(-1, 0, 10), 0);
+            assertEqual(clamp(15, 0, 10), 10);
+        });
+
+        test('linearRegression fits a perfect line exactly', () => {
+            const reg = linearRegression([0, 1, 2, 3, 4], [2, 4, 6, 8, 10]);
+            assertClose(reg.slope, 2, 1e-9);
+            assertClose(reg.intercept, 2, 1e-9);
+            assertClose(reg.r2, 1, 1e-9);
+            assertClose(reg.predict(5), 12, 1e-9);
+        });
+
+        test('linearRegression on flat data has zero slope and predicts the constant', () => {
+            const reg = linearRegression([0, 1, 2, 3], [5, 5, 5, 5]);
+            assertClose(reg.slope, 0, 1e-9);
+            assertClose(reg.predict(10), 5, 1e-9);
+        });
+
+        // ============================================================
+        // CSV parsing
+        // ============================================================
+
+        test('parseCSVText handles quoted fields with embedded commas and escaped quotes', () => {
+            const csv = 'name,note\n"Acme, Inc.","She said ""hi"""\nGlobex,plain\n';
+            const { columns, rows } = parseCSVText(csv);
+            assertEqual(columns.join('|'), 'name|note');
+            assertEqual(rows.length, 2);
+            assertEqual(rows[0].name, 'Acme, Inc.');
+            assertEqual(rows[0].note, 'She said "hi"');
+            assertEqual(rows[1].name, 'Globex');
+        });
+
+        test('parseCSVText turns blank cells into null', () => {
+            const { rows } = parseCSVText('a,b\n1,\n,2\n');
+            assertEqual(rows[0].b, null);
+            assertEqual(rows[1].a, null);
+        });
+
+        test('countDuplicateRows counts only fully-identical rows', () => {
+            const columns = ['a', 'b'];
+            const rows = [
+                { a: 1, b: 'x' },
+                { a: 1, b: 'x' },
+                { a: 1, b: 'y' },
+            ];
+            assertEqual(countDuplicateRows(rows, columns), 1);
+        });
+
+        // ============================================================
+        // Schema inference
+        // ============================================================
+
+        test('inferSchema picks the right metric, timeline, entity, and dimension columns', () => {
+            const columns = ['order_id', 'order_date', 'revenue', 'region', 'customer'];
+            const regions = ['East', 'West'];
+            const customers = ['Acme', 'Globex', 'Initech'];
+            const rows = [];
+            for (let i = 1; i <= 12; i++) {
+                rows.push({
+                    order_id: i,
+                    order_date: `2024-01-${String(i).padStart(2, '0')}`,
+                    revenue: 100 * i,
+                    region: regions[i % regions.length],
+                    customer: customers[i % customers.length]
+                });
+            }
+            const analyzer = new BookOfBusinessAnalyzer(rows, columns, 'fixture.csv');
+            const schema = analyzer.inferSchema();
+
+            assertEqual(schema.inferred_mapping.metric_column, 'revenue');
+            assertEqual(schema.inferred_mapping.timeline_column, 'order_date');
+            assertEqual(schema.inferred_mapping.entity_column, 'customer');
+            assertTrue(schema.inferred_mapping.dimension_columns.includes('region'), 'region should be a dimension candidate');
+            assertTrue(schema.numeric_columns.includes('revenue'), 'revenue should be numeric');
+            assertTrue(!schema.numeric_columns.includes('order_id'), 'order_id should be classified ID-like, not numeric');
+        });
+
+        test('assessDataQuality flags duplicate rows', () => {
+            const columns = ['date', 'amount'];
+            const rows = [
+                { date: '2024-01-01', amount: 10 },
+                { date: '2024-01-01', amount: 10 },
+                { date: '2024-01-02', amount: 20 }
+            ];
+            const analyzer = new BookOfBusinessAnalyzer(rows, columns, 'fixture.csv');
+            const quality = analyzer.assessDataQuality({ metric_column: 'amount', timeline_column: 'date', entity_column: null, dimension_columns: [] });
+            assertEqual(quality.duplicate_rows, 1);
+            assertTrue(quality.warnings.some((w) => w.toLowerCase().includes('duplicate')), 'should warn about duplicates');
+        });
+
+        // ============================================================
+        // runAnalysis: KPIs and HHI concentration
+        // ============================================================
+
+        test('runAnalysis computes total, average, and HHI correctly for a known split', () => {
+            const columns = ['date', 'amount', 'region'];
+            const rows = [
+                { date: '2024-01-10', amount: 600, region: 'A' },
+                { date: '2024-01-15', amount: 300, region: 'B' },
+                { date: '2024-01-20', amount: 100, region: 'C' }
+            ];
+            const analyzer = new BookOfBusinessAnalyzer(rows, columns, 'fixture.csv');
+            const res = analyzer.runAnalysis({
+                mapping: { metric_column: 'amount', timeline_column: 'date', entity_column: null, dimension_columns: ['region'] },
+                dimension_filters: {},
+                projection_target: 'value',
+                primary_dimension: 'region',
+                include_future_dates: true,
+                goals: [],
+                entity_view: 'all'
+            });
+
+            assertEqual(res.kpis.total_metric_value, 1000);
+            assertClose(res.kpis.avg_entity_value, 1000 / 3, 1e-6);
+            // Shares are 60%, 30%, 10% -> HHI = 60^2 + 30^2 + 10^2 = 4600
+            assertClose(res.kpis.hhi_index, 4600, 1e-6);
+            assertEqual(res.entity_split.classification_method, 'unavailable');
+        });
+
+        // ============================================================
+        // New vs. Repeat entity classification (the 30-day rule)
+        // ============================================================
+
+        test('entity split classifies New vs Repeat using the 30-day first-seen rule', () => {
+            const columns = ['date', 'amount', 'customer'];
+            const rows = [
+                { date: '2024-01-01', amount: 100, customer: 'Cust1' },   // New (first-ever row)
+                { date: '2024-01-05', amount: 200, customer: 'Cust2' },   // New (first-seen)
+                { date: '2024-03-10', amount: 50, customer: 'Cust2' }     // Repeat (65 days after first-seen)
+            ];
+            const analyzer = new BookOfBusinessAnalyzer(rows, columns, 'fixture.csv');
+            const res = analyzer.runAnalysis({
+                mapping: { metric_column: 'amount', timeline_column: 'date', entity_column: 'customer', dimension_columns: [] },
+                dimension_filters: {},
+                projection_target: 'value',
+                primary_dimension: null,
+                include_future_dates: true,
+                goals: [],
+                entity_view: 'all'
+            });
+
+            assertEqual(res.entity_split.classification_method, 'derived');
+            assertEqual(res.entity_split.new_count, 2, 'Cust1 and Cust2 each have at least one New row');
+            assertEqual(res.entity_split.repeat_count, 1, 'only Cust2 has a Repeat row');
+            assertEqual(res.entity_split.new_value, 300, '100 (Cust1) + 200 (Cust2 first purchase)');
+            assertEqual(res.entity_split.repeat_value, 50);
+        });
+
+        // ============================================================
+        // Goal pacing status
+        // ============================================================
+
+        test('computeGoals classifies ahead / on_pace / behind / no_goal_set correctly', () => {
+            const columns = ['date', 'amount'];
+            const rows = [{ date: '2024-01-05', amount: 600 }];
+            const analyzer = new BookOfBusinessAnalyzer(rows, columns, 'fixture.csv');
+            const workingRows = analyzer.buildWorkingRows('amount', 'date', null, []);
+            const anchor = d('2024-01-16');
+
+            const goals = [
+                { id: 'ahead', label: 'Ahead', period: 'monthly', scope_type: 'overall', target_value: 600 },
+                { id: 'on_pace', label: 'On Pace', period: 'monthly', scope_type: 'overall', target_value: 1200 },
+                { id: 'behind', label: 'Behind', period: 'monthly', scope_type: 'overall', target_value: 3000 },
+                { id: 'none', label: 'No Goal', period: 'monthly', scope_type: 'overall', target_value: 0 }
+            ];
+
+            const progress = analyzer.computeGoals(workingRows, null, 'value', goals, anchor);
+            const byId = Object.fromEntries(progress.map((g) => [g.id, g]));
+
+            assertEqual(byId.ahead.status, 'ahead');
+            assertEqual(byId.on_pace.status, 'on_pace');
+            assertEqual(byId.behind.status, 'behind');
+            assertEqual(byId.none.status, 'no_goal_set');
+        });
+
+        test('roundTarget rounds to a sensible magnitude based on size', () => {
+            const columns = ['date', 'amount'];
+            const analyzer = new BookOfBusinessAnalyzer([], columns, 'fixture.csv');
+            assertEqual(analyzer.roundTarget(1234), 1200);
+            assertEqual(analyzer.roundTarget(87), 87);
+            assertEqual(analyzer.roundTarget(0), 0);
+            assertEqual(analyzer.roundTarget(-5), 0);
+        });
+
+        // ============================================================
+        // Month-over-month anomaly detection
+        // ============================================================
+
+        test('detectTrendAnomalies flags a real spike but not a flat series', () => {
+            const columns = ['date', 'amount', 'region'];
+            const rows = [];
+            // Region X: flat at 1000 for 4 months, then spikes to 2000.
+            ['2024-01-05', '2024-02-05', '2024-03-05', '2024-04-05'].forEach((date) => {
+                rows.push({ date, amount: 1000, region: 'X' });
+            });
+            rows.push({ date: '2024-05-05', amount: 2000, region: 'X' });
+            // Region Y: flat the whole time, should never be flagged.
+            ['2024-01-05', '2024-02-05', '2024-03-05', '2024-04-05', '2024-05-05'].forEach((date) => {
+                rows.push({ date, amount: 500, region: 'Y' });
+            });
+
+            const analyzer = new BookOfBusinessAnalyzer(rows, columns, 'fixture.csv');
+            const workingRows = analyzer.buildWorkingRows('amount', 'date', null, ['region']);
+            const flags = analyzer.detectTrendAnomalies(workingRows, null, 'value', 'region', 1000);
+
+            assertEqual(flags.length, 1, 'only the spiking region should be flagged');
+            assertEqual(flags[0].scope_value, 'X');
+            assertEqual(flags[0].direction, 'spike');
+        });
+
+        // ============================================================
+        // Seasonal trend forecast — sanity checks on shape, not exact values
+        // ============================================================
+
+        test('seasonalTrendForecast on a steady upward trend projects further growth with tight bands', () => {
+            const columns = ['date', 'amount'];
+            const rows = [];
+            let ord = 0;
+            for (let m = 1; m <= 12; m++) {
+                rows.push({ date: `2023-${String(m).padStart(2, '0')}-15`, amount: 1000 + m * 100 });
+            }
+            const analyzer = new BookOfBusinessAnalyzer(rows, columns, 'fixture.csv');
+            const workingRows = analyzer.buildWorkingRows('amount', 'date', null, []);
+            const monthly = analyzer.buildMonthlySeries(workingRows, null);
+            const { future, diagnostics } = analyzer.seasonalTrendForecast(monthly, 'value', 3);
+
+            assertEqual(future.length, 3);
+            assertTrue(diagnostics.r_squared > 0.99, `expected a near-perfect linear fit, got r2=${diagnostics.r_squared}`);
+            assertTrue(future[2].expected_value > future[0].expected_value, 'later months should project higher than earlier ones on an upward trend');
+            assertTrue(future[0].conservative_value <= future[0].expected_value && future[0].expected_value <= future[0].aggressive_value, 'conservative <= expected <= aggressive');
+        });
+
+        // ============================================================
+        // Render results
+        // ============================================================
+
+        const passCount = results.filter((r) => r.pass).length;
+        const failCount = results.length - passCount;
+
+        const summaryEl = document.getElementById('summary');
+        summaryEl.innerHTML = `
+            <p class="text-sm font-semibold ${failCount === 0 ? 'text-emerald-600' : 'text-red-600'}">
+                ${passCount} / ${results.length} tests passed
+            </p>
+        `;
+
+        const resultsEl = document.getElementById('results');
+        resultsEl.innerHTML = results.map((r) => `
+            <div class="bg-white border ${r.pass ? 'border-slate-200' : 'border-red-300'} rounded-lg p-3 flex items-start gap-3">
+                <span class="text-sm font-bold ${r.pass ? 'text-emerald-600' : 'text-red-600'}">${r.pass ? '✓' : '✗'}</span>
+                <div>
+                    <p class="text-sm text-slate-800">${r.name}</p>
+                    ${r.pass ? '' : `<p class="text-xs text-red-600 mt-1 font-mono">${r.error}</p>`}
+                </div>
+            </div>
+        `).join('');
+
+        console.log(`${passCount}/${results.length} tests passed`);
+        results.filter((r) => !r.pass).forEach((r) => console.error(`FAIL: ${r.name} — ${r.error}`));
+    </script>
+
+</body>
+</html>
