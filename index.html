@@ -414,13 +414,6 @@
 
         searchInput.addEventListener('input', filterTools);
 
-        // -------------------------------------------------------------- //
-        // Tool status badges: each card gets a real reachability check
-        // (a same-origin HEAD request to that tool's own page), not a
-        // decorative always-green light. "Offline" means the request
-        // failed or timed out — a genuinely broken link, a missing file,
-        // or a bad deploy would show up here.
-        // -------------------------------------------------------------- //
         const allCards = Array.from(document.querySelectorAll('.tool-card'));
 
         function initStatusBadges() {
