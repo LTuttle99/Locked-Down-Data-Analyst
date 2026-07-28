@@ -336,7 +336,25 @@
     </footer>
 
     <script>
-        const ACCESS_CODE = '1159';
+        const VIEW_CODES = {
+            '1159': {
+                label: 'Data Analyst',
+                tools: [
+                    'data-analyzer', 'file-diff', 'pivot-explorer', 'data-cleaner',
+                    'converter', 'column-stats', 'json-formatter', 'timestamp-converter',
+                    'regex-tester', 'text-diff', 'color-tools', 'text-analyzer',
+                    'qr-generator', 'markdown-preview', 'encode-decode', 'unit-converter'
+                ]
+            },
+            '3010': { label: 'Leadership', tools: ['data-analyzer', 'pivot-explorer'] },
+            '3020': { label: 'Marketing', tools: ['qr-generator', 'color-tools', 'markdown-preview', 'text-analyzer'] },
+            '3030': { label: 'IT / Dev', tools: ['json-formatter', 'regex-tester', 'encode-decode', 'timestamp-converter', 'text-diff', 'file-diff'] },
+            '3040': { label: 'HR / Operations', tools: ['data-cleaner', 'converter', 'column-stats', 'timestamp-converter'] },
+            '3050': { label: 'Finance', tools: ['data-analyzer', 'column-stats', 'pivot-explorer', 'file-diff'] }
+        };
+
+        const PIN_LENGTH = 4;
+        let activeViewCode = null;
 
         const searchInput = document.getElementById('tool-search');
         const noResultsEl = document.getElementById('no-results');
@@ -345,6 +363,7 @@
 
         function filterTools() {
             const query = searchInput.value.trim().toLowerCase();
+            const allowedTools = activeViewCode ? new Set(VIEW_CODES[activeViewCode].tools) : new Set();
             let anyVisible = false;
 
             categorySections.forEach((section) => {
@@ -353,7 +372,9 @@
 
                 sectionCards.forEach((card) => {
                     const text = card.innerText.toLowerCase();
-                    const matches = query === '' || text.includes(query);
+                    const matchesQuery = query === '' || text.includes(query);
+                    const matchesCode = allowedTools.has(card.dataset.tool);
+                    const matches = matchesQuery && matchesCode;
                     card.classList.toggle('hidden', !matches);
                     if (matches) visibleInSection++;
                 });
@@ -378,7 +399,7 @@
 
         function renderPinDots() {
             pinDotsEl.innerHTML = '';
-            for (let i = 0; i < ACCESS_CODE.length; i++) {
+            for (let i = 0; i < PIN_LENGTH; i++) {
                 const dot = document.createElement('div');
                 const filled = i < enteredPin.length;
                 dot.className = 'h-3 w-3 rounded-full border border-slate-500' + (filled ? ' bg-white border-white' : '');
@@ -387,7 +408,12 @@
         }
 
         function submitPin() {
-            if (enteredPin === ACCESS_CODE) {
+            const entry = VIEW_CODES[enteredPin];
+
+            if (entry) {
+                activeViewCode = enteredPin;
+                filterTools();
+
                 gateEl.style.opacity = '0';
                 setTimeout(() => {
                     gateEl.classList.add('hidden');
@@ -405,11 +431,11 @@
         }
 
         function pressDigit(digit) {
-            if (enteredPin.length >= ACCESS_CODE.length) return;
+            if (enteredPin.length >= PIN_LENGTH) return;
             pinErrorEl.classList.add('hidden');
             enteredPin += digit;
             renderPinDots();
-            if (enteredPin.length === ACCESS_CODE.length) submitPin();
+            if (enteredPin.length === PIN_LENGTH) submitPin();
         }
 
         function pressBackspace() {
@@ -440,6 +466,7 @@
         });
 
         document.body.classList.add('overflow-hidden');
+        filterTools();
         renderPinDots();
         gateEl.style.transition = 'opacity 0.2s ease-out';
     </script>

@@ -53,12 +53,26 @@ Previewer is the only text-based tool with an external dependency (`marked`).
   what it points to.
 - **Access code gate** — every visit (and every refresh) opens on a
   full-screen black keypad ("Enter Access Code") that covers the whole hub;
-  nothing behind it is reachable until the correct numeric code is entered.
+  nothing behind it is reachable until a valid numeric code is entered.
   Wrong codes shake and clear; there's no "skip" or "show all" control.
-  The code is set in the `ACCESS_CODE` constant in the `<script>` at the
-  bottom of the root `index.html` — change that one value to change the
-  code. It's not remembered anywhere (no `localStorage`, no URL param), so
-  it has to be re-entered on every fresh load by design.
+  Each code unlocks only the tools assigned to it — the `VIEW_CODES` object
+  in the `<script>` at the bottom of the root `index.html` maps each code to
+  a label and a list of `data-tool` ids (visible as a `data-tool="..."`
+  attribute on every card in the HTML). Current codes:
+
+  | Code | View | Tools |
+  |---|---|---|
+  | `1159` | Data Analyst | all 16 tools |
+  | `3010` | Leadership | Data Analyzer, Pivot & Chart Explorer |
+  | `3020` | Marketing | QR Generator, Color Tools, Markdown Previewer, Text Analyzer |
+  | `3030` | IT / Dev | JSON Formatter, Regex Tester, Base64/URL Encoder, Timestamp Converter, Text Diff, File Diff |
+  | `3040` | HR / Operations | Data Cleaner, Format Converter, Column Statistics, Timestamp Converter |
+  | `3050` | Finance | Data Analyzer, Column Statistics, Pivot & Chart Explorer, File Diff |
+
+  A code is not remembered anywhere (no `localStorage`, no URL param), so it
+  has to be re-entered on every fresh load by design, and there's no way to
+  switch views without refreshing and re-entering a (possibly different)
+  code.
 
   **This is a convenience filter, not access control.** It only covers the
   landing page — anyone who knows or guesses a tool's direct URL (e.g.
