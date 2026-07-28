@@ -128,8 +128,8 @@
             if (nums.length === 0) return 0;
             if (mode === 'sum') return nums.reduce((a, b) => a + b, 0);
             if (mode === 'avg') return nums.reduce((a, b) => a + b, 0) / nums.length;
-            if (mode === 'min') return Math.min(...nums);
-            if (mode === 'max') return Math.max(...nums);
+            if (mode === 'min') return nums.reduce((a, b) => (b < a ? b : a), nums[0]);
+            if (mode === 'max') return nums.reduce((a, b) => (b > a ? b : a), nums[0]);
             return 0;
         }
 

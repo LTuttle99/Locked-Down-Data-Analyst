@@ -345,8 +345,15 @@ class BookOfBusinessAnalyzer {
     if (!timeCol || !this.columns.includes(timeCol)) return { min_date: null, max_date: null };
     const parsed = this.rows.map((r) => toDate(r[timeCol])).filter((d) => d !== null && d >= ANALYTICAL_BASELINE);
     if (parsed.length === 0) return { min_date: null, max_date: null };
-    const minD = new Date(Math.min(...parsed.map((d) => d.getTime())));
-    const maxD = new Date(Math.max(...parsed.map((d) => d.getTime())));
+    const times = parsed.map((d) => d.getTime());
+    let minTime = times[0];
+    let maxTime = times[0];
+    for (const t of times) {
+      if (t < minTime) minTime = t;
+      if (t > maxTime) maxTime = t;
+    }
+    const minD = new Date(minTime);
+    const maxD = new Date(maxTime);
     return { min_date: formatDateISO(minD), max_date: formatDateISO(maxD) };
   }
 
