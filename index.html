@@ -27,40 +27,40 @@
 
 <body class="bg-slate-50 text-slate-900 min-h-screen font-sans">
 
-    <div id="access-gate" class="fixed inset-0 z-50 bg-black flex items-center justify-center px-6">
+    <div id="access-gate" role="dialog" aria-modal="true" aria-labelledby="pin-heading" class="fixed inset-0 z-50 bg-black flex items-center justify-center px-6">
         <div id="pin-panel" class="w-full max-w-xs text-center">
             <div class="h-12 w-12 mx-auto rounded-lg bg-[#0062F1] flex items-center justify-center font-bold text-white text-xl mb-8" aria-hidden="true">H</div>
 
-            <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-6">Enter Access Code</p>
+            <p id="pin-heading" class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-6">Enter Access Code</p>
 
             <div id="pin-dots" class="flex items-center justify-center gap-4 mb-3"></div>
 
-            <p id="pin-error" class="hidden text-xs text-red-400 mb-6">Incorrect code</p>
+            <p id="pin-error" class="hidden text-xs text-red-400 mb-6" role="alert">Incorrect code</p>
 
             <div id="pin-pad" class="grid grid-cols-3 gap-3">
-                <button type="button" data-digit="1" class="pin-key h-16 w-16 mx-auto rounded-full bg-white/5 hover:bg-white/10 active:bg-white/20 text-white text-xl font-medium transition-colors border border-white/10">1</button>
-                <button type="button" data-digit="2" class="pin-key h-16 w-16 mx-auto rounded-full bg-white/5 hover:bg-white/10 active:bg-white/20 text-white text-xl font-medium transition-colors border border-white/10">2</button>
-                <button type="button" data-digit="3" class="pin-key h-16 w-16 mx-auto rounded-full bg-white/5 hover:bg-white/10 active:bg-white/20 text-white text-xl font-medium transition-colors border border-white/10">3</button>
-                <button type="button" data-digit="4" class="pin-key h-16 w-16 mx-auto rounded-full bg-white/5 hover:bg-white/10 active:bg-white/20 text-white text-xl font-medium transition-colors border border-white/10">4</button>
-                <button type="button" data-digit="5" class="pin-key h-16 w-16 mx-auto rounded-full bg-white/5 hover:bg-white/10 active:bg-white/20 text-white text-xl font-medium transition-colors border border-white/10">5</button>
-                <button type="button" data-digit="6" class="pin-key h-16 w-16 mx-auto rounded-full bg-white/5 hover:bg-white/10 active:bg-white/20 text-white text-xl font-medium transition-colors border border-white/10">6</button>
-                <button type="button" data-digit="7" class="pin-key h-16 w-16 mx-auto rounded-full bg-white/5 hover:bg-white/10 active:bg-white/20 text-white text-xl font-medium transition-colors border border-white/10">7</button>
-                <button type="button" data-digit="8" class="pin-key h-16 w-16 mx-auto rounded-full bg-white/5 hover:bg-white/10 active:bg-white/20 text-white text-xl font-medium transition-colors border border-white/10">8</button>
-                <button type="button" data-digit="9" class="pin-key h-16 w-16 mx-auto rounded-full bg-white/5 hover:bg-white/10 active:bg-white/20 text-white text-xl font-medium transition-colors border border-white/10">9</button>
-                <button type="button" data-action="clear" class="pin-key h-16 w-16 mx-auto rounded-full bg-transparent hover:bg-white/10 active:bg-white/20 text-slate-400 text-xs font-semibold transition-colors">Clear</button>
-                <button type="button" data-digit="0" class="pin-key h-16 w-16 mx-auto rounded-full bg-white/5 hover:bg-white/10 active:bg-white/20 text-white text-xl font-medium transition-colors border border-white/10">0</button>
-                <button type="button" data-action="back" class="pin-key h-16 w-16 mx-auto rounded-full bg-transparent hover:bg-white/10 active:bg-white/20 text-slate-400 text-xl transition-colors" aria-label="Backspace">&#9003;</button>
+                <button type="button" data-digit="1" class="pin-key h-16 w-16 mx-auto rounded-full bg-white/5 hover:bg-white/10 active:bg-white/20 text-white text-xl font-medium transition-colors border border-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0062F1] focus-visible:ring-offset-2 focus-visible:ring-offset-black">1</button>
+                <button type="button" data-digit="2" class="pin-key h-16 w-16 mx-auto rounded-full bg-white/5 hover:bg-white/10 active:bg-white/20 text-white text-xl font-medium transition-colors border border-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0062F1] focus-visible:ring-offset-2 focus-visible:ring-offset-black">2</button>
+                <button type="button" data-digit="3" class="pin-key h-16 w-16 mx-auto rounded-full bg-white/5 hover:bg-white/10 active:bg-white/20 text-white text-xl font-medium transition-colors border border-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0062F1] focus-visible:ring-offset-2 focus-visible:ring-offset-black">3</button>
+                <button type="button" data-digit="4" class="pin-key h-16 w-16 mx-auto rounded-full bg-white/5 hover:bg-white/10 active:bg-white/20 text-white text-xl font-medium transition-colors border border-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0062F1] focus-visible:ring-offset-2 focus-visible:ring-offset-black">4</button>
+                <button type="button" data-digit="5" class="pin-key h-16 w-16 mx-auto rounded-full bg-white/5 hover:bg-white/10 active:bg-white/20 text-white text-xl font-medium transition-colors border border-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0062F1] focus-visible:ring-offset-2 focus-visible:ring-offset-black">5</button>
+                <button type="button" data-digit="6" class="pin-key h-16 w-16 mx-auto rounded-full bg-white/5 hover:bg-white/10 active:bg-white/20 text-white text-xl font-medium transition-colors border border-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0062F1] focus-visible:ring-offset-2 focus-visible:ring-offset-black">6</button>
+                <button type="button" data-digit="7" class="pin-key h-16 w-16 mx-auto rounded-full bg-white/5 hover:bg-white/10 active:bg-white/20 text-white text-xl font-medium transition-colors border border-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0062F1] focus-visible:ring-offset-2 focus-visible:ring-offset-black">7</button>
+                <button type="button" data-digit="8" class="pin-key h-16 w-16 mx-auto rounded-full bg-white/5 hover:bg-white/10 active:bg-white/20 text-white text-xl font-medium transition-colors border border-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0062F1] focus-visible:ring-offset-2 focus-visible:ring-offset-black">8</button>
+                <button type="button" data-digit="9" class="pin-key h-16 w-16 mx-auto rounded-full bg-white/5 hover:bg-white/10 active:bg-white/20 text-white text-xl font-medium transition-colors border border-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0062F1] focus-visible:ring-offset-2 focus-visible:ring-offset-black">9</button>
+                <button type="button" data-action="clear" class="pin-key h-16 w-16 mx-auto rounded-full bg-transparent hover:bg-white/10 active:bg-white/20 text-slate-400 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0062F1] focus-visible:ring-offset-2 focus-visible:ring-offset-black">Clear</button>
+                <button type="button" data-digit="0" class="pin-key h-16 w-16 mx-auto rounded-full bg-white/5 hover:bg-white/10 active:bg-white/20 text-white text-xl font-medium transition-colors border border-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0062F1] focus-visible:ring-offset-2 focus-visible:ring-offset-black">0</button>
+                <button type="button" data-action="back" class="pin-key h-16 w-16 mx-auto rounded-full bg-transparent hover:bg-white/10 active:bg-white/20 text-slate-400 text-xl transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0062F1] focus-visible:ring-offset-2 focus-visible:ring-offset-black" aria-label="Backspace">&#9003;</button>
             </div>
         </div>
 
-        <div id="pin-welcome" class="hidden w-full max-w-xs text-center">
+        <div id="pin-welcome" class="hidden w-full max-w-xs text-center" aria-live="polite">
             <div class="h-14 w-14 mx-auto rounded-full bg-[#0062F1]/15 border border-[#0062F1]/40 flex items-center justify-center text-2xl mb-5" aria-hidden="true">&#10003;</div>
             <p class="text-xs font-semibold uppercase tracking-wider text-[#0062F1] mb-2">Access Granted</p>
             <p id="pin-welcome-text" class="text-xl font-semibold text-white"></p>
         </div>
     </div>
 
-    <header class="border-b border-slate-200 bg-white px-8 py-4 flex items-center justify-between">
+    <header id="hub-header" inert class="border-b border-slate-200 bg-white px-8 py-4 flex items-center justify-between">
         <div class="flex items-center space-x-3">
             <div class="h-9 w-9 rounded bg-[#00133C] flex items-center justify-center font-bold text-white" aria-hidden="true">H</div>
             <h1 class="text-xl font-semibold tracking-wide text-[#00133C]">
@@ -73,7 +73,7 @@
         </div>
     </header>
 
-    <main class="max-w-6xl mx-auto p-8 space-y-10">
+    <main id="hub-main" inert class="max-w-6xl mx-auto p-8 space-y-10">
 
         <section class="max-w-2xl pt-4">
             <span class="inline-block text-xs font-semibold text-[#0062F1] bg-blue-50 border border-blue-100 rounded-full px-3 py-1 mb-4">
@@ -342,14 +342,16 @@
 
     </main>
 
-    <footer class="max-w-6xl mx-auto px-8 py-8 text-xs text-slate-500 border-t border-slate-200 mt-4">
-        Hosted as a static site — no backend, no accounts, no cost. Your data stays in your own browser tab.
+    <footer id="hub-footer" inert class="max-w-6xl mx-auto px-8 py-8 text-xs text-slate-500 border-t border-slate-200 mt-4 space-y-1">
+        <p>Hosted as a static site — no backend, no accounts, no cost. Your data stays in your own browser tab.</p>
+        <p>Have a suggestion, or spot something that needs fixing? Email <a href="mailto:logannt04@gmail.com" class="text-[#0062F1] hover:text-[#00133C] font-medium">Logann</a>.</p>
     </footer>
 
     <script>
         const VIEW_CODES = {
             '1159': {
                 label: 'Data Analyst',
+                welcome: 'Welcome Data Analyst',
                 tools: [
                     'data-analyzer', 'file-diff', 'pivot-explorer', 'data-cleaner',
                     'converter', 'column-stats', 'json-formatter', 'timestamp-converter',
@@ -428,7 +430,7 @@
                 filterTools();
 
                 pinPanelEl.classList.add('hidden');
-                pinWelcomeTextEl.innerText = `Welcome, ${entry.label} team member`;
+                pinWelcomeTextEl.innerText = entry.welcome || `Welcome, ${entry.label} team member`;
                 pinWelcomeEl.classList.remove('hidden');
                 pinWelcomeEl.classList.add('welcome-in');
 
@@ -437,6 +439,11 @@
                     setTimeout(() => {
                         gateEl.classList.add('hidden');
                         document.body.classList.remove('overflow-hidden');
+
+                        document.getElementById('hub-header').removeAttribute('inert');
+                        document.getElementById('hub-main').removeAttribute('inert');
+                        document.getElementById('hub-footer').removeAttribute('inert');
+                        searchInput.focus();
                     }, 200);
                 }, 1300);
                 return;
@@ -489,6 +496,7 @@
         filterTools();
         renderPinDots();
         gateEl.style.transition = 'opacity 0.2s ease-out';
+        document.querySelector('.pin-key').focus();
     </script>
 
 </body>
