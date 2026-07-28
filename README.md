@@ -91,6 +91,20 @@ Nothing is uploaded anywhere. Files you pick are parsed and analyzed entirely
 in your own browser tab; there's no server to send data to — which is also
 what keeps this safe to share as a team hub with no login and no backend.
 
+## Testing
+
+`tests/data-analyzer.test.html` is a small, self-contained in-browser test
+suite for the Data Analyzer's engine — regression math, seasonal forecasting,
+goal pacing status, the New/Repeat 30-day classification rule, HHI/KPI
+calculations, month-over-month anomaly detection, schema inference, data
+quality warnings, and CSV parsing. It loads the exact same
+`tools/data-analyzer/js/*.js` files the real tool uses, runs ~18 assertions
+against hand-verified fixtures, and renders pass/fail results on the page
+(also logged to the console). No build step or dependencies — open it via
+`./serve.sh` (`http://localhost:8020/tests/data-analyzer.test.html`) or by
+double-clicking the file, and re-run it any time after touching the engine
+files to catch a regression before it reaches the dashboard.
+
 ## Preview it locally before publishing
 
 ```bash

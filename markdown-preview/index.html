@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Markdown Previewer — Data and Analytics Hub</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2300133C'/%3E%3Ctext x='16' y='23' font-family='Georgia,serif' font-size='19' fill='%230062F1' text-anchor='middle'%3EH%3C/text%3E%3C/svg%3E">
+</head>
+
+<body class="bg-slate-50 text-slate-900 min-h-screen font-sans">
+    <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2"></div>
+
+    <header class="border-b border-slate-200 bg-white px-8 py-4 flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+            <a href="../../index.html" class="text-xs text-slate-500 hover:text-[#0062F1]">&larr; Hub</a>
+            <div class="h-6 w-px bg-slate-100"></div>
+            <h1 class="text-lg font-semibold text-[#00133C]">Markdown Previewer</h1>
+        </div>
+        <div class="flex items-center gap-3">
+            <button onclick="copyHtml()" class="text-xs text-[#0062F1] hover:text-[#00133C] font-medium">Copy HTML</button>
+            <button onclick="downloadHtml()" class="text-xs text-[#0062F1] hover:text-[#00133C] font-medium">Download HTML</button>
+        </div>
+    </header>
+
+    <main class="max-w-6xl mx-auto p-6">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div class="bg-white border border-slate-200 rounded-xl p-4">
+                <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2">Markdown</label>
+                <textarea id="md-input" spellcheck="false" rows="22"
+                    class="w-full bg-slate-50 border border-slate-300 rounded-lg p-3 text-sm font-mono text-slate-900 focus:border-[#0062F1] focus:ring-2 focus:ring-[#0062F1]/20 focus:outline-none resize-y"
+># Welcome
+
+Type **Markdown** on the left, see it rendered on the *right*.
+
+- Live preview
+- No server, runs entirely in your browser
+- Supports tables, code blocks, links, and more
+
+```js
+console.log("Hello, hub!");
+```
+
+> A blockquote example.
+
+[Visit the hub](../../index.html)</textarea>
+            </div>
+
+            <div class="bg-white border border-slate-200 rounded-xl p-4">
+                <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2">Preview</label>
+                <div id="md-preview" class="prose-preview text-sm text-slate-800 max-h-[34rem] overflow-y-auto"></div>
+            </div>
+        </div>
+    </main>
+
+    <style>
+        .prose-preview h1 { font-size: 1.5rem; font-weight: 700; color: #00133C; margin: 0.75rem 0 0.5rem; }
+        .prose-preview h2 { font-size: 1.25rem; font-weight: 700; color: #00133C; margin: 0.75rem 0 0.5rem; }
+        .prose-preview h3 { font-size: 1.1rem; font-weight: 600; color: #00133C; margin: 0.6rem 0 0.4rem; }
+        .prose-preview p { margin: 0.5rem 0; line-height: 1.6; }
+        .prose-preview ul { list-style: disc; padding-left: 1.5rem; margin: 0.5rem 0; }
+        .prose-preview ol { list-style: decimal; padding-left: 1.5rem; margin: 0.5rem 0; }
+        .prose-preview li { margin: 0.2rem 0; }
+        .prose-preview a { color: #0062F1; text-decoration: underline; }
+        .prose-preview blockquote { border-left: 3px solid #0062F1; padding-left: 0.75rem; color: #475569; margin: 0.5rem 0; }
+        .prose-preview code { background: #f1f5f9; padding: 0.1rem 0.3rem; border-radius: 0.25rem; font-size: 0.85em; }
+        .prose-preview pre { background: #0f172a; color: #e2e8f0; padding: 0.75rem; border-radius: 0.5rem; overflow-x: auto; margin: 0.5rem 0; }
+        .prose-preview pre code { background: transparent; padding: 0; }
+        .prose-preview table { border-collapse: collapse; margin: 0.5rem 0; }
+        .prose-preview th, .prose-preview td { border: 1px solid #e2e8f0; padding: 0.35rem 0.6rem; }
+        .prose-preview th { background: #f8fafc; }
+        .prose-preview hr { border: none; border-top: 1px solid #e2e8f0; margin: 1rem 0; }
+        .prose-preview img { max-width: 100%; }
+    </style>
+
+    <script>
+        function showToast(message) {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = 'text-sm rounded-lg px-4 py-3 shadow-2xl max-w-md bg-emerald-50 border border-emerald-300 text-emerald-700';
+            toast.innerText = message;
+            container.appendChild(toast);
+            setTimeout(() => toast.remove(), 2500);
+        }
+
+        function render() {
+            const text = document.getElementById('md-input').value;
+            const html = (typeof marked.parse === 'function') ? marked.parse(text) : marked(text);
+            document.getElementById('md-preview').innerHTML = html;
+        }
+
+        function copyHtml() {
+            const html = document.getElementById('md-preview').innerHTML;
+            navigator.clipboard.writeText(html).then(() => showToast('HTML copied to clipboard.'));
+        }
+
+        function downloadHtml() {
+            const html = document.getElementById('md-preview').innerHTML;
+            const blob = new Blob([html], { type: 'text/html;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'preview.html';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        document.getElementById('md-input').addEventListener('input', render);
+        render();
+    </script>
+</body>
+</html>

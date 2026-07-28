@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Base64 / URL Encoder — Data and Analytics Hub</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2300133C'/%3E%3Ctext x='16' y='23' font-family='Georgia,serif' font-size='19' fill='%230062F1' text-anchor='middle'%3EH%3C/text%3E%3C/svg%3E">
+</head>
+
+<body class="bg-slate-50 text-slate-900 min-h-screen font-sans">
+    <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2"></div>
+
+    <header class="border-b border-slate-200 bg-white px-8 py-4 flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+            <a href="../../index.html" class="text-xs text-slate-500 hover:text-[#0062F1]">&larr; Hub</a>
+            <div class="h-6 w-px bg-slate-100"></div>
+            <h1 class="text-lg font-semibold text-[#00133C]">Base64 / URL Encoder</h1>
+        </div>
+        <div class="text-xs text-slate-600 bg-slate-50 px-3 py-1 rounded-full border border-slate-200">Encode &middot; Decode</div>
+    </header>
+
+    <main class="max-w-4xl mx-auto p-6 space-y-4">
+        <div class="bg-white border border-slate-200 rounded-xl p-4">
+            <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2">Input</label>
+            <textarea id="input-text" spellcheck="false" rows="8"
+                class="w-full bg-slate-50 border border-slate-300 rounded-lg p-3 text-sm font-mono text-slate-900 focus:border-[#0062F1] focus:ring-2 focus:ring-[#0062F1]/20 focus:outline-none resize-y"
+                placeholder="Type or paste text here..."></textarea>
+        </div>
+
+        <div class="flex flex-wrap gap-2">
+            <button onclick="run('base64encode')" class="bg-[#0062F1] hover:bg-[#0050C7] text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors">Base64 Encode &rarr;</button>
+            <button onclick="run('base64decode')" class="bg-[#0062F1] hover:bg-[#0050C7] text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors">Base64 Decode &rarr;</button>
+            <button onclick="run('urlencode')" class="bg-white border border-slate-300 hover:border-[#0062F1] text-slate-700 text-sm font-semibold px-4 py-2 rounded-lg transition-colors">URL Encode &rarr;</button>
+            <button onclick="run('urldecode')" class="bg-white border border-slate-300 hover:border-[#0062F1] text-slate-700 text-sm font-semibold px-4 py-2 rounded-lg transition-colors">URL Decode &rarr;</button>
+        </div>
+
+        <div class="bg-white border border-slate-200 rounded-xl p-4">
+            <div class="flex items-center justify-between mb-2">
+                <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wider">Output</label>
+                <div class="flex gap-3">
+                    <button onclick="useOutputAsInput()" class="text-xs text-[#0062F1] hover:text-[#00133C] font-medium">Use as Input</button>
+                    <button onclick="copyOutput()" class="text-xs text-[#0062F1] hover:text-[#00133C] font-medium">Copy</button>
+                </div>
+            </div>
+            <textarea id="output-text" spellcheck="false" rows="8" readonly
+                class="w-full bg-slate-50 border border-slate-300 rounded-lg p-3 text-sm font-mono text-slate-700 resize-y"
+                placeholder="Result will appear here..."></textarea>
+            <p id="op-error" class="hidden text-xs text-red-600 mt-2"></p>
+        </div>
+    </main>
+
+    <script>
+        function showToast(message, isError = false) {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `text-sm rounded-lg px-4 py-3 shadow-2xl max-w-md ${isError ? 'bg-red-50 border border-red-300 text-red-500' : 'bg-emerald-50 border border-emerald-300 text-emerald-700'}`;
+            toast.innerText = message;
+            container.appendChild(toast);
+            setTimeout(() => toast.remove(), 2500);
+        }
+
+        function base64Encode(str) {
+            const bytes = new TextEncoder().encode(str);
+            let binary = '';
+            bytes.forEach(b => { binary += String.fromCharCode(b); });
+            return btoa(binary);
+        }
+
+        function base64Decode(str) {
+            const binary = atob(str);
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+            return new TextDecoder().decode(bytes);
+        }
+
+        function run(op) {
+            const input = document.getElementById('input-text').value;
+            const errorEl = document.getElementById('op-error');
+            const outputEl = document.getElementById('output-text');
+
+            try {
+                let result;
+                if (op === 'base64encode') result = base64Encode(input);
+                else if (op === 'base64decode') result = base64Decode(input);
+                else if (op === 'urlencode') result = encodeURIComponent(input);
+                else result = decodeURIComponent(input);
+
+                outputEl.value = result;
+                errorEl.classList.add('hidden');
+            } catch (err) {
+                errorEl.classList.remove('hidden');
+                errorEl.innerText = `Could not ${op}: ${err.message}`;
+                outputEl.value = '';
+            }
+        }
+
+        function copyOutput() {
+            const text = document.getElementById('output-text').value;
+            if (!text) return;
+            navigator.clipboard.writeText(text).then(() => showToast('Copied to clipboard.'));
+        }
+
+        function useOutputAsInput() {
+            const output = document.getElementById('output-text').value;
+            document.getElementById('input-text').value = output;
+        }
+    </script>
+</body>
+</html>

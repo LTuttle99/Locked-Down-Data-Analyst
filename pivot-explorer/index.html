@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pivot Explorer — Team Analytics Hub</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2300133C'/%3E%3Ctext x='16' y='23' font-family='Georgia,serif' font-size='19' fill='%230062F1' text-anchor='middle'%3EH%3C/text%3E%3C/svg%3E">
+</head>
+
+<body class="bg-slate-50 text-slate-900 min-h-screen font-sans">
+    <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2"></div>
+
+    <header class="border-b border-slate-200 bg-white px-8 py-4 flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+            <a href="../../index.html" class="text-xs text-slate-500 hover:text-[#0062F1]">&larr; Hub</a>
+            <div class="h-6 w-px bg-slate-100"></div>
+            <h1 class="text-lg font-semibold text-[#00133C]">Pivot &amp; Chart Explorer</h1>
+        </div>
+        <div class="text-xs text-slate-600 bg-slate-50 px-3 py-1 rounded-full border border-slate-200">Ad-hoc data exploration</div>
+    </header>
+
+    <main class="max-w-6xl mx-auto p-6 space-y-6">
+        <p class="text-sm text-slate-600 max-w-2xl">
+            Upload any CSV or Excel file, pick a row field, an optional column field, and a value
+            field to aggregate — get an instant pivot table and chart. No fixed schema required.
+        </p>
+
+        <div class="bg-white border border-slate-200 rounded-xl p-5">
+            <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2">Upload File</label>
+            <input type="file" id="file-input" accept=".csv,.xlsx,.xls" class="block w-full text-sm text-slate-700 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-slate-100 file:text-slate-800 hover:file:bg-slate-200">
+            <p id="file-status" class="text-xs text-slate-500 mt-2"></p>
+        </div>
+
+        <div id="controls" class="hidden bg-white border border-slate-200 rounded-xl p-5 flex flex-wrap items-end gap-4">
+            <div>
+                <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">Rows</label>
+                <select id="field-rows" class="bg-slate-50 border border-slate-300 rounded-lg text-sm p-2 text-slate-900 min-w-[160px]"></select>
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">Columns <span class="text-slate-600 normal-case">(optional)</span></label>
+                <select id="field-columns" class="bg-slate-50 border border-slate-300 rounded-lg text-sm p-2 text-slate-900 min-w-[160px]">
+                    <option value="">-- None --</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">Values</label>
+                <select id="field-values" class="bg-slate-50 border border-slate-300 rounded-lg text-sm p-2 text-slate-900 min-w-[160px]"></select>
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">Aggregation</label>
+                <select id="field-agg" class="bg-slate-50 border border-slate-300 rounded-lg text-sm p-2 text-slate-900">
+                    <option value="sum">Sum</option>
+                    <option value="count">Count</option>
+                    <option value="avg">Average</option>
+                    <option value="min">Min</option>
+                    <option value="max">Max</option>
+                </select>
+            </div>
+            <button onclick="buildPivot()" class="bg-[#0062F1] hover:bg-[#0050C7] text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition-colors">
+                Build Pivot
+            </button>
+        </div>
+
+        <div id="results" class="hidden space-y-6">
+            <div class="bg-white border border-slate-200 rounded-xl p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-sm font-medium text-slate-700">Chart</h3>
+                </div>
+                <div class="h-80"><canvas id="pivotChart"></canvas></div>
+            </div>
+
+            <div class="bg-white border border-slate-200 rounded-xl p-4">
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="text-sm font-medium text-slate-700">Pivot Table</h3>
+                    <button onclick="exportPivot()" class="text-xs text-[#0062F1] hover:text-[#00133C] font-medium">Export CSV</button>
+                </div>
+                <div id="pivot-table-container" class="overflow-x-auto"></div>
+            </div>
+        </div>
+    </main>
+
+    <script src="../shared/parse.js"></script>
+    <script>
+        let fileData = null;
+        let activeChart = null;
+        let lastPivot = null;
+
+        function showToast(message) {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = 'text-sm rounded-lg px-4 py-3 shadow-2xl max-w-md bg-red-50 border border-red-300 text-red-500';
+            toast.innerText = message;
+            container.appendChild(toast);
+            setTimeout(() => toast.remove(), 5000);
+        }
+
+        document.getElementById('file-input').addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            try {
+                fileData = await parseFileToRows(file);
+                document.getElementById('file-status').innerText = `${file.name} — ${fileData.rows.length.toLocaleString()} rows, ${fileData.columns.length} columns`;
+
+                const opts = fileData.columns.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+                document.getElementById('field-rows').innerHTML = opts;
+                document.getElementById('field-columns').innerHTML = '<option value="">-- None --</option>' + opts;
+                document.getElementById('field-values').innerHTML = opts;
+
+                document.getElementById('controls').classList.remove('hidden');
+            } catch (err) {
+                showToast('Could not parse file: ' + err.message);
+            }
+        });
+
+        function toNum(v) {
+            if (v === null || v === undefined || v === '') return null;
+            const n = Number(v);
+            return Number.isFinite(n) ? n : null;
+        }
+
+        function aggregate(values, mode) {
+            const nums = values.map(toNum).filter(v => v !== null);
+            if (mode === 'count') return values.length;
+            if (nums.length === 0) return 0;
+            if (mode === 'sum') return nums.reduce((a, b) => a + b, 0);
+            if (mode === 'avg') return nums.reduce((a, b) => a + b, 0) / nums.length;
+            if (mode === 'min') return Math.min(...nums);
+            if (mode === 'max') return Math.max(...nums);
+            return 0;
+        }
+
+        function buildPivot() {
+            if (!fileData) return;
+
+            const rowsField = document.getElementById('field-rows').value;
+            const colsField = document.getElementById('field-columns').value;
+            const valuesField = document.getElementById('field-values').value;
+            const agg = document.getElementById('field-agg').value;
+
+            const rowGroups = new Map();
+            for (const r of fileData.rows) {
+                const rk = String(r[rowsField] ?? '(blank)');
+                if (!rowGroups.has(rk)) rowGroups.set(rk, []);
+                rowGroups.get(rk).push(r);
+            }
+
+            let colValues = [];
+            if (colsField) {
+                colValues = Array.from(new Set(fileData.rows.map(r => String(r[colsField] ?? '(blank)')))).sort();
+                if (colValues.length > 20) {
+                    showToast(`"${colsField}" has ${colValues.length} distinct values — showing the first 20 as columns.`);
+                    colValues = colValues.slice(0, 20);
+                }
+            }
+
+            const rowKeys = Array.from(rowGroups.keys()).sort((a, b) => {
+                const totalA = aggregate(rowGroups.get(a).map(r => r[valuesField]), agg);
+                const totalB = aggregate(rowGroups.get(b).map(r => r[valuesField]), agg);
+                return totalB - totalA;
+            });
+
+            const table = rowKeys.map(rk => {
+                const rowsForKey = rowGroups.get(rk);
+                const cell = {};
+                if (colsField) {
+                    for (const cv of colValues) {
+                        const subset = rowsForKey.filter(r => String(r[colsField] ?? '(blank)') === cv);
+                        cell[cv] = aggregate(subset.map(r => r[valuesField]), agg);
+                    }
+                }
+                const total = aggregate(rowsForKey.map(r => r[valuesField]), agg);
+                return { rowKey: rk, cell, total };
+            });
+
+            lastPivot = { rowsField, colsField, valuesField, agg, colValues, table };
+
+            renderPivotTable();
+            renderPivotChart();
+            document.getElementById('results').classList.remove('hidden');
+        }
+
+        function renderPivotTable() {
+            const container = document.getElementById('pivot-table-container');
+            const { rowsField, colsField, colValues, table } = lastPivot;
+
+            const headerCols = colsField ? colValues : ['Value'];
+
+            container.innerHTML = `
+                <table class="w-full text-left text-xs">
+                    <thead><tr class="border-b border-slate-200 text-slate-600 uppercase">
+                        <th class="py-2 px-3">${escapeHtml(rowsField)}</th>
+                        ${headerCols.map(c => `<th class="py-2 px-3 text-right">${escapeHtml(c)}</th>`).join('')}
+                        ${colsField ? '<th class="py-2 px-3 text-right font-semibold">Total</th>' : ''}
+                    </tr></thead>
+                    <tbody class="divide-y divide-slate-200">
+                        ${table.map(row => `
+                            <tr>
+                                <td class="py-2 px-3 text-slate-800 font-medium">${escapeHtml(row.rowKey)}</td>
+                                ${colsField
+                                    ? colValues.map(cv => `<td class="py-2 px-3 text-right text-slate-700">${formatNum(row.cell[cv])}</td>`).join('')
+                                    : `<td class="py-2 px-3 text-right text-slate-700">${formatNum(row.total)}</td>`
+                                }
+                                ${colsField ? `<td class="py-2 px-3 text-right text-[#0062F1] font-semibold">${formatNum(row.total)}</td>` : ''}
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+
+        function formatNum(v) {
+            if (v === null || v === undefined) return '—';
+            return Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 });
+        }
+
+        function renderPivotChart() {
+            const { rowsField, colsField, colValues, table } = lastPivot;
+            const canvas = document.getElementById('pivotChart');
+
+            if (activeChart) { activeChart.destroy(); activeChart = null; }
+
+            const topRows = table.slice(0, 25);
+            const labels = topRows.map(r => r.rowKey);
+
+            const palette = ['#0062F1', '#DC6803', '#00133C', '#a855f7', '#10b981', '#f59e0b', '#ef4444', '#ec4899'];
+
+            let datasets;
+            if (colsField) {
+                datasets = colValues.map((cv, i) => ({
+                    label: cv,
+                    data: topRows.map(r => r.cell[cv] || 0),
+                    backgroundColor: palette[i % palette.length]
+                }));
+            } else {
+                datasets = [{ label: rowsField, data: topRows.map(r => r.total), backgroundColor: '#0062F1' }];
+            }
+
+            activeChart = new Chart(canvas.getContext('2d'), {
+                type: 'bar',
+                data: { labels, datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { stacked: !!colsField, ticks: { color: '#475569' }, grid: { color: '#e2e8f0' } },
+                        y: { stacked: !!colsField, ticks: { color: '#475569' }, grid: { color: '#e2e8f0' } }
+                    },
+                    plugins: {
+                        legend: { display: !!colsField, labels: { color: '#334155' } }
+                    }
+                }
+            });
+        }
+
+        function exportPivot() {
+            if (!lastPivot) return;
+            const { rowsField, colsField, colValues, table } = lastPivot;
+
+            const cols = colsField ? [rowsField, ...colValues, 'Total'] : [rowsField, 'Value'];
+            const rows = table.map(r => {
+                const obj = { [rowsField]: r.rowKey };
+                if (colsField) {
+                    for (const cv of colValues) obj[cv] = r.cell[cv];
+                    obj['Total'] = r.total;
+                } else {
+                    obj['Value'] = r.total;
+                }
+                return obj;
+            });
+
+            downloadCSV('pivot_export.csv', cols, rows);
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Timestamp Converter — Team Analytics Hub</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2300133C'/%3E%3Ctext x='16' y='23' font-family='Georgia,serif' font-size='19' fill='%230062F1' text-anchor='middle'%3EH%3C/text%3E%3C/svg%3E">
+</head>
+
+<body class="bg-slate-50 text-slate-900 min-h-screen font-sans">
+    <header class="border-b border-slate-200 bg-white px-8 py-4 flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+            <a href="../../index.html" class="text-xs text-slate-500 hover:text-[#0062F1]">&larr; Hub</a>
+            <div class="h-6 w-px bg-slate-100"></div>
+            <h1 class="text-lg font-semibold text-[#00133C]">Timestamp Converter</h1>
+        </div>
+        <div class="text-xs text-slate-600 bg-slate-50 px-3 py-1 rounded-full border border-slate-200">Unix &middot; ISO &middot; Timezones</div>
+    </header>
+
+    <main class="max-w-3xl mx-auto p-6 space-y-6">
+        <div class="bg-white border border-slate-200 rounded-xl p-5">
+            <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2">
+                Unix timestamp (seconds or ms) or any date string
+            </label>
+            <div class="flex gap-2">
+                <input type="text" id="ts-input" placeholder="e.g. 1735689600, 1735689600000, or 2025-01-01T00:00:00Z"
+                    class="flex-1 bg-slate-50 border border-slate-300 rounded-lg text-sm p-3 text-slate-900 focus:border-[#0062F1] focus:ring-2 focus:ring-[#0062F1]/20 focus:outline-none font-mono">
+                <button onclick="setNow()" class="bg-[#0062F1] hover:bg-[#0050C7] text-white text-sm font-semibold px-4 rounded-lg transition-colors">Now</button>
+            </div>
+            <p id="parse-error" class="hidden text-xs text-red-600 mt-2"></p>
+        </div>
+
+        <div id="output-section" class="hidden space-y-4">
+            <div class="bg-white border border-slate-200 rounded-xl p-5">
+                <p class="text-xs font-semibold uppercase tracking-wider text-slate-600 mb-3">Standard Formats</p>
+                <div id="standard-outputs" class="space-y-2 text-sm"></div>
+            </div>
+
+            <div class="bg-white border border-slate-200 rounded-xl p-5">
+                <p class="text-xs font-semibold uppercase tracking-wider text-slate-600 mb-3">Around the World</p>
+                <div id="timezone-outputs" class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm"></div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const TIMEZONES = [
+            ['UTC', 'UTC'],
+            ['New York', 'America/New_York'],
+            ['Chicago', 'America/Chicago'],
+            ['Los Angeles', 'America/Los_Angeles'],
+            ['London', 'Europe/London'],
+            ['Berlin', 'Europe/Berlin'],
+            ['Tokyo', 'Asia/Tokyo'],
+            ['Shanghai', 'Asia/Shanghai'],
+            ['Sydney', 'Australia/Sydney']
+        ];
+
+        const input = document.getElementById('ts-input');
+        const errorEl = document.getElementById('parse-error');
+        const outputSection = document.getElementById('output-section');
+        const standardOutputs = document.getElementById('standard-outputs');
+        const timezoneOutputs = document.getElementById('timezone-outputs');
+
+        function parseInput(value) {
+            value = value.trim();
+            if (value === '') return null;
+
+            if (/^-?\d+$/.test(value)) {
+                const num = Number(value);
+                const ms = Math.abs(num) > 1e11 ? num : num * 1000;
+                return new Date(ms);
+            }
+
+            const d = new Date(value);
+            return Number.isNaN(d.getTime()) ? undefined : d;
+        }
+
+        function relativeTime(date) {
+            const rtf = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
+            const diffMs = date.getTime() - Date.now();
+            const diffSec = diffMs / 1000;
+
+            const units = [
+                ['year', 31536000], ['month', 2592000], ['day', 86400],
+                ['hour', 3600], ['minute', 60], ['second', 1]
+            ];
+
+            for (const [unit, secs] of units) {
+                if (Math.abs(diffSec) >= secs || unit === 'second') {
+                    return rtf.format(Math.round(diffSec / secs), unit);
+                }
+            }
+            return rtf.format(0, 'second');
+        }
+
+        function row(label, value) {
+            return `
+                <div class="flex items-center justify-between gap-3 bg-slate-100 rounded-lg px-3 py-2">
+                    <span class="text-slate-500 text-xs uppercase tracking-wider">${label}</span>
+                    <span class="font-mono text-slate-800">${value}</span>
+                </div>
+            `;
+        }
+
+        function render() {
+            const date = parseInput(input.value);
+
+            if (date === null) {
+                outputSection.classList.add('hidden');
+                errorEl.classList.add('hidden');
+                return;
+            }
+
+            if (date === undefined) {
+                outputSection.classList.add('hidden');
+                errorEl.classList.remove('hidden');
+                errorEl.innerText = "Couldn't parse that as a timestamp or date.";
+                return;
+            }
+
+            errorEl.classList.add('hidden');
+            outputSection.classList.remove('hidden');
+
+            standardOutputs.innerHTML = [
+                row('ISO 8601', date.toISOString()),
+                row('Unix (seconds)', Math.floor(date.getTime() / 1000)),
+                row('Unix (milliseconds)', date.getTime()),
+                row('Local time', date.toLocaleString()),
+                row('UTC', date.toUTCString()),
+                row('Relative', relativeTime(date))
+            ].join('');
+
+            timezoneOutputs.innerHTML = TIMEZONES.map(([label, tz]) => {
+                const formatted = new Intl.DateTimeFormat('en-US', {
+                    timeZone: tz, dateStyle: 'medium', timeStyle: 'short'
+                }).format(date);
+                return row(label, formatted);
+            }).join('');
+        }
+
+        function setNow() {
+            input.value = Date.now().toString();
+            render();
+        }
+
+        input.addEventListener('input', render);
+        setNow();
+    </script>
+</body>
+</html>
