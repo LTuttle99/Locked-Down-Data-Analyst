@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Intelligent Data Analyzer</title>
+    <title>Data Analyzer — Data and Analytics Hub</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
@@ -36,23 +36,22 @@
 
     <header class="border-b border-slate-200 bg-white px-8 py-4 flex items-center justify-between">
         <div class="flex items-center space-x-3">
-            <div class="h-8 w-8 rounded bg-[#0062F1] flex items-center justify-center font-bold text-white">D</div>
-            <h1 class="text-xl font-semibold tracking-wide text-[#00133C]">
-                DataAnalyzer<span class="text-[#0062F1] font-normal">.io</span>
-            </h1>
+            <a href="../../index.html" class="text-xs text-slate-500 hover:text-[#0062F1]">&larr; Hub</a>
+            <div class="h-6 w-px bg-slate-100"></div>
+            <h1 class="text-lg font-semibold text-[#00133C]">Data Analyzer</h1>
         </div>
 
         <div class="text-xs text-slate-600 bg-slate-50 px-3 py-1 rounded-full border border-slate-200">
-            Advanced Analytics Hub
+            KPIs, forecasting &amp; insights
         </div>
     </header>
 
     <main class="max-w-7xl mx-auto p-6 space-y-6">
 
         <section id="upload-card" class="bg-white border border-slate-200 rounded-xl p-8 max-w-xl mx-auto shadow-2xl">
-            <h2 class="text-lg font-medium text-[#00133C] mb-2">Initialize Data Analysis</h2>
+            <h2 class="text-lg font-medium text-[#00133C] mb-2">Start an analysis</h2>
             <p class="text-sm text-slate-600 mb-6">
-                Upload one or more CSV or Excel files, each with a date column and a numeric metric. Select several at once to load them all — you can switch between loaded files at any time from the dashboard. Analysis automatically scopes from January 2020 onward.
+                Pick one or more CSV or Excel files, each with a date column and a numeric metric. Select several at once to load them all — you can switch between loaded files at any time from the dashboard. Analysis automatically scopes from January 2020 onward.
             </p>
 
             <div id="drop-zone" class="border-2 border-dashed border-slate-300 hover:border-[#0062F1] rounded-lg p-8 text-center cursor-pointer bg-slate-100 transition-colors group">
@@ -68,12 +67,21 @@
                     </p>
                 </div>
             </div>
+
+            <div class="mt-6 pt-6 border-t border-slate-200 text-center">
+                <p class="text-sm text-slate-600 mb-3">
+                    No file handy? Load a sample sales dataset to see what the analyzer does.
+                </p>
+                <button type="button" id="load-sample-btn" class="bg-slate-50 hover:bg-slate-100 border border-slate-300 hover:border-[#0062F1] text-[#00133C] text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+                    Load sample data
+                </button>
+            </div>
         </section>
 
         <section id="mapping-card" class="hidden bg-white border border-slate-200 rounded-xl p-8 max-w-xl mx-auto shadow-2xl">
-            <h3 class="text-lg font-medium text-[#00133C] mb-2">Verify Schema Assertions</h3>
+            <h3 class="text-lg font-medium text-[#00133C] mb-2">Check the columns we picked</h3>
             <p class="text-sm text-slate-600 mb-6">
-                Confirm parsed structural mappings before running the analytics engine.
+                We guessed which columns hold your date, your metric, and the groups you want to break it down by. Change anything that looks wrong, then run the analysis.
             </p>
 
             <div class="space-y-4" id="mapping-selectors"></div>
@@ -719,6 +727,7 @@
     <script src="js/insights.js"></script>
     <script src="js/run-analysis.js"></script>
     <script src="js/session.js"></script>
+    <script src="js/sample-data.js"></script>
 
     <script>
         const dropZone = document.getElementById('drop-zone');
@@ -746,6 +755,10 @@
 
         dropZone.addEventListener('click', () => fileInput.click());
         fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
+
+        document.getElementById('load-sample-btn').addEventListener('click', () => {
+            handleFiles([buildSampleDataFile()]);
+        });
 
         async function uploadOneFile(file) {
             let data;
