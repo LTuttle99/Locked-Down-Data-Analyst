@@ -201,6 +201,16 @@
                             <span class="text-slate-600">▾</span>
                         </button>
                     </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">
+                            SQL
+                        </label>
+
+                        <button onclick="toggleSqlPanel()" type="button" class="bg-slate-50 border border-slate-300 hover:border-[#0062F1] text-slate-900 text-xs font-medium px-3 py-2 rounded-lg transition-colors">
+                            Query Data
+                        </button>
+                    </div>
                 </div>
 
                 <div id="dimension-filters-panel" class="hidden bg-slate-100 border border-slate-200 rounded-lg p-4 space-y-3">
@@ -309,6 +319,40 @@
                     </div>
                     <p class="text-[10px] text-slate-500">Click a dataset to switch to it. Removing the active dataset switches to another loaded one, if any remain.</p>
                     <div id="data-files-list" class="flex flex-wrap gap-2"></div>
+                </div>
+
+                <div id="sql-panel" class="hidden bg-slate-100 border border-slate-200 rounded-lg p-4 space-y-3">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <p class="text-xs font-semibold text-slate-700">Query Your Data With SQL</p>
+                        <p class="text-[10px] text-slate-500">SQLite syntax. Runs entirely in your browser against the datasets you have loaded.</p>
+                    </div>
+
+                    <p class="text-[10px] text-slate-500">Click any column name to insert it into your query. <span class="font-mono text-slate-400">#</span> marks a number column, <span class="font-mono text-slate-400">A</span> marks text.</p>
+
+                    <div id="sql-schema" class="space-y-1.5"></div>
+
+                    <div>
+                        <label for="sql-editor" class="block text-[10px] font-semibold text-slate-600 uppercase tracking-wider mb-1">Query</label>
+                        <textarea id="sql-editor" rows="5" spellcheck="false" class="w-full bg-white border border-slate-300 rounded-lg text-xs font-mono p-3 text-slate-900 focus:border-[#0062F1] focus:outline-none"></textarea>
+                        <p class="text-[10px] text-slate-500 mt-1">Press Ctrl+Enter (Cmd+Enter on Mac) to run. Column names with spaces need double quotes, like "Order Date".</p>
+                    </div>
+
+                    <div class="flex flex-wrap items-center gap-2">
+                        <button id="sql-run-btn" onclick="runSqlFromEditor()" type="button" class="bg-[#0062F1] hover:bg-[#0050C7] text-white text-xs font-semibold px-4 py-2 rounded-lg transition-colors">
+                            Run Query
+                        </button>
+                        <button onclick="exportSqlResultsCsv()" type="button" class="bg-white border border-slate-300 hover:border-[#0062F1] text-[#00133C] text-xs font-medium px-3 py-2 rounded-lg transition-colors">
+                            Export CSV
+                        </button>
+                        <button onclick="loadSqlResultsAsDataset()" type="button" class="bg-white border border-slate-300 hover:border-[#0062F1] text-[#00133C] text-xs font-medium px-3 py-2 rounded-lg transition-colors">
+                            Analyze Results
+                        </button>
+                        <span id="sql-status" class="text-[10px] text-slate-500"></span>
+                    </div>
+
+                    <div id="sql-error" class="hidden text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg p-3 font-mono whitespace-pre-wrap"></div>
+
+                    <div id="sql-results"></div>
                 </div>
 
                 <div class="border-t border-slate-200"></div>
@@ -728,6 +772,7 @@
     <script src="js/run-analysis.js"></script>
     <script src="js/session.js"></script>
     <script src="js/sample-data.js"></script>
+    <script src="js/sql-query.js"></script>
 
     <script>
         const dropZone = document.getElementById('drop-zone');
@@ -758,6 +803,13 @@
 
         document.getElementById('load-sample-btn').addEventListener('click', () => {
             handleFiles([buildSampleDataFile()]);
+        });
+
+        document.getElementById('sql-editor').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                e.preventDefault();
+                runSqlFromEditor();
+            }
         });
 
         async function uploadOneFile(file) {
@@ -1009,6 +1061,7 @@
             document.getElementById('goals-panel').classList.add('hidden');
             document.getElementById('saved-views-panel').classList.add('hidden');
             document.getElementById('data-files-panel').classList.add('hidden');
+            document.getElementById('sql-panel').classList.add('hidden');
         }
 
         function toggleDataFilesPanel() {
@@ -1016,6 +1069,7 @@
             document.getElementById('dimension-filters-panel').classList.add('hidden');
             document.getElementById('goals-panel').classList.add('hidden');
             document.getElementById('saved-views-panel').classList.add('hidden');
+            document.getElementById('sql-panel').classList.add('hidden');
         }
 
         function renderDataFilesList() {
@@ -1333,13 +1387,198 @@
             document.getElementById('goals-panel').classList.toggle('hidden');
             document.getElementById('saved-views-panel').classList.add('hidden');
             document.getElementById('data-files-panel').classList.add('hidden');
+            document.getElementById('sql-panel').classList.add('hidden');
         }
 
         function toggleSavedViewsPanel() {
             document.getElementById('saved-views-panel').classList.toggle('hidden');
             document.getElementById('goals-panel').classList.add('hidden');
             document.getElementById('data-files-panel').classList.add('hidden');
+            document.getElementById('sql-panel').classList.add('hidden');
             renderSavedViewsList();
+        }
+
+        async function toggleSqlPanel() {
+            const panel = document.getElementById('sql-panel');
+            const wasHidden = panel.classList.contains('hidden');
+
+            panel.classList.toggle('hidden');
+            document.getElementById('goals-panel').classList.add('hidden');
+            document.getElementById('data-files-panel').classList.add('hidden');
+            document.getElementById('saved-views-panel').classList.add('hidden');
+            document.getElementById('dimension-filters-panel').classList.add('hidden');
+
+            if (!wasHidden) return;
+
+            const status = document.getElementById('sql-status');
+            const schema = document.getElementById('sql-schema');
+
+            status.innerText = 'Preparing datasets...';
+            schema.innerHTML = '';
+
+            try {
+                const started = performance.now();
+                const map = await buildSqlDatabase();
+                const elapsed = Math.round(performance.now() - started);
+
+                renderSqlSchema(map);
+                status.innerText = `Ready in ${elapsed} ms.`;
+
+                const editor = document.getElementById('sql-editor');
+                if (editor.value.trim() === '' && map.length > 0) {
+                    editor.value = `SELECT *\nFROM ${map[0].table}\nLIMIT 20;`;
+                }
+            } catch (err) {
+                status.innerText = '';
+                showSqlError(err.message || String(err));
+            }
+        }
+
+        function renderSqlSchema(map) {
+            const container = document.getElementById('sql-schema');
+
+            if (!map || map.length === 0) {
+                container.innerHTML = '<p class="text-[10px] text-slate-500 italic">No datasets are loaded.</p>';
+                return;
+            }
+
+            container.innerHTML = map.map((entry) => `
+                <div class="bg-white border border-slate-200 rounded-lg px-3 py-2">
+                    <div class="flex flex-wrap items-baseline gap-2">
+                        <code class="text-[11px] font-semibold text-[#0062F1]">${escapeHtml(entry.table)}</code>
+                        <span class="text-[10px] text-slate-500">${escapeHtml(entry.fileName)} &middot; ${entry.rowCount.toLocaleString()} rows</span>
+                    </div>
+                    <div class="mt-1 flex flex-wrap gap-1">
+                        ${entry.columns.map((c, i) => `
+                            <button type="button" onclick="insertSqlColumn(${JSON.stringify(c).replaceAll('"', '&quot;')})" class="text-[10px] font-mono bg-slate-100 hover:bg-blue-50 hover:text-[#0062F1] border border-slate-200 rounded px-1.5 py-0.5 text-slate-600 transition-colors" title="Insert into query">
+                                ${escapeHtml(c)}<span class="text-slate-400 ml-1">${entry.numericFlags[i] ? '#' : 'A'}</span>
+                            </button>
+                        `).join('')}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function insertSqlColumn(column) {
+            const editor = document.getElementById('sql-editor');
+            const token = /^[A-Za-z_][A-Za-z0-9_]*$/.test(column) ? column : `"${column.replaceAll('"', '""')}"`;
+            const start = editor.selectionStart;
+            const end = editor.selectionEnd;
+
+            editor.value = editor.value.slice(0, start) + token + editor.value.slice(end);
+            editor.focus();
+            editor.selectionStart = editor.selectionEnd = start + token.length;
+        }
+
+        function showSqlError(message) {
+            const box = document.getElementById('sql-error');
+            box.innerText = message;
+            box.classList.remove('hidden');
+        }
+
+        function clearSqlError() {
+            document.getElementById('sql-error').classList.add('hidden');
+        }
+
+        async function runSqlFromEditor() {
+            clearSqlError();
+
+            const button = document.getElementById('sql-run-btn');
+            const status = document.getElementById('sql-status');
+
+            button.disabled = true;
+            status.innerText = 'Running...';
+            await new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)));
+
+            try {
+                if (!SQL_DATABASE) await buildSqlDatabase();
+
+                const result = runSqlStatement(document.getElementById('sql-editor').value);
+                SQL_LAST_RESULT = result;
+
+                renderSqlResults(result);
+                status.innerText = result.columns.length === 0
+                    ? `Statement completed in ${result.elapsedMs.toFixed(0)} ms. No rows returned.`
+                    : `${result.rows.length.toLocaleString()} row${result.rows.length === 1 ? '' : 's'} in ${result.elapsedMs.toFixed(0)} ms.`;
+            } catch (err) {
+                SQL_LAST_RESULT = null;
+                document.getElementById('sql-results').innerHTML = '';
+                status.innerText = '';
+                showSqlError(err.message || String(err));
+            } finally {
+                button.disabled = false;
+            }
+        }
+
+        function renderSqlResults(result) {
+            const container = document.getElementById('sql-results');
+
+            if (result.columns.length === 0) {
+                container.innerHTML = '';
+                return;
+            }
+
+            if (result.rows.length === 0) {
+                container.innerHTML = '<p class="text-xs text-slate-500 italic">The query ran successfully but returned no rows.</p>';
+                return;
+            }
+
+            const shown = result.rows.slice(0, SQL_MAX_DISPLAY_ROWS);
+            const truncatedNote = result.rows.length > SQL_MAX_DISPLAY_ROWS
+                ? `<p class="text-[10px] text-slate-500 mt-2">Showing the first ${SQL_MAX_DISPLAY_ROWS.toLocaleString()} of ${result.rows.length.toLocaleString()} rows. Export CSV to get them all.</p>`
+                : '';
+
+            container.innerHTML = `
+                <div class="overflow-x-auto max-h-96 overflow-y-auto border border-slate-200 rounded-lg bg-white">
+                    <table class="w-full text-xs">
+                        <thead class="bg-slate-50 sticky top-0">
+                            <tr>${result.columns.map((c) => `<th class="text-left font-semibold text-slate-700 px-3 py-2 border-b border-slate-200 whitespace-nowrap">${escapeHtml(c)}</th>`).join('')}</tr>
+                        </thead>
+                        <tbody>
+                            ${shown.map((row) => `<tr class="border-b border-slate-100 last:border-0">${row.map((v) => `<td class="px-3 py-1.5 text-slate-700 whitespace-nowrap">${v === null ? '<span class="text-slate-400 italic">null</span>' : escapeHtml(v)}</td>`).join('')}</tr>`).join('')}
+                        </tbody>
+                    </table>
+                </div>
+                ${truncatedNote}
+            `;
+        }
+
+        function exportSqlResultsCsv() {
+            if (!SQL_LAST_RESULT || SQL_LAST_RESULT.columns.length === 0) {
+                showErrorToast('Run a query that returns rows first.');
+                return;
+            }
+
+            const blob = new Blob([sqlResultToCSV(SQL_LAST_RESULT)], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `sql_results_${new Date().toISOString().slice(0, 10)}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        async function loadSqlResultsAsDataset() {
+            if (!SQL_LAST_RESULT || SQL_LAST_RESULT.columns.length === 0) {
+                showErrorToast('Run a query that returns rows first.');
+                return;
+            }
+
+            if (SQL_LAST_RESULT.rows.length === 0) {
+                showErrorToast('The last query returned no rows to analyze.');
+                return;
+            }
+
+            const stamp = new Date().toISOString().slice(11, 19).replaceAll(':', '');
+            const file = new File([sqlResultToCSV(SQL_LAST_RESULT)], `query-results-${stamp}.csv`, { type: 'text/csv' });
+            const schema = await uploadFileBatch([file], null);
+
+            if (!schema) return;
+
+            document.getElementById('sql-panel').classList.add('hidden');
+            showMappingForSchema(schema);
         }
 
         async function onGoalScopeTypeChange() {
