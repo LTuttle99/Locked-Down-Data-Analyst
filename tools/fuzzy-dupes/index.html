@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fuzzy Duplicate Finder — Data and Analytics Hub</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2300133C'/%3E%3Ctext x='16' y='23' font-family='Georgia,serif' font-size='19' fill='%230062F1' text-anchor='middle'%3EH%3C/text%3E%3C/svg%3E">
+</head>
+
+<body class="bg-slate-50 text-slate-900 min-h-screen font-sans">
+    <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2"></div>
+
+    <header class="border-b border-slate-200 bg-white px-8 py-4 flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+            <a href="../../index.html" class="text-xs text-slate-500 hover:text-[#0062F1]">&larr; Hub</a>
+            <div class="h-6 w-px bg-slate-100"></div>
+            <h1 class="text-lg font-semibold text-[#00133C]">Fuzzy Duplicate Finder</h1>
+        </div>
+        <div class="text-xs text-slate-600 bg-slate-50 px-3 py-1 rounded-full border border-slate-200">Near-match detection</div>
+    </header>
+
+    <main class="max-w-6xl mx-auto p-6 space-y-4">
+        <p class="text-sm text-slate-600 max-w-3xl">
+            Data Cleaner removes rows that are byte-for-byte identical. This finds the ones that are not:
+            "Acme Corp", "Acme Corp." and "ACME CORPORATION" as three versions of one customer. Pick a
+            column, set how similar counts as a match, and review the groups before removing anything.
+        </p>
+
+        <div class="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
+            <label class="block bg-slate-50 border border-dashed border-slate-300 hover:border-[#0062F1] rounded-lg p-5 text-center cursor-pointer transition-colors">
+                <span class="text-sm text-slate-600">Choose a CSV, Excel, or JSON file</span>
+                <input type="file" id="file-input" accept=".csv,.xlsx,.xls,.xlsm,.json" class="hidden">
+            </label>
+            <p id="file-status" class="text-xs text-slate-500">No file loaded.</p>
+
+            <div id="controls" class="hidden flex flex-wrap items-end gap-4">
+                <div>
+                    <label for="compare-column" class="block text-[10px] font-semibold text-slate-600 uppercase tracking-wider mb-1">Compare this column</label>
+                    <select id="compare-column" class="bg-slate-50 border border-slate-300 rounded-lg text-sm p-2 text-slate-900 min-w-[12rem]"></select>
+                </div>
+                <div>
+                    <label for="threshold" class="block text-[10px] font-semibold text-slate-600 uppercase tracking-wider mb-1">
+                        Similarity threshold: <span id="threshold-label" class="text-[#0062F1] font-bold">85%</span>
+                    </label>
+                    <input type="range" id="threshold" min="60" max="100" value="85" step="1" class="w-56 accent-[#0062F1]">
+                </div>
+                <label class="flex items-center gap-2 text-sm text-slate-700 pb-2">
+                    <input type="checkbox" id="strip-suffixes" checked class="accent-[#0062F1]"> Ignore business suffixes (Corp, Inc, Ltd)
+                </label>
+                <button onclick="findDuplicates()" class="bg-[#0062F1] hover:bg-[#0050C7] text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition-colors">
+                    Find Duplicates
+                </button>
+            </div>
+        </div>
+
+        <div id="results" class="hidden space-y-4">
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div class="bg-white border border-slate-200 p-4 rounded-xl">
+                    <p class="text-xs font-semibold uppercase tracking-wider text-slate-600">Groups Found</p>
+                    <p id="stat-groups" class="text-2xl font-bold text-[#00133C] mt-1">0</p>
+                </div>
+                <div class="bg-white border border-slate-200 p-4 rounded-xl">
+                    <p class="text-xs font-semibold uppercase tracking-wider text-slate-600">Rows Involved</p>
+                    <p id="stat-rows" class="text-2xl font-bold text-[#DC6803] mt-1">0</p>
+                </div>
+                <div class="bg-white border border-slate-200 p-4 rounded-xl">
+                    <p class="text-xs font-semibold uppercase tracking-wider text-slate-600">Exact Matches</p>
+                    <p id="stat-exact" class="text-2xl font-bold text-red-600 mt-1">0</p>
+                </div>
+                <div class="bg-white border border-slate-200 p-4 rounded-xl">
+                    <p class="text-xs font-semibold uppercase tracking-wider text-slate-600">Would Remove</p>
+                    <p id="stat-removable" class="text-2xl font-bold text-emerald-600 mt-1">0</p>
+                </div>
+            </div>
+
+            <div id="perf-note" class="hidden bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-800"></div>
+
+            <div class="bg-white border border-slate-200 rounded-xl p-4">
+                <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+                    <h3 class="text-sm font-medium text-slate-700">Suspected duplicate groups</h3>
+                    <div class="flex gap-2">
+                        <button onclick="exportGroups()" class="bg-white border border-slate-300 hover:border-[#0062F1] text-[#00133C] text-xs font-medium px-3 py-1.5 rounded-lg transition-colors">Export Groups</button>
+                        <button onclick="exportDeduped()" class="bg-white border border-slate-300 hover:border-[#0062F1] text-[#00133C] text-xs font-medium px-3 py-1.5 rounded-lg transition-colors">Export Deduped File</button>
+                    </div>
+                </div>
+                <p class="text-[10px] text-slate-500 mb-3">Untick any group you do not want treated as a duplicate. The first row in each group is kept.</p>
+                <div id="groups-container" class="space-y-2"></div>
+            </div>
+        </div>
+    </main>
+
+    <script src="../shared/parse.js"></script>
+    <script>
+        const MAX_COMPARISONS = 4000000;
+
+        let fileData = null;
+        let groups = [];
+
+        function showToast(message, isError = true) {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `text-sm rounded-lg px-4 py-3 shadow-2xl max-w-md ${isError ? 'bg-red-50 border border-red-300 text-red-500' : 'bg-emerald-50 border border-emerald-300 text-emerald-700'}`;
+            toast.innerText = message;
+            container.appendChild(toast);
+            setTimeout(() => toast.remove(), 4000);
+        }
+
+        const BUSINESS_SUFFIXES = new Set([
+            'corp', 'corporation', 'inc', 'incorporated', 'ltd', 'limited', 'llc', 'llp',
+            'plc', 'co', 'company', 'gmbh', 'sa', 'nv', 'bv', 'ag', 'pty', 'group', 'holdings'
+        ]);
+
+        function normalizeValue(v, stripSuffixes) {
+            if (v === null || v === undefined) return '';
+
+            let s = String(v)
+                .toLowerCase()
+                .replace(/[^a-z0-9\s]/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim();
+
+            if (stripSuffixes) {
+                let tokens = s.split(' ');
+                while (tokens.length > 1 && BUSINESS_SUFFIXES.has(tokens[tokens.length - 1])) tokens.pop();
+                s = tokens.join(' ');
+            }
+
+            return s;
+        }
+
+        function levenshtein(a, b) {
+            if (a === b) return 0;
+            if (a.length === 0) return b.length;
+            if (b.length === 0) return a.length;
+
+            let prev = new Uint32Array(b.length + 1);
+            let curr = new Uint32Array(b.length + 1);
+
+            for (let j = 0; j <= b.length; j++) prev[j] = j;
+
+            for (let i = 1; i <= a.length; i++) {
+                curr[0] = i;
+                const ca = a.charCodeAt(i - 1);
+                for (let j = 1; j <= b.length; j++) {
+                    const cost = ca === b.charCodeAt(j - 1) ? 0 : 1;
+                    curr[j] = Math.min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost);
+                }
+                const tmp = prev;
+                prev = curr;
+                curr = tmp;
+            }
+
+            return prev[b.length];
+        }
+
+        function similarity(a, b) {
+            const longest = Math.max(a.length, b.length);
+            if (longest === 0) return 1;
+            return 1 - levenshtein(a, b) / longest;
+        }
+
+        document.getElementById('threshold').addEventListener('input', (e) => {
+            document.getElementById('threshold-label').innerText = `${e.target.value}%`;
+        });
+
+        document.getElementById('file-input').addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            try {
+                fileData = await parseFileToRows(file);
+                if (fileData.columns.length === 0) throw new Error('No readable columns found.');
+
+                document.getElementById('file-status').innerText = `${file.name} — ${fileData.rows.length.toLocaleString()} rows, ${fileData.columns.length} columns`;
+                document.getElementById('compare-column').innerHTML = fileData.columns.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+                document.getElementById('controls').classList.remove('hidden');
+            } catch (err) {
+                showToast('Could not read that file: ' + err.message);
+            } finally {
+                e.target.value = '';
+            }
+        });
+
+        function findDuplicates() {
+            if (!fileData) return;
+
+            const column = document.getElementById('compare-column').value;
+            const threshold = Number(document.getElementById('threshold').value) / 100;
+
+            const stripSuffixes = document.getElementById('strip-suffixes').checked;
+
+            const entries = [];
+            fileData.rows.forEach((row, idx) => {
+                const raw = row[column];
+                const norm = normalizeValue(raw, stripSuffixes);
+                if (norm === '') return;
+                entries.push({ idx, raw, norm });
+            });
+
+            const blocks = new Map();
+            for (const entry of entries) {
+                const blockKey = entry.norm.slice(0, 1);
+                if (!blocks.has(blockKey)) blocks.set(blockKey, []);
+                blocks.get(blockKey).push(entry);
+            }
+
+            let plannedComparisons = 0;
+            for (const list of blocks.values()) plannedComparisons += (list.length * (list.length - 1)) / 2;
+
+            const perfNote = document.getElementById('perf-note');
+            let capped = false;
+            if (plannedComparisons > MAX_COMPARISONS) capped = true;
+
+            const parent = new Map();
+            const find = (x) => {
+                while (parent.get(x) !== x) {
+                    parent.set(x, parent.get(parent.get(x)));
+                    x = parent.get(x);
+                }
+                return x;
+            };
+            const union = (a, b) => {
+                const ra = find(a);
+                const rb = find(b);
+                if (ra !== rb) parent.set(ra, rb);
+            };
+
+            for (const entry of entries) parent.set(entry.idx, entry.idx);
+
+            let exactPairs = 0;
+            let comparisons = 0;
+
+            for (const list of blocks.values()) {
+                const byNorm = new Map();
+                for (const entry of list) {
+                    if (byNorm.has(entry.norm)) {
+                        union(entry.idx, byNorm.get(entry.norm));
+                        exactPairs++;
+                    } else {
+                        byNorm.set(entry.norm, entry.idx);
+                    }
+                }
+
+                const unique = Array.from(byNorm.entries()).map(([norm, idx]) => ({ norm, idx }));
+
+                for (let i = 0; i < unique.length; i++) {
+                    for (let j = i + 1; j < unique.length; j++) {
+                        if (capped && comparisons >= MAX_COMPARISONS) break;
+                        comparisons++;
+
+                        const a = unique[i].norm;
+                        const b = unique[j].norm;
+                        const lengthRatio = Math.min(a.length, b.length) / Math.max(a.length, b.length);
+                        if (lengthRatio < threshold) continue;
+
+                        if (similarity(a, b) >= threshold) union(unique[i].idx, unique[j].idx);
+                    }
+                    if (capped && comparisons >= MAX_COMPARISONS) break;
+                }
+            }
+
+            const clusters = new Map();
+            for (const entry of entries) {
+                const root = find(entry.idx);
+                if (!clusters.has(root)) clusters.set(root, []);
+                clusters.get(root).push(entry);
+            }
+
+            groups = Array.from(clusters.values())
+                .filter(g => g.length > 1)
+                .map((g, i) => ({ id: i, members: g, keep: true }))
+                .sort((a, b) => b.members.length - a.members.length);
+
+            const rowsInvolved = groups.reduce((s, g) => s + g.members.length, 0);
+            const removable = groups.reduce((s, g) => s + g.members.length - 1, 0);
+
+            document.getElementById('stat-groups').innerText = groups.length.toLocaleString();
+            document.getElementById('stat-rows').innerText = rowsInvolved.toLocaleString();
+            document.getElementById('stat-exact').innerText = exactPairs.toLocaleString();
+            document.getElementById('stat-removable').innerText = removable.toLocaleString();
+
+            if (capped) {
+                perfNote.classList.remove('hidden');
+                perfNote.innerText = `This file is large enough that the comparison budget was reached, so some distant pairs were not checked. Results still include every exact and near match found within the budget. Narrowing to a single column with shorter values, or raising the threshold, makes the search faster.`;
+            } else {
+                perfNote.classList.add('hidden');
+            }
+
+            renderGroups(column);
+            document.getElementById('results').classList.remove('hidden');
+        }
+
+        function renderGroups(column) {
+            const container = document.getElementById('groups-container');
+
+            if (groups.length === 0) {
+                container.innerHTML = '<p class="text-sm text-slate-500 italic">No duplicate groups found at this threshold. Try lowering it.</p>';
+                return;
+            }
+
+            container.innerHTML = groups.slice(0, 300).map(g => `
+                <div class="border border-slate-200 rounded-lg p-3">
+                    <label class="flex items-center gap-2 mb-2">
+                        <input type="checkbox" class="group-toggle accent-[#0062F1]" data-group="${g.id}" ${g.keep ? 'checked' : ''}>
+                        <span class="text-xs font-semibold text-slate-700">${g.members.length} similar values</span>
+                    </label>
+                    <div class="flex flex-wrap gap-1.5">
+                        ${g.members.map((m, i) => `
+                            <span class="text-xs px-2 py-1 rounded ${i === 0 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-600 border border-slate-200'}" title="Row ${m.idx + 2}">
+                                ${escapeHtml(m.raw)}${i === 0 ? ' (kept)' : ''}
+                            </span>
+                        `).join('')}
+                    </div>
+                </div>
+            `).join('') + (groups.length > 300 ? `<p class="text-xs text-slate-500 italic">Showing the first 300 of ${groups.length.toLocaleString()} groups. Export to see them all.</p>` : '');
+
+            container.querySelectorAll('.group-toggle').forEach(cb => {
+                cb.addEventListener('change', (e) => {
+                    const id = Number(e.target.dataset.group);
+                    const group = groups.find(g => g.id === id);
+                    if (group) group.keep = e.target.checked;
+                });
+            });
+        }
+
+        function exportGroups() {
+            if (groups.length === 0) return;
+            const column = document.getElementById('compare-column').value;
+
+            const rows = [];
+            groups.forEach((g, gi) => {
+                g.members.forEach((m, mi) => {
+                    rows.push({
+                        group: gi + 1,
+                        source_row: m.idx + 2,
+                        value: m.raw,
+                        role: mi === 0 ? 'kept' : 'duplicate',
+                        marked_for_removal: g.keep ? (mi === 0 ? 'no' : 'yes') : 'no'
+                    });
+                });
+            });
+
+            downloadCSV(`duplicate_groups_${column.replace(/[^a-zA-Z0-9]+/g, '_')}.csv`, ['group', 'source_row', 'value', 'role', 'marked_for_removal'], rows);
+        }
+
+        function exportDeduped() {
+            if (!fileData) return;
+
+            const drop = new Set();
+            for (const g of groups) {
+                if (!g.keep) continue;
+                g.members.slice(1).forEach(m => drop.add(m.idx));
+            }
+
+            const kept = fileData.rows.filter((_, idx) => !drop.has(idx));
+            downloadCSV('deduplicated.csv', fileData.columns, kept);
+            showToast(`Removed ${drop.size.toLocaleString()} rows, kept ${kept.length.toLocaleString()}.`, false);
+        }
+    </script>
+</body>
+</html>

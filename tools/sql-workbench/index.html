@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SQL Workbench — Data and Analytics Hub</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2300133C'/%3E%3Ctext x='16' y='23' font-family='Georgia,serif' font-size='19' fill='%230062F1' text-anchor='middle'%3EH%3C/text%3E%3C/svg%3E">
+</head>
+
+<body class="bg-slate-50 text-slate-900 min-h-screen font-sans">
+    <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2"></div>
+
+    <header class="border-b border-slate-200 bg-white px-8 py-4 flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+            <a href="../../index.html" class="text-xs text-slate-500 hover:text-[#0062F1]">&larr; Hub</a>
+            <div class="h-6 w-px bg-slate-100"></div>
+            <h1 class="text-lg font-semibold text-[#00133C]">SQL Workbench</h1>
+        </div>
+        <div class="text-xs text-slate-600 bg-slate-50 px-3 py-1 rounded-full border border-slate-200">Query files with SQLite</div>
+    </header>
+
+    <main class="max-w-6xl mx-auto p-6 space-y-4">
+        <p class="text-sm text-slate-600 max-w-3xl">
+            Load one or more CSV, Excel, or JSON files, then query them with standard SQLite. Each file
+            becomes a table, so you can join across them, group, and aggregate. Everything runs in your
+            browser and nothing is uploaded anywhere.
+        </p>
+
+        <div class="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
+            <div class="flex flex-wrap items-center gap-3">
+                <label class="bg-[#0062F1] hover:bg-[#0050C7] text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors cursor-pointer">
+                    Add Files
+                    <input type="file" id="file-input" accept=".csv,.xlsx,.xls,.xlsm,.json" class="hidden" multiple>
+                </label>
+                <button onclick="loadSampleTables()" type="button" class="bg-white border border-slate-300 hover:border-[#0062F1] text-[#00133C] text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+                    Load Sample Tables
+                </button>
+                <button onclick="clearAllTables()" type="button" class="bg-white border border-slate-300 hover:border-red-400 text-slate-600 hover:text-red-500 text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+                    Clear All
+                </button>
+                <span id="load-status" class="text-xs text-slate-500"></span>
+            </div>
+
+            <div id="schema-container" class="space-y-2"></div>
+        </div>
+
+        <div class="bg-white border border-slate-200 rounded-xl p-5 space-y-3">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+                <label for="sql-editor" class="block text-xs font-semibold text-slate-600 uppercase tracking-wider">Query</label>
+                <p class="text-[10px] text-slate-500">Click a column name to insert it. Names with spaces need double quotes, like "Order Date".</p>
+            </div>
+
+            <textarea id="sql-editor" rows="7" spellcheck="false"
+                class="w-full bg-slate-50 border border-slate-300 rounded-lg text-sm font-mono p-3 text-slate-900 focus:border-[#0062F1] focus:ring-2 focus:ring-[#0062F1]/20 focus:outline-none resize-y"
+                placeholder="SELECT * FROM your_table LIMIT 20;"></textarea>
+
+            <div class="flex flex-wrap items-center gap-2">
+                <button id="run-btn" onclick="runQuery()" type="button" class="bg-[#0062F1] hover:bg-[#0050C7] text-white text-sm font-semibold px-5 py-2 rounded-lg transition-colors">
+                    Run Query
+                </button>
+                <button onclick="exportResultsCsv()" type="button" class="bg-white border border-slate-300 hover:border-[#0062F1] text-[#00133C] text-sm font-medium px-3 py-2 rounded-lg transition-colors">
+                    Export CSV
+                </button>
+                <button onclick="exportResultsExcel()" type="button" class="bg-white border border-slate-300 hover:border-[#0062F1] text-[#00133C] text-sm font-medium px-3 py-2 rounded-lg transition-colors">
+                    Export Excel
+                </button>
+                <button onclick="saveResultsAsTable()" type="button" class="bg-white border border-slate-300 hover:border-[#0062F1] text-[#00133C] text-sm font-medium px-3 py-2 rounded-lg transition-colors">
+                    Save as Table
+                </button>
+                <span id="query-status" class="text-xs text-slate-500"></span>
+            </div>
+
+            <p class="text-[10px] text-slate-500">Press Ctrl+Enter (Cmd+Enter on Mac) to run.</p>
+
+            <div id="query-error" class="hidden text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg p-3 font-mono whitespace-pre-wrap"></div>
+        </div>
+
+        <div class="bg-white border border-slate-200 rounded-xl p-5">
+            <h3 class="text-sm font-medium text-slate-700 mb-3">Results</h3>
+            <div id="results-container">
+                <p class="text-sm text-slate-400 italic">Load a file and run a query to see results here.</p>
+            </div>
+        </div>
+    </main>
+
+    <script src="../shared/parse.js"></script>
+    <script src="../shared/sql.js"></script>
+    <script>
+        const MAX_DISPLAY_ROWS = 500;
+
+        let datasets = [];
+        let database = null;
+        let tableInfo = [];
+        let lastResult = null;
+
+        function showToast(message, isError = true) {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `text-sm rounded-lg px-4 py-3 shadow-2xl max-w-md ${isError ? 'bg-red-50 border border-red-300 text-red-500' : 'bg-emerald-50 border border-emerald-300 text-emerald-700'}`;
+            toast.innerText = message;
+            container.appendChild(toast);
+            setTimeout(() => toast.remove(), 4000);
+        }
+
+        function showError(message) {
+            const box = document.getElementById('query-error');
+            box.innerText = message;
+            box.classList.remove('hidden');
+        }
+
+        function clearError() {
+            document.getElementById('query-error').classList.add('hidden');
+        }
+
+        async function rebuildDatabase() {
+            if (database) {
+                database.close();
+                database = null;
+            }
+
+            if (datasets.length === 0) {
+                tableInfo = [];
+                renderSchema();
+                return;
+            }
+
+            const status = document.getElementById('load-status');
+            status.innerText = 'Preparing tables...';
+
+            const started = performance.now();
+            const built = await buildSqlDatabaseFrom(datasets);
+            database = built.db;
+            tableInfo = built.tables;
+
+            status.innerText = `${tableInfo.length} table${tableInfo.length === 1 ? '' : 's'} ready in ${Math.round(performance.now() - started)} ms.`;
+            renderSchema();
+        }
+
+        function renderSchema() {
+            const container = document.getElementById('schema-container');
+
+            if (tableInfo.length === 0) {
+                container.innerHTML = '<p class="text-sm text-slate-400 italic">No tables loaded yet. Add a file or load the sample tables.</p>';
+                return;
+            }
+
+            container.innerHTML = tableInfo.map((entry, idx) => `
+                <div class="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <div class="flex flex-wrap items-baseline gap-2">
+                            <code class="text-xs font-semibold text-[#0062F1]">${escapeHtml(entry.table)}</code>
+                            <span class="text-[10px] text-slate-500">${escapeHtml(entry.name)} &middot; ${entry.rowCount.toLocaleString()} rows &middot; ${entry.columns.length} columns</span>
+                        </div>
+                        <button onclick="removeTable(${idx})" class="text-slate-400 hover:text-red-500 text-xs font-bold" title="Remove this table" aria-label="Remove ${escapeHtml(entry.name)}">&times;</button>
+                    </div>
+                    <div class="mt-1.5 flex flex-wrap gap-1">
+                        ${entry.columns.map((c, i) => `
+                            <button type="button" onclick="insertColumn(${JSON.stringify(c).replaceAll('"', '&quot;')})" class="text-[10px] font-mono bg-white hover:bg-blue-50 hover:text-[#0062F1] border border-slate-200 rounded px-1.5 py-0.5 text-slate-600 transition-colors" title="Insert into query">
+                                ${escapeHtml(c)}<span class="text-slate-400 ml-1">${entry.numericFlags[i] ? '#' : 'A'}</span>
+                            </button>
+                        `).join('')}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function insertColumn(column) {
+            const editor = document.getElementById('sql-editor');
+            const token = /^[A-Za-z_][A-Za-z0-9_]*$/.test(column) ? column : `"${column.replaceAll('"', '""')}"`;
+            const start = editor.selectionStart;
+            const end = editor.selectionEnd;
+
+            editor.value = editor.value.slice(0, start) + token + editor.value.slice(end);
+            editor.focus();
+            editor.selectionStart = editor.selectionEnd = start + token.length;
+        }
+
+        async function addDatasets(newSets) {
+            datasets = datasets.concat(newSets);
+            await rebuildDatabase();
+
+            const editor = document.getElementById('sql-editor');
+            if (editor.value.trim() === '' && tableInfo.length > 0) {
+                editor.value = `SELECT *\nFROM ${tableInfo[0].table}\nLIMIT 20;`;
+            }
+        }
+
+        async function removeTable(index) {
+            datasets.splice(index, 1);
+            await rebuildDatabase();
+        }
+
+        async function clearAllTables() {
+            datasets = [];
+            lastResult = null;
+            document.getElementById('sql-editor').value = '';
+            document.getElementById('query-status').innerText = '';
+            document.getElementById('load-status').innerText = '';
+            document.getElementById('results-container').innerHTML = '<p class="text-sm text-slate-400 italic">Load a file and run a query to see results here.</p>';
+            clearError();
+            await rebuildDatabase();
+        }
+
+        document.getElementById('file-input').addEventListener('change', async (e) => {
+            const files = Array.from(e.target.files || []);
+            if (files.length === 0) return;
+
+            const loaded = [];
+            for (const file of files) {
+                try {
+                    const parsed = await parseFileToRows(file);
+                    if (parsed.columns.length === 0) {
+                        showToast(`"${file.name}" has no readable columns.`);
+                        continue;
+                    }
+                    loaded.push({ name: file.name, columns: parsed.columns, rows: parsed.rows });
+                } catch (err) {
+                    showToast(`Could not read "${file.name}": ${err.message}`);
+                }
+            }
+
+            e.target.value = '';
+            if (loaded.length > 0) await addDatasets(loaded);
+        });
+
+        async function runQuery() {
+            clearError();
+
+            const button = document.getElementById('run-btn');
+            const status = document.getElementById('query-status');
+
+            button.disabled = true;
+            status.innerText = 'Running...';
+            await new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)));
+
+            try {
+                const result = runSqlOn(database, document.getElementById('sql-editor').value);
+                lastResult = result;
+                renderResults(result);
+
+                status.innerText = result.columns.length === 0
+                    ? `Statement completed in ${result.elapsedMs.toFixed(0)} ms. No rows returned.`
+                    : `${result.rows.length.toLocaleString()} row${result.rows.length === 1 ? '' : 's'} in ${result.elapsedMs.toFixed(0)} ms.`;
+            } catch (err) {
+                lastResult = null;
+                document.getElementById('results-container').innerHTML = '<p class="text-sm text-slate-400 italic">No results.</p>';
+                status.innerText = '';
+                showError(err.message || String(err));
+            } finally {
+                button.disabled = false;
+            }
+        }
+
+        function renderResults(result) {
+            const container = document.getElementById('results-container');
+
+            if (result.columns.length === 0) {
+                container.innerHTML = '<p class="text-sm text-slate-500 italic">Statement completed. No rows returned.</p>';
+                return;
+            }
+
+            if (result.rows.length === 0) {
+                container.innerHTML = '<p class="text-sm text-slate-500 italic">The query ran successfully but returned no rows.</p>';
+                return;
+            }
+
+            const shown = result.rows.slice(0, MAX_DISPLAY_ROWS);
+            const note = result.rows.length > MAX_DISPLAY_ROWS
+                ? `<p class="text-[10px] text-slate-500 mt-2">Showing the first ${MAX_DISPLAY_ROWS.toLocaleString()} of ${result.rows.length.toLocaleString()} rows. Export to get them all.</p>`
+                : '';
+
+            container.innerHTML = `
+                <div class="overflow-x-auto max-h-[30rem] overflow-y-auto border border-slate-200 rounded-lg">
+                    <table class="w-full text-xs">
+                        <thead class="bg-slate-50 sticky top-0">
+                            <tr>${result.columns.map((c) => `<th class="text-left font-semibold text-slate-700 px-3 py-2 border-b border-slate-200 whitespace-nowrap">${escapeHtml(c)}</th>`).join('')}</tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            ${shown.map((row) => `<tr class="hover:bg-slate-50">${row.map((v) => `<td class="px-3 py-1.5 text-slate-700 whitespace-nowrap">${v === null ? '<span class="text-slate-400 italic">null</span>' : escapeHtml(v)}</td>`).join('')}</tr>`).join('')}
+                        </tbody>
+                    </table>
+                </div>
+                ${note}
+            `;
+        }
+
+        function requireResults() {
+            if (!lastResult || lastResult.columns.length === 0 || lastResult.rows.length === 0) {
+                showToast('Run a query that returns rows first.');
+                return false;
+            }
+            return true;
+        }
+
+        function exportResultsCsv() {
+            if (!requireResults()) return;
+            downloadCSV('query_results.csv', lastResult.columns, sqlResultToObjects(lastResult));
+        }
+
+        function exportResultsExcel() {
+            if (!requireResults()) return;
+            downloadExcel('query_results.xlsx', lastResult.columns, sqlResultToObjects(lastResult));
+        }
+
+        async function saveResultsAsTable() {
+            if (!requireResults()) return;
+
+            const stamp = new Date().toISOString().slice(11, 19).replaceAll(':', '');
+            await addDatasets([{
+                name: `query_result_${stamp}`,
+                columns: lastResult.columns.slice(),
+                rows: sqlResultToObjects(lastResult)
+            }]);
+
+            showToast('Saved as a new table you can query.', false);
+        }
+
+        function buildSampleTables() {
+            const regions = ['North America', 'EMEA', 'APAC', 'Latin America'];
+            const tiers = ['Enterprise', 'Mid-Market', 'Small Business'];
+            const products = ['Software Licenses', 'Hardware', 'Professional Services', 'Support Contracts'];
+
+            let seed = 20240115;
+            const rand = () => {
+                seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+                return seed / 4294967296;
+            };
+
+            const customers = [];
+            for (let i = 1; i <= 60; i++) {
+                customers.push({
+                    customer_id: `CUST${String(i).padStart(3, '0')}`,
+                    customer_name: `Customer ${i}`,
+                    region: regions[Math.floor(rand() * regions.length)],
+                    tier: tiers[Math.floor(rand() * tiers.length)]
+                });
+            }
+
+            const orders = [];
+            const today = new Date();
+            for (let i = 1; i <= 400; i++) {
+                const customer = customers[Math.floor(rand() * customers.length)];
+                const daysAgo = Math.floor(rand() * 540);
+                const when = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() - daysAgo));
+                const units = 1 + Math.floor(rand() * 9);
+                const unitPrice = 800 + Math.floor(rand() * 9000);
+
+                orders.push({
+                    order_id: `ORD${String(i).padStart(4, '0')}`,
+                    order_date: `${when.getUTCFullYear()}-${String(when.getUTCMonth() + 1).padStart(2, '0')}-${String(when.getUTCDate()).padStart(2, '0')}`,
+                    customer_id: customer.customer_id,
+                    product: products[Math.floor(rand() * products.length)],
+                    units,
+                    revenue: Number((units * unitPrice).toFixed(2))
+                });
+            }
+
+            return [
+                { name: 'customers', columns: ['customer_id', 'customer_name', 'region', 'tier'], rows: customers },
+                { name: 'orders', columns: ['order_id', 'order_date', 'customer_id', 'product', 'units', 'revenue'], rows: orders }
+            ];
+        }
+
+        async function loadSampleTables() {
+            await addDatasets(buildSampleTables());
+
+            document.getElementById('sql-editor').value =
+                'SELECT c.region,\n' +
+                '       COUNT(*) AS orders,\n' +
+                '       ROUND(SUM(o.revenue)) AS revenue\n' +
+                'FROM orders o\n' +
+                'JOIN customers c ON c.customer_id = o.customer_id\n' +
+                'GROUP BY c.region\n' +
+                'ORDER BY revenue DESC;';
+        }
+
+        document.getElementById('sql-editor').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                e.preventDefault();
+                runQuery();
+            }
+        });
+
+        renderSchema();
+    </script>
+</body>
+</html>

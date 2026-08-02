@@ -17,6 +17,13 @@ and a card on the landing page, and it's a new tool.
 | JSON Formatter | `tools/json-formatter/` | Validates, pretty-prints, and minifies JSON |
 | Timestamp Converter | `tools/timestamp-converter/` | Unix/date conversion across timezones, ISO 8601, relative time |
 | Column Statistics | `tools/column-stats/` | Per-column min/max/mean/median/stddev/nulls — instant data profiling, no mapping step |
+| SQL Workbench | `tools/sql-workbench/` | Load CSV/Excel/JSON files as tables and query them with standard SQLite, including joins across files |
+| Lookup & Merge | `tools/lookup-merge/` | Match two files on a shared key and pull columns across, reporting unmatched rows |
+| Fuzzy Duplicate Finder | `tools/fuzzy-dupes/` | Finds near-duplicate values that exact deduplication misses, with an adjustable similarity threshold |
+| Chart Builder | `tools/chart-builder/` | Two columns to a bar/line/pie/scatter chart, downloadable as PNG |
+| Test Data Generator | `tools/data-generator/` | Builds realistic sample files from a column spec, with a seed for repeatable output |
+| Code Helper | `tools/code-helper/` | Snippets for common data tasks in Python, R, SQL, JavaScript, and Java, using your own column names |
+| JWT Decoder | `tools/jwt-decoder/` | Decodes a JSON Web Token's header, payload, and expiry (does not verify signatures) |
 | Regex Tester | `tools/regex-tester/` | Live-highlighted pattern matches and capture groups against sample text |
 | Text Diff | `tools/text-diff/` | Line-level diff between two pasted blocks of text |
 | Color Tools | `tools/color-tools/` | Shade palette generator from a base color, plus a WCAG contrast ratio checker |
@@ -28,9 +35,15 @@ and a card on the landing page, and it's a new tool.
 
 `tools/shared/parse.js` holds the CSV/Excel parsing and CSV/Excel/JSON
 download helpers reused by every file-based tool (File Diff, Pivot Explorer,
-Data Cleaner, Format Converter, Column Statistics). Data Analyzer keeps its
-own copy in `tools/data-analyzer/js/core.js` so it stays fully
-self-contained. The purely text/paste-based tools (JSON Formatter,
+Data Cleaner, Format Converter, Column Statistics, SQL Workbench). Data
+Analyzer keeps its own copy in `tools/data-analyzer/js/core.js` so it stays
+fully self-contained.
+
+`tools/shared/sql.js` wraps the SQLite engine (sql.js, compiled to
+WebAssembly and loaded lazily from a CDN the first time a query runs). It
+turns any set of parsed datasets into in-memory SQL tables. SQL Workbench
+uses it directly; Data Analyzer has its own copy in
+`tools/data-analyzer/js/sql-query.js` for the same self-containment reason. The purely text/paste-based tools (JSON Formatter,
 Timestamp Converter, Regex Tester, Text Diff, Color Tools, Text Analyzer,
 Base64/URL Encoder, Unit Converter) need no file parsing at all. Markdown
 Previewer is the only text-based tool with an external dependency (`marked`).
@@ -39,6 +52,13 @@ Previewer is the only text-based tool with an external dependency (`marked`).
 
 - **Search** — the search box on the landing page filters cards by name and
   description as you type; empty categories hide themselves automatically.
+- **Command palette** — Ctrl+K (Cmd+K on Mac) opens a jump-to-tool box with
+  arrow-key navigation. It only ever lists tools the current access code
+  unlocks.
+- **Recently used** — the last five tools opened appear as chips at the top of
+  the hub, stored in `localStorage` under `hub_recent_tools` and filtered to
+  the current code's tools. This is the one thing the hub remembers between
+  visits; the access code itself is still never stored.
 - **Categories** — tools are grouped into "Data & Files" (upload-a-file tools)
   and "Text & Dev Utilities" (paste/type tools).
 - **Favicon** — every page (hub + all tools) shares the same navy/blue "H"
@@ -62,12 +82,12 @@ Previewer is the only text-based tool with an external dependency (`marked`).
 
   | Code | View | Tools |
   |---|---|---|
-  | `1159` | Data Analyst | all 16 tools |
-  | `3010` | Leadership | Data Analyzer, Pivot & Chart Explorer |
-  | `3020` | Marketing | QR Generator, Color Tools, Markdown Previewer, Text Analyzer |
-  | `3030` | IT / Dev | JSON Formatter, Regex Tester, Base64/URL Encoder, Timestamp Converter, Text Diff, File Diff |
-  | `3040` | HR / Operations | Data Cleaner, Format Converter, Column Statistics, Timestamp Converter |
-  | `3050` | Finance | Data Analyzer, Column Statistics, Pivot & Chart Explorer, File Diff |
+  | `1159` | Data Analyst | all 23 tools |
+  | `7284` | Leadership | Data Analyzer, Pivot & Chart Explorer, Chart Builder |
+  | `5931` | Marketing | QR Generator, Color Tools, Markdown Previewer, Text Analyzer, Chart Builder |
+  | `4067` | IT / Dev | JSON Formatter, Regex Tester, Base64/URL Encoder, Timestamp Converter, Text Diff, File Diff, SQL Workbench, Code Helper, JWT Decoder, Test Data Generator |
+  | `8412` | HR / Operations | Data Cleaner, Format Converter, Column Statistics, Timestamp Converter, Lookup & Merge, Fuzzy Duplicate Finder |
+  | `2650` | Finance | Data Analyzer, Column Statistics, Pivot & Chart Explorer, File Diff, SQL Workbench, Lookup & Merge, Chart Builder |
 
   A code is not remembered anywhere (no `localStorage`, no URL param), so it
   has to be re-entered on every fresh load by design, and there's no way to

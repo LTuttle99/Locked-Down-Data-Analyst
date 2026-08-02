@@ -60,6 +60,20 @@
         </div>
     </div>
 
+    <div id="palette-overlay" class="hidden fixed inset-0 z-40 bg-slate-900/40 backdrop-blur-sm px-4 pt-24" role="dialog" aria-modal="true" aria-labelledby="palette-label">
+        <div class="max-w-lg mx-auto bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden">
+            <label id="palette-label" for="palette-input" class="sr-only">Jump to a tool</label>
+            <input type="text" id="palette-input" placeholder="Jump to a tool..." autocomplete="off"
+                class="w-full text-sm px-4 py-3.5 border-b border-slate-200 focus:outline-none text-slate-900">
+            <div id="palette-results" class="max-h-80 overflow-y-auto"></div>
+            <div class="flex items-center gap-3 px-4 py-2 bg-slate-50 border-t border-slate-200 text-[10px] text-slate-500">
+                <span><kbd class="font-sans font-semibold">Up</kbd> and <kbd class="font-sans font-semibold">Down</kbd> to move</span>
+                <span><kbd class="font-sans font-semibold">Enter</kbd> to open</span>
+                <span><kbd class="font-sans font-semibold">Esc</kbd> to close</span>
+            </div>
+        </div>
+    </div>
+
     <header id="hub-header" inert class="border-b border-slate-200 bg-white px-8 py-4 flex flex-wrap items-center justify-between gap-3">
         <div class="flex items-center space-x-3">
             <div class="h-9 w-9 rounded bg-[#00133C] flex items-center justify-center font-bold text-white" aria-hidden="true">H</div>
@@ -119,6 +133,14 @@
         </a>
 
         <div class="space-y-10">
+
+        <section id="recent-section" class="hidden">
+            <div class="flex items-center justify-between mb-3">
+                <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-500">Recently Used</h3>
+                <button onclick="clearRecent()" class="text-xs text-slate-400 hover:text-red-500">Clear</button>
+            </div>
+            <div id="recent-list" class="flex flex-wrap gap-2"></div>
+        </section>
 
         <section>
             <div class="relative max-w-md">
@@ -204,6 +226,66 @@
                     <p class="text-sm text-slate-600 leading-relaxed flex-1">
                         Upload any file and get instant per-column min/max/mean/median/nulls —
                         a fast data profile with no mapping step.
+                    </p>
+                    <span class="mt-4 text-xs font-semibold text-[#0062F1] group-hover:text-[#00133C] inline-flex items-center gap-1">
+                        Open tool <span aria-hidden="true">&rarr;</span>
+                    </span>
+                </a>
+
+                <a href="tools/sql-workbench/index.html" data-tool="sql-workbench" class="tool-card group bg-white border border-slate-200 hover:border-[#0062F1] hover:shadow-md rounded-xl p-6 shadow-sm transition-all flex flex-col">
+                    <div class="h-10 w-10 rounded-lg bg-[#00133C] text-white flex items-center justify-center text-xs font-bold mb-4" aria-hidden="true">SQL</div>
+                    <h4 class="text-base font-semibold text-[#00133C] mb-1.5">SQL Workbench</h4>
+                    <p class="text-sm text-slate-600 leading-relaxed flex-1">
+                        Load CSV, Excel, or JSON files as tables and query them with standard SQLite —
+                        joins, grouping, and aggregates across files.
+                    </p>
+                    <span class="mt-4 text-xs font-semibold text-[#0062F1] group-hover:text-[#00133C] inline-flex items-center gap-1">
+                        Open tool <span aria-hidden="true">&rarr;</span>
+                    </span>
+                </a>
+
+                <a href="tools/lookup-merge/index.html" data-tool="lookup-merge" class="tool-card group bg-white border border-slate-200 hover:border-[#0062F1] hover:shadow-md rounded-xl p-6 shadow-sm transition-all flex flex-col">
+                    <div class="h-10 w-10 rounded-lg bg-[#00133C] text-white flex items-center justify-center text-sm font-bold mb-4" aria-hidden="true">LU</div>
+                    <h4 class="text-base font-semibold text-[#00133C] mb-1.5">Lookup &amp; Merge</h4>
+                    <p class="text-sm text-slate-600 leading-relaxed flex-1">
+                        Match two files on a shared key and pull columns from one into the other, with
+                        unmatched rows reported instead of silently dropped.
+                    </p>
+                    <span class="mt-4 text-xs font-semibold text-[#0062F1] group-hover:text-[#00133C] inline-flex items-center gap-1">
+                        Open tool <span aria-hidden="true">&rarr;</span>
+                    </span>
+                </a>
+
+                <a href="tools/fuzzy-dupes/index.html" data-tool="fuzzy-dupes" class="tool-card group bg-white border border-slate-200 hover:border-[#0062F1] hover:shadow-md rounded-xl p-6 shadow-sm transition-all flex flex-col">
+                    <div class="h-10 w-10 rounded-lg bg-[#00133C] text-white flex items-center justify-center text-lg font-bold mb-4" aria-hidden="true">&asymp;</div>
+                    <h4 class="text-base font-semibold text-[#00133C] mb-1.5">Fuzzy Duplicate Finder</h4>
+                    <p class="text-sm text-slate-600 leading-relaxed flex-1">
+                        Catch near-matches that exact deduplication misses, like "Acme Corp" and
+                        "ACME CORPORATION", and review each group before removing.
+                    </p>
+                    <span class="mt-4 text-xs font-semibold text-[#0062F1] group-hover:text-[#00133C] inline-flex items-center gap-1">
+                        Open tool <span aria-hidden="true">&rarr;</span>
+                    </span>
+                </a>
+
+                <a href="tools/chart-builder/index.html" data-tool="chart-builder" class="tool-card group bg-white border border-slate-200 hover:border-[#0062F1] hover:shadow-md rounded-xl p-6 shadow-sm transition-all flex flex-col">
+                    <div class="h-10 w-10 rounded-lg bg-[#00133C] text-white flex items-center justify-center text-sm font-bold mb-4" aria-hidden="true">CB</div>
+                    <h4 class="text-base font-semibold text-[#00133C] mb-1.5">Chart Builder</h4>
+                    <p class="text-sm text-slate-600 leading-relaxed flex-1">
+                        Pick two columns and get a clean bar, line, pie, or scatter chart you can
+                        download as a PNG for a deck.
+                    </p>
+                    <span class="mt-4 text-xs font-semibold text-[#0062F1] group-hover:text-[#00133C] inline-flex items-center gap-1">
+                        Open tool <span aria-hidden="true">&rarr;</span>
+                    </span>
+                </a>
+
+                <a href="tools/data-generator/index.html" data-tool="data-generator" class="tool-card group bg-white border border-slate-200 hover:border-[#0062F1] hover:shadow-md rounded-xl p-6 shadow-sm transition-all flex flex-col">
+                    <div class="h-10 w-10 rounded-lg bg-[#00133C] text-white flex items-center justify-center text-xs font-bold mb-4" aria-hidden="true">GEN</div>
+                    <h4 class="text-base font-semibold text-[#00133C] mb-1.5">Test Data Generator</h4>
+                    <p class="text-sm text-slate-600 leading-relaxed flex-1">
+                        Build a realistic sample file to test the other tools with, or to share a data
+                        shape without sharing real records.
                     </p>
                     <span class="mt-4 text-xs font-semibold text-[#0062F1] group-hover:text-[#00133C] inline-flex items-center gap-1">
                         Open tool <span aria-hidden="true">&rarr;</span>
@@ -330,8 +412,32 @@
                     <div class="h-10 w-10 rounded-lg bg-[#00133C] text-white flex items-center justify-center text-lg font-bold mb-4" aria-hidden="true">&#8646;</div>
                     <h4 class="text-base font-semibold text-[#00133C] mb-1.5">Unit Converter</h4>
                     <p class="text-sm text-slate-600 leading-relaxed flex-1">
-                        Convert between length, weight, and temperature units, with a quick
-                        reference table for the current unit.
+                        Convert between length, weight, temperature, data size, and duration, with a
+                        quick reference table for the current unit.
+                    </p>
+                    <span class="mt-4 text-xs font-semibold text-[#0062F1] group-hover:text-[#00133C] inline-flex items-center gap-1">
+                        Open tool <span aria-hidden="true">&rarr;</span>
+                    </span>
+                </a>
+
+                <a href="tools/code-helper/index.html" data-tool="code-helper" class="tool-card group bg-white border border-slate-200 hover:border-[#0062F1] hover:shadow-md rounded-xl p-6 shadow-sm transition-all flex flex-col">
+                    <div class="h-10 w-10 rounded-lg bg-[#00133C] text-white flex items-center justify-center text-lg font-bold mb-4" aria-hidden="true">{ }</div>
+                    <h4 class="text-base font-semibold text-[#00133C] mb-1.5">Code Helper</h4>
+                    <p class="text-sm text-slate-600 leading-relaxed flex-1">
+                        Working snippets for common data tasks in Python, R, SQL, JavaScript, and Java,
+                        using your own file's column names.
+                    </p>
+                    <span class="mt-4 text-xs font-semibold text-[#0062F1] group-hover:text-[#00133C] inline-flex items-center gap-1">
+                        Open tool <span aria-hidden="true">&rarr;</span>
+                    </span>
+                </a>
+
+                <a href="tools/jwt-decoder/index.html" data-tool="jwt-decoder" class="tool-card group bg-white border border-slate-200 hover:border-[#0062F1] hover:shadow-md rounded-xl p-6 shadow-sm transition-all flex flex-col">
+                    <div class="h-10 w-10 rounded-lg bg-[#00133C] text-white flex items-center justify-center text-xs font-bold mb-4" aria-hidden="true">JWT</div>
+                    <h4 class="text-base font-semibold text-[#00133C] mb-1.5">JWT Decoder</h4>
+                    <p class="text-sm text-slate-600 leading-relaxed flex-1">
+                        Read the header, payload, and expiry of a JSON Web Token, with registered
+                        claims rendered as real dates.
                     </p>
                     <span class="mt-4 text-xs font-semibold text-[#0062F1] group-hover:text-[#00133C] inline-flex items-center gap-1">
                         Open tool <span aria-hidden="true">&rarr;</span>
@@ -368,16 +474,37 @@
                 welcome: 'Welcome Data Analyst',
                 tools: [
                     'data-analyzer', 'file-diff', 'pivot-explorer', 'data-cleaner',
-                    'converter', 'column-stats', 'json-formatter', 'timestamp-converter',
-                    'regex-tester', 'text-diff', 'color-tools', 'text-analyzer',
-                    'qr-generator', 'markdown-preview', 'encode-decode', 'unit-converter'
+                    'converter', 'column-stats', 'sql-workbench', 'lookup-merge',
+                    'fuzzy-dupes', 'chart-builder', 'data-generator', 'json-formatter',
+                    'timestamp-converter', 'regex-tester', 'text-diff', 'color-tools',
+                    'text-analyzer', 'qr-generator', 'markdown-preview', 'encode-decode',
+                    'unit-converter', 'code-helper', 'jwt-decoder'
                 ]
             },
-            '7284': { label: 'Leadership', tools: ['data-analyzer', 'pivot-explorer'] },
-            '5931': { label: 'Marketing', tools: ['qr-generator', 'color-tools', 'markdown-preview', 'text-analyzer'] },
-            '4067': { label: 'IT / Dev', tools: ['json-formatter', 'regex-tester', 'encode-decode', 'timestamp-converter', 'text-diff', 'file-diff'] },
-            '8412': { label: 'HR / Operations', tools: ['data-cleaner', 'converter', 'column-stats', 'timestamp-converter'] },
-            '2650': { label: 'Finance', tools: ['data-analyzer', 'column-stats', 'pivot-explorer', 'file-diff'] }
+            '7284': {
+                label: 'Leadership',
+                tools: ['data-analyzer', 'pivot-explorer', 'chart-builder']
+            },
+            '5931': {
+                label: 'Marketing',
+                tools: ['qr-generator', 'color-tools', 'markdown-preview', 'text-analyzer', 'chart-builder']
+            },
+            '4067': {
+                label: 'IT / Dev',
+                tools: [
+                    'json-formatter', 'regex-tester', 'encode-decode', 'timestamp-converter',
+                    'text-diff', 'file-diff', 'sql-workbench', 'code-helper', 'jwt-decoder',
+                    'data-generator'
+                ]
+            },
+            '8412': {
+                label: 'HR / Operations',
+                tools: ['data-cleaner', 'converter', 'column-stats', 'timestamp-converter', 'lookup-merge', 'fuzzy-dupes']
+            },
+            '2650': {
+                label: 'Finance',
+                tools: ['data-analyzer', 'column-stats', 'pivot-explorer', 'file-diff', 'sql-workbench', 'lookup-merge', 'chart-builder']
+            }
         };
 
         const PIN_LENGTH = 4;
@@ -516,6 +643,7 @@
             if (entry) {
                 activeViewCode = enteredPin;
                 filterTools();
+                renderRecent();
                 runStatusChecks();
 
                 pinPanelEl.classList.add('hidden');
@@ -579,6 +707,163 @@
             if (/^[0-9]$/.test(e.key)) pressDigit(e.key);
             else if (e.key === 'Backspace') pressBackspace();
             else if (e.key === 'Escape') pressClear();
+        });
+
+        const RECENT_KEY = 'hub_recent_tools';
+        const RECENT_LIMIT = 5;
+
+        function readRecent() {
+            try {
+                const raw = JSON.parse(localStorage.getItem(RECENT_KEY) || '[]');
+                return Array.isArray(raw) ? raw.filter(v => typeof v === 'string') : [];
+            } catch (err) {
+                return [];
+            }
+        }
+
+        function recordRecent(toolId) {
+            try {
+                const list = readRecent().filter(id => id !== toolId);
+                list.unshift(toolId);
+                localStorage.setItem(RECENT_KEY, JSON.stringify(list.slice(0, RECENT_LIMIT)));
+            } catch (err) {
+                return;
+            }
+        }
+
+        function clearRecent() {
+            try {
+                localStorage.removeItem(RECENT_KEY);
+            } catch (err) {
+                return;
+            }
+            renderRecent();
+        }
+
+        function cardFor(toolId) {
+            return allCards.find(c => c.dataset.tool === toolId) || null;
+        }
+
+        function toolTitle(card) {
+            const heading = card.querySelector('h4');
+            return heading ? heading.innerText.trim() : card.dataset.tool;
+        }
+
+        function renderRecent() {
+            const section = document.getElementById('recent-section');
+            const list = document.getElementById('recent-list');
+            const allowed = activeViewCode ? new Set(VIEW_CODES[activeViewCode].tools) : new Set();
+
+            const items = readRecent().filter(id => allowed.has(id) && cardFor(id));
+
+            if (items.length === 0) {
+                section.classList.add('hidden');
+                return;
+            }
+
+            section.classList.remove('hidden');
+            list.innerHTML = items.map(id => {
+                const card = cardFor(id);
+                return `<a href="${card.getAttribute('href')}" data-recent="${id}" class="inline-flex items-center gap-2 bg-white border border-slate-200 hover:border-[#0062F1] rounded-full px-3.5 py-1.5 text-xs font-medium text-[#00133C] transition-colors">${toolTitle(card)}</a>`;
+            }).join('');
+
+            list.querySelectorAll('[data-recent]').forEach(a => {
+                a.addEventListener('click', () => recordRecent(a.dataset.recent));
+            });
+        }
+
+        allCards.forEach(card => {
+            card.addEventListener('click', () => recordRecent(card.dataset.tool));
+        });
+
+        const paletteOverlay = document.getElementById('palette-overlay');
+        const paletteInput = document.getElementById('palette-input');
+        const paletteResults = document.getElementById('palette-results');
+        let paletteMatches = [];
+        let paletteIndex = 0;
+
+        function paletteCandidates() {
+            const allowed = activeViewCode ? new Set(VIEW_CODES[activeViewCode].tools) : new Set();
+            return allCards.filter(c => allowed.has(c.dataset.tool));
+        }
+
+        function renderPalette() {
+            const query = paletteInput.value.trim().toLowerCase();
+            const candidates = paletteCandidates();
+
+            paletteMatches = query === ''
+                ? candidates
+                : candidates.filter(c => c.innerText.toLowerCase().includes(query));
+
+            if (paletteIndex >= paletteMatches.length) paletteIndex = 0;
+
+            if (paletteMatches.length === 0) {
+                paletteResults.innerHTML = '<p class="px-4 py-6 text-sm text-slate-400 italic text-center">No tools match that.</p>';
+                return;
+            }
+
+            paletteResults.innerHTML = paletteMatches.map((card, i) => `
+                <button type="button" data-index="${i}" class="palette-item w-full text-left px-4 py-2.5 flex items-center gap-3 transition-colors ${i === paletteIndex ? 'bg-blue-50' : 'hover:bg-slate-50'}">
+                    <span class="h-7 w-7 shrink-0 rounded bg-[#00133C] text-white flex items-center justify-center text-[10px] font-bold">${card.querySelector('div[aria-hidden]').innerText}</span>
+                    <span class="text-sm text-[#00133C] font-medium">${toolTitle(card)}</span>
+                </button>
+            `).join('');
+
+            paletteResults.querySelectorAll('.palette-item').forEach(el => {
+                el.addEventListener('click', () => openPaletteMatch(Number(el.dataset.index)));
+            });
+        }
+
+        function openPaletteMatch(index) {
+            const card = paletteMatches[index];
+            if (!card) return;
+            recordRecent(card.dataset.tool);
+            window.location.href = card.getAttribute('href');
+        }
+
+        function openPalette() {
+            if (!activeViewCode) return;
+            paletteOverlay.classList.remove('hidden');
+            paletteInput.value = '';
+            paletteIndex = 0;
+            renderPalette();
+            paletteInput.focus();
+        }
+
+        function closePalette() {
+            paletteOverlay.classList.add('hidden');
+        }
+
+        paletteInput.addEventListener('input', () => { paletteIndex = 0; renderPalette(); });
+
+        paletteInput.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                paletteIndex = Math.min(paletteIndex + 1, paletteMatches.length - 1);
+                renderPalette();
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                paletteIndex = Math.max(paletteIndex - 1, 0);
+                renderPalette();
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                openPaletteMatch(paletteIndex);
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                closePalette();
+            }
+        });
+
+        paletteOverlay.addEventListener('click', (e) => {
+            if (e.target === paletteOverlay) closePalette();
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+                e.preventDefault();
+                if (paletteOverlay.classList.contains('hidden')) openPalette();
+                else closePalette();
+            }
         });
 
         document.body.classList.add('overflow-hidden');

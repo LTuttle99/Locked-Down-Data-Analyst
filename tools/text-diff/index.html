@@ -41,9 +41,17 @@
             </div>
         </div>
 
-        <button onclick="runDiff()" class="bg-[#0062F1] hover:bg-[#0050C7] text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition-colors">
-            Compare
-        </button>
+        <div class="flex flex-wrap items-center gap-4">
+            <button onclick="runDiff()" class="bg-[#0062F1] hover:bg-[#0050C7] text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition-colors">
+                Compare
+            </button>
+            <label class="flex items-center gap-2 text-sm text-slate-700">
+                <input type="checkbox" id="word-level" checked class="accent-[#0062F1]"> Highlight changed words within a line
+            </label>
+            <label class="flex items-center gap-2 text-sm text-slate-700">
+                <input type="checkbox" id="ignore-space" class="accent-[#0062F1]"> Ignore leading and trailing spaces
+            </label>
+        </div>
 
         <div id="results" class="hidden space-y-4">
             <div class="grid grid-cols-3 gap-4">
@@ -116,12 +124,97 @@
             return result;
         }
 
+        function splitWords(line) {
+            return line.split(/(\s+)/).filter(t => t !== '');
+        }
+
+        function diffWords(oldLine, newLine) {
+            const a = splitWords(oldLine);
+            const b = splitWords(newLine);
+            const n = a.length;
+            const m = b.length;
+
+            const dp = [];
+            for (let i = 0; i <= n; i++) dp.push(new Uint32Array(m + 1));
+
+            for (let i = n - 1; i >= 0; i--) {
+                for (let j = m - 1; j >= 0; j--) {
+                    dp[i][j] = a[i] === b[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+                }
+            }
+
+            const oldParts = [];
+            const newParts = [];
+            let i = 0;
+            let j = 0;
+
+            while (i < n && j < m) {
+                if (a[i] === b[j]) {
+                    oldParts.push({ same: true, text: a[i] });
+                    newParts.push({ same: true, text: b[j] });
+                    i++; j++;
+                } else if (dp[i + 1][j] >= dp[i][j + 1]) {
+                    oldParts.push({ same: false, text: a[i] });
+                    i++;
+                } else {
+                    newParts.push({ same: false, text: b[j] });
+                    j++;
+                }
+            }
+            while (i < n) { oldParts.push({ same: false, text: a[i] }); i++; }
+            while (j < m) { newParts.push({ same: false, text: b[j] }); j++; }
+
+            const toHtml = (parts, cls) => parts.map(p =>
+                p.same ? escapeHtml(p.text) : `<mark class="${cls} rounded px-0.5">${escapeHtml(p.text)}</mark>`
+            ).join('');
+
+            return {
+                oldHtml: toHtml(oldParts, 'bg-red-200 text-red-900'),
+                newHtml: toHtml(newParts, 'bg-emerald-200 text-emerald-900')
+            };
+        }
+
+        function applyWordLevel(diff) {
+            let i = 0;
+            while (i < diff.length) {
+                if (diff[i].type !== 'removed') { i++; continue; }
+
+                let removedEnd = i;
+                while (removedEnd < diff.length && diff[removedEnd].type === 'removed') removedEnd++;
+
+                let addedEnd = removedEnd;
+                while (addedEnd < diff.length && diff[addedEnd].type === 'added') addedEnd++;
+
+                const removed = diff.slice(i, removedEnd);
+                const added = diff.slice(removedEnd, addedEnd);
+                const pairs = Math.min(removed.length, added.length);
+
+                for (let k = 0; k < pairs; k++) {
+                    const oldLine = removed[k].text;
+                    const newLine = added[k].text;
+                    if (oldLine.length > 2000 || newLine.length > 2000) continue;
+
+                    const { oldHtml, newHtml } = diffWords(oldLine, newLine);
+                    removed[k].html = oldHtml;
+                    added[k].html = newHtml;
+                }
+
+                i = addedEnd > i ? addedEnd : i + 1;
+            }
+        }
+
         function runDiff() {
             const a = document.getElementById('text-a').value;
             const b = document.getElementById('text-b').value;
+            const trimEnds = document.getElementById('ignore-space').checked;
 
-            const linesA = a.split('\n');
-            const linesB = b.split('\n');
+            const prep = (text) => {
+                const lines = text.split('\n');
+                return trimEnds ? lines.map(l => l.trim()) : lines;
+            };
+
+            const linesA = prep(a);
+            const linesB = prep(b);
 
             if (linesA.length * linesB.length > 4000000) {
                 showToast('These texts are too large to diff line-by-line in the browser (limit ~2,000 lines each side).');
@@ -138,11 +231,14 @@
             document.getElementById('count-removed').innerText = removed.toLocaleString();
             document.getElementById('count-same').innerText = same.toLocaleString();
 
+            if (document.getElementById('word-level').checked) applyWordLevel(diff);
+
             document.getElementById('diff-output').innerHTML = diff.map(d => {
                 const bg = d.type === 'added' ? 'bg-emerald-50' : d.type === 'removed' ? 'bg-red-50' : '';
                 const color = d.type === 'added' ? 'text-emerald-700' : d.type === 'removed' ? 'text-red-700' : 'text-slate-600';
                 const prefix = d.type === 'added' ? '+' : d.type === 'removed' ? '-' : ' ';
-                return `<div class="${bg} ${color} px-2 py-0.5 whitespace-pre-wrap break-words">${prefix} ${escapeHtml(d.text)}</div>`;
+                const body = d.html !== undefined ? d.html : escapeHtml(d.text);
+                return `<div class="${bg} ${color} px-2 py-0.5 whitespace-pre-wrap break-words">${prefix} ${body}</div>`;
             }).join('');
 
             document.getElementById('results').classList.remove('hidden');

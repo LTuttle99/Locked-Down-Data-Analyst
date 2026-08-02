@@ -31,7 +31,21 @@
                 </div>
             </div>
             <div id="palette-output" class="grid grid-cols-6 sm:grid-cols-11 gap-1"></div>
-            <p class="text-[11px] text-slate-500">Click a swatch to copy its hex code.</p>
+
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <p class="text-[11px] text-slate-500">Click a swatch to copy its hex code.</p>
+                <div class="flex flex-wrap gap-2">
+                    <button onclick="copyPalette('css')" class="bg-white border border-slate-300 hover:border-[#0062F1] text-[#00133C] text-xs font-medium px-3 py-1.5 rounded-lg transition-colors">Copy as CSS</button>
+                    <button onclick="copyPalette('tailwind')" class="bg-white border border-slate-300 hover:border-[#0062F1] text-[#00133C] text-xs font-medium px-3 py-1.5 rounded-lg transition-colors">Copy as Tailwind</button>
+                    <button onclick="copyPalette('scss')" class="bg-white border border-slate-300 hover:border-[#0062F1] text-[#00133C] text-xs font-medium px-3 py-1.5 rounded-lg transition-colors">Copy as SCSS</button>
+                    <button onclick="copyPalette('json')" class="bg-white border border-slate-300 hover:border-[#0062F1] text-[#00133C] text-xs font-medium px-3 py-1.5 rounded-lg transition-colors">Copy as JSON</button>
+                </div>
+            </div>
+
+            <div>
+                <label for="palette-name" class="block text-[10px] font-semibold text-slate-600 uppercase tracking-wider mb-1">Name used in exports</label>
+                <input type="text" id="palette-name" value="brand" class="bg-slate-50 border border-slate-300 rounded-lg text-sm p-2 text-slate-900 w-48 focus:border-[#0062F1] focus:outline-none">
+            </div>
         </section>
 
         <section class="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
@@ -144,17 +158,51 @@
         const SHADES = [50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950];
         const SHADE_LIGHTNESS = { 50: 97, 100: 93, 200: 85, 300: 74, 400: 62, 500: 50, 600: 42, 700: 34, 800: 26, 900: 18, 950: 11 };
 
-        function renderPalette() {
+        function buildPalette() {
             const hex = document.getElementById('base-color-hex').value;
-            if (!isValidHex(hex)) return;
+            if (!isValidHex(hex)) return [];
 
             const { h, s } = rgbToHsl(hexToRgb(hex));
-            const container = document.getElementById('palette-output');
-
-            container.innerHTML = SHADES.map((shade) => {
+            return SHADES.map((shade) => {
                 const l = SHADE_LIGHTNESS[shade];
                 const adjS = shade <= 100 ? Math.min(100, s * 0.85) : shade >= 800 ? Math.min(100, s * 1.05) : s;
-                const swatchHex = rgbToHex(hslToRgb({ h, s: adjS, l }));
+                return { shade, hex: rgbToHex(hslToRgb({ h, s: adjS, l })) };
+            });
+        }
+
+        function paletteName() {
+            const raw = (document.getElementById('palette-name').value || 'brand').trim();
+            const safe = raw.toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '');
+            return safe || 'brand';
+        }
+
+        function copyPalette(format) {
+            const palette = buildPalette();
+            if (palette.length === 0) return;
+
+            const name = paletteName();
+            let text;
+
+            if (format === 'css') {
+                text = `:root {\n${palette.map(p => `  --${name}-${p.shade}: ${p.hex};`).join('\n')}\n}`;
+            } else if (format === 'scss') {
+                text = palette.map(p => `$${name}-${p.shade}: ${p.hex};`).join('\n');
+            } else if (format === 'tailwind') {
+                text = `colors: {\n  '${name}': {\n${palette.map(p => `    ${p.shade}: '${p.hex}',`).join('\n')}\n  },\n}`;
+            } else {
+                text = JSON.stringify({ [name]: Object.fromEntries(palette.map(p => [p.shade, p.hex])) }, null, 2);
+            }
+
+            navigator.clipboard.writeText(text).then(() => showToast(`Palette copied as ${format.toUpperCase()}.`));
+        }
+
+        function renderPalette() {
+            const container = document.getElementById('palette-output');
+            const palette = buildPalette();
+            if (palette.length === 0) return;
+
+            container.innerHTML = palette.map(({ shade, hex: swatchHex }) => {
+                const l = SHADE_LIGHTNESS[shade];
                 const textColor = l > 60 ? '#00133C' : '#FFFFFF';
                 return `
                     <button onclick="copySwatch('${swatchHex}')" class="group relative rounded-lg h-16 flex flex-col items-center justify-end pb-1.5 transition-transform hover:scale-105" style="background-color: ${swatchHex}">

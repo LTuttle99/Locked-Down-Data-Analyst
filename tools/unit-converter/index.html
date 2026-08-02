@@ -22,10 +22,12 @@
         <div class="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
             <div>
                 <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2">Category</label>
-                <div class="inline-flex rounded-lg border border-slate-300 p-0.5 bg-slate-50">
+                <div class="inline-flex flex-wrap rounded-lg border border-slate-300 p-0.5 bg-slate-50">
                     <button id="cat-length" onclick="setCategory('length')" class="px-4 py-1.5 text-sm font-medium rounded-md transition-colors">Length</button>
                     <button id="cat-weight" onclick="setCategory('weight')" class="px-4 py-1.5 text-sm font-medium rounded-md transition-colors">Weight</button>
                     <button id="cat-temperature" onclick="setCategory('temperature')" class="px-4 py-1.5 text-sm font-medium rounded-md transition-colors">Temperature</button>
+                    <button id="cat-data" onclick="setCategory('data')" class="px-4 py-1.5 text-sm font-medium rounded-md transition-colors">Data Size</button>
+                    <button id="cat-duration" onclick="setCategory('duration')" class="px-4 py-1.5 text-sm font-medium rounded-md transition-colors">Duration</button>
                 </div>
             </div>
 
@@ -77,6 +79,27 @@
                 units: { C: null, F: null, K: null },
                 labels: { C: 'Celsius', F: 'Fahrenheit', K: 'Kelvin' },
                 defaultFrom: 'C', defaultTo: 'F'
+            },
+            data: {
+                base: 'B',
+                units: {
+                    B: 1, KB: 1000, MB: 1e6, GB: 1e9, TB: 1e12,
+                    KiB: 1024, MiB: 1048576, GiB: 1073741824, TiB: 1099511627776
+                },
+                labels: {
+                    B: 'Bytes', KB: 'Kilobytes', MB: 'Megabytes', GB: 'Gigabytes', TB: 'Terabytes',
+                    KiB: 'Kibibytes', MiB: 'Mebibytes', GiB: 'Gibibytes', TiB: 'Tebibytes'
+                },
+                defaultFrom: 'MB', defaultTo: 'GB'
+            },
+            duration: {
+                base: 's',
+                units: { ms: 0.001, s: 1, min: 60, h: 3600, d: 86400, wk: 604800, mo: 2629800, yr: 31557600 },
+                labels: {
+                    ms: 'Milliseconds', s: 'Seconds', min: 'Minutes', h: 'Hours',
+                    d: 'Days', wk: 'Weeks', mo: 'Months (average)', yr: 'Years (average)'
+                },
+                defaultFrom: 'h', defaultTo: 'min'
             }
         };
 
@@ -113,7 +136,7 @@
         function setCategory(category) {
             currentCategory = category;
 
-            ['length', 'weight', 'temperature'].forEach(c => {
+            ['length', 'weight', 'temperature', 'data', 'duration'].forEach(c => {
                 const btn = document.getElementById(`cat-${c}`);
                 btn.className = c === category
                     ? 'px-4 py-1.5 text-sm font-medium rounded-md bg-[#0062F1] text-white transition-colors'

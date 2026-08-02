@@ -105,6 +105,44 @@
             return Math.sqrt(variance);
         }
 
+        function percentile(sorted, p) {
+            if (sorted.length === 0) return null;
+            if (sorted.length === 1) return sorted[0];
+            const pos = (sorted.length - 1) * p;
+            const lower = Math.floor(pos);
+            const upper = Math.ceil(pos);
+            if (lower === upper) return sorted[lower];
+            return sorted[lower] + (sorted[upper] - sorted[lower]) * (pos - lower);
+        }
+
+        function histogram(sorted, buckets = 12) {
+            if (sorted.length === 0) return [];
+            const min = sorted[0];
+            const max = sorted[sorted.length - 1];
+            if (min === max) return [sorted.length];
+
+            const counts = new Array(buckets).fill(0);
+            const width = (max - min) / buckets;
+            for (const v of sorted) {
+                let idx = Math.floor((v - min) / width);
+                if (idx >= buckets) idx = buckets - 1;
+                if (idx < 0) idx = 0;
+                counts[idx]++;
+            }
+            return counts;
+        }
+
+        function sparkline(counts) {
+            if (counts.length === 0) return '<span class="text-slate-300">—</span>';
+            const max = Math.max(...counts);
+            if (max === 0) return '<span class="text-slate-300">—</span>';
+
+            return `<span class="inline-flex items-end gap-px h-6" title="Distribution across ${counts.length} buckets">${counts.map(c => {
+                const pct = Math.max(8, Math.round((c / max) * 100));
+                return `<span class="w-1 bg-[#0062F1]/70 rounded-sm" style="height:${pct}%"></span>`;
+            }).join('')}</span>`;
+        }
+
         function fmt(v) {
             if (v === null || v === undefined || Number.isNaN(v)) return '—';
             return Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 });
@@ -152,6 +190,8 @@
                         min: sorted.length ? sorted[0] : null,
                         max: sorted.length ? sorted[sorted.length - 1] : null,
                         mean: m, median: median(sorted), stddev: stddev(numericVals, m),
+                        p25: percentile(sorted, 0.25), p75: percentile(sorted, 0.75),
+                        buckets: histogram(sorted),
                         top_value: null, top_freq: null
                     };
                 }
@@ -171,6 +211,7 @@
                     column: col, type: 'text', count: rawVals.length, nulls: nullCount,
                     null_pct: rawVals.length ? (nullCount / rawVals.length) * 100 : 0,
                     unique: uniqueCount, min: null, max: null, mean: null, median: null, stddev: null,
+                    p25: null, p75: null, buckets: [],
                     top_value: topValue, top_freq: topFreq
                 };
             });
@@ -190,10 +231,13 @@
                         <th class="py-2 px-3 text-right">Nulls</th>
                         <th class="py-2 px-3 text-right">Unique</th>
                         <th class="py-2 px-3 text-right">Min</th>
+                        <th class="py-2 px-3 text-right">P25</th>
+                        <th class="py-2 px-3 text-right">Median</th>
+                        <th class="py-2 px-3 text-right">P75</th>
                         <th class="py-2 px-3 text-right">Max</th>
                         <th class="py-2 px-3 text-right">Mean</th>
-                        <th class="py-2 px-3 text-right">Median</th>
                         <th class="py-2 px-3 text-right">Std Dev</th>
+                        <th class="py-2 px-3">Distribution</th>
                         <th class="py-2 px-3">Most Common</th>
                     </tr></thead>
                     <tbody class="divide-y divide-slate-100">
@@ -206,10 +250,13 @@
                                 <td class="py-2 px-3 text-right text-slate-700">${s.nulls.toLocaleString()} (${s.null_pct.toFixed(0)}%)</td>
                                 <td class="py-2 px-3 text-right text-slate-700">${s.unique.toLocaleString()}</td>
                                 <td class="py-2 px-3 text-right text-slate-700">${fmt(s.min)}</td>
+                                <td class="py-2 px-3 text-right text-slate-700">${fmt(s.p25)}</td>
+                                <td class="py-2 px-3 text-right text-slate-700">${fmt(s.median)}</td>
+                                <td class="py-2 px-3 text-right text-slate-700">${fmt(s.p75)}</td>
                                 <td class="py-2 px-3 text-right text-slate-700">${fmt(s.max)}</td>
                                 <td class="py-2 px-3 text-right text-slate-700">${fmt(s.mean)}</td>
-                                <td class="py-2 px-3 text-right text-slate-700">${fmt(s.median)}</td>
                                 <td class="py-2 px-3 text-right text-slate-700">${fmt(s.stddev)}</td>
+                                <td class="py-2 px-3">${s.type === 'numeric' ? sparkline(s.buckets) : '<span class="text-slate-300">—</span>'}</td>
                                 <td class="py-2 px-3 text-slate-700">${s.top_value !== null ? `${escapeHtml(s.top_value)} (${s.top_freq})` : '—'}</td>
                             </tr>
                         `).join('')}
@@ -222,7 +269,7 @@
 
         function exportSummary() {
             if (!lastSummary) return;
-            const cols = ['column', 'type', 'count', 'nulls', 'null_pct', 'unique', 'min', 'max', 'mean', 'median', 'stddev', 'top_value', 'top_freq'];
+            const cols = ['column', 'type', 'count', 'nulls', 'null_pct', 'unique', 'min', 'p25', 'median', 'p75', 'max', 'mean', 'stddev', 'top_value', 'top_freq'];
             downloadCSV('column_statistics.csv', cols, lastSummary);
         }
     </script>

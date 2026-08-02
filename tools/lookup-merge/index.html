@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lookup &amp; Merge — Data and Analytics Hub</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2300133C'/%3E%3Ctext x='16' y='23' font-family='Georgia,serif' font-size='19' fill='%230062F1' text-anchor='middle'%3EH%3C/text%3E%3C/svg%3E">
+</head>
+
+<body class="bg-slate-50 text-slate-900 min-h-screen font-sans">
+    <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2"></div>
+
+    <header class="border-b border-slate-200 bg-white px-8 py-4 flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+            <a href="../../index.html" class="text-xs text-slate-500 hover:text-[#0062F1]">&larr; Hub</a>
+            <div class="h-6 w-px bg-slate-100"></div>
+            <h1 class="text-lg font-semibold text-[#00133C]">Lookup &amp; Merge</h1>
+        </div>
+        <div class="text-xs text-slate-600 bg-slate-50 px-3 py-1 rounded-full border border-slate-200">Bring columns across files</div>
+    </header>
+
+    <main class="max-w-6xl mx-auto p-6 space-y-4">
+        <p class="text-sm text-slate-600 max-w-3xl">
+            The spreadsheet lookup, without the spreadsheet. Load a main file and a lookup file, match
+            them on a shared key, and pull columns from the second file into the first. Rows that find
+            no match are reported rather than silently dropped.
+        </p>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
+                <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wider">Main file</label>
+                <label class="block bg-slate-50 border border-dashed border-slate-300 hover:border-[#0062F1] rounded-lg p-4 text-center cursor-pointer transition-colors">
+                    <span class="text-sm text-slate-600">Choose the file you want to add columns to</span>
+                    <input type="file" id="main-input" accept=".csv,.xlsx,.xls,.xlsm,.json" class="hidden">
+                </label>
+                <p id="main-status" class="text-xs text-slate-500">No file loaded.</p>
+                <div id="main-key-wrap" class="hidden">
+                    <label for="main-key" class="block text-[10px] font-semibold text-slate-600 uppercase tracking-wider mb-1">Key column</label>
+                    <select id="main-key" class="w-full bg-slate-50 border border-slate-300 rounded-lg text-sm p-2 text-slate-900"></select>
+                </div>
+            </div>
+
+            <div class="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
+                <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wider">Lookup file</label>
+                <label class="block bg-slate-50 border border-dashed border-slate-300 hover:border-[#0062F1] rounded-lg p-4 text-center cursor-pointer transition-colors">
+                    <span class="text-sm text-slate-600">Choose the file to pull columns from</span>
+                    <input type="file" id="lookup-input" accept=".csv,.xlsx,.xls,.xlsm,.json" class="hidden">
+                </label>
+                <p id="lookup-status" class="text-xs text-slate-500">No file loaded.</p>
+                <div id="lookup-key-wrap" class="hidden">
+                    <label for="lookup-key" class="block text-[10px] font-semibold text-slate-600 uppercase tracking-wider mb-1">Key column</label>
+                    <select id="lookup-key" class="w-full bg-slate-50 border border-slate-300 rounded-lg text-sm p-2 text-slate-900"></select>
+                </div>
+            </div>
+        </div>
+
+        <div id="options-card" class="hidden bg-white border border-slate-200 rounded-xl p-5 space-y-4">
+            <div class="flex flex-wrap items-end gap-4">
+                <div>
+                    <label for="join-type" class="block text-[10px] font-semibold text-slate-600 uppercase tracking-wider mb-1">Keep rows</label>
+                    <select id="join-type" class="bg-slate-50 border border-slate-300 rounded-lg text-sm p-2 text-slate-900">
+                        <option value="left">All rows from the main file</option>
+                        <option value="inner">Only rows that matched</option>
+                        <option value="unmatched">Only rows that did not match</option>
+                    </select>
+                </div>
+                <label class="flex items-center gap-2 text-sm text-slate-700">
+                    <input type="checkbox" id="case-insensitive" class="accent-[#0062F1]"> Ignore case and surrounding spaces when matching
+                </label>
+                <button onclick="runMerge()" class="bg-[#0062F1] hover:bg-[#0050C7] text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition-colors">
+                    Merge
+                </button>
+            </div>
+
+            <div>
+                <div class="flex items-center justify-between mb-2">
+                    <label class="block text-[10px] font-semibold text-slate-600 uppercase tracking-wider">Columns to bring across</label>
+                    <div class="flex gap-2">
+                        <button onclick="toggleAllColumns(true)" class="text-xs text-[#0062F1] hover:text-[#00133C]">Select all</button>
+                        <button onclick="toggleAllColumns(false)" class="text-xs text-slate-500 hover:text-slate-700">Clear</button>
+                    </div>
+                </div>
+                <div id="bring-columns" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2"></div>
+            </div>
+        </div>
+
+        <div id="results" class="hidden space-y-4">
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div class="bg-white border border-slate-200 p-4 rounded-xl">
+                    <p class="text-xs font-semibold uppercase tracking-wider text-slate-600">Result Rows</p>
+                    <p id="stat-rows" class="text-2xl font-bold text-[#00133C] mt-1">0</p>
+                </div>
+                <div class="bg-white border border-slate-200 p-4 rounded-xl">
+                    <p class="text-xs font-semibold uppercase tracking-wider text-slate-600">Matched</p>
+                    <p id="stat-matched" class="text-2xl font-bold text-emerald-600 mt-1">0</p>
+                </div>
+                <div class="bg-white border border-slate-200 p-4 rounded-xl">
+                    <p class="text-xs font-semibold uppercase tracking-wider text-slate-600">Unmatched</p>
+                    <p id="stat-unmatched" class="text-2xl font-bold text-red-600 mt-1">0</p>
+                </div>
+                <div class="bg-white border border-slate-200 p-4 rounded-xl">
+                    <p class="text-xs font-semibold uppercase tracking-wider text-slate-600">Duplicate Keys</p>
+                    <p id="stat-dupes" class="text-2xl font-bold text-[#DC6803] mt-1">0</p>
+                </div>
+            </div>
+
+            <div id="warning-box" class="hidden bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-800"></div>
+
+            <div class="bg-white border border-slate-200 rounded-xl p-4">
+                <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+                    <h3 class="text-sm font-medium text-slate-700">Preview (first 20 rows)</h3>
+                    <div class="flex gap-2">
+                        <button onclick="exportMerged('csv')" class="bg-white border border-slate-300 hover:border-[#0062F1] text-[#00133C] text-xs font-medium px-3 py-1.5 rounded-lg transition-colors">Export CSV</button>
+                        <button onclick="exportMerged('xlsx')" class="bg-white border border-slate-300 hover:border-[#0062F1] text-[#00133C] text-xs font-medium px-3 py-1.5 rounded-lg transition-colors">Export Excel</button>
+                    </div>
+                </div>
+                <div id="preview-container" class="overflow-x-auto"></div>
+            </div>
+        </div>
+    </main>
+
+    <script src="../shared/parse.js"></script>
+    <script>
+        let mainData = null;
+        let lookupData = null;
+        let merged = null;
+
+        function showToast(message, isError = true) {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `text-sm rounded-lg px-4 py-3 shadow-2xl max-w-md ${isError ? 'bg-red-50 border border-red-300 text-red-500' : 'bg-emerald-50 border border-emerald-300 text-emerald-700'}`;
+            toast.innerText = message;
+            container.appendChild(toast);
+            setTimeout(() => toast.remove(), 4000);
+        }
+
+        function normalizeKey(value, loose) {
+            if (value === null || value === undefined) return '';
+            const s = value instanceof Date ? value.toISOString().slice(0, 10) : String(value);
+            return loose ? s.trim().toLowerCase() : s;
+        }
+
+        function fillSelect(el, columns, guess) {
+            el.innerHTML = columns.map(c => `<option value="${escapeHtml(c)}" ${c === guess ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('');
+        }
+
+        function guessKey(columns) {
+            const hints = ['id', 'key', 'code', 'number', 'ref', 'sku', 'email'];
+            for (const c of columns) {
+                const lower = String(c).toLowerCase();
+                if (hints.some(h => lower.includes(h))) return c;
+            }
+            return columns[0];
+        }
+
+        function maybeShowOptions() {
+            if (!mainData || !lookupData) return;
+            document.getElementById('options-card').classList.remove('hidden');
+            renderBringColumns();
+        }
+
+        function renderBringColumns() {
+            const lookupKey = document.getElementById('lookup-key').value;
+            const container = document.getElementById('bring-columns');
+
+            container.innerHTML = lookupData.columns
+                .filter(c => c !== lookupKey)
+                .map(c => `
+                    <label class="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-slate-700">
+                        <input type="checkbox" class="bring-col accent-[#0062F1]" value="${escapeHtml(c)}" checked>
+                        <span class="truncate" title="${escapeHtml(c)}">${escapeHtml(c)}</span>
+                    </label>
+                `).join('');
+        }
+
+        function toggleAllColumns(state) {
+            document.querySelectorAll('.bring-col').forEach(cb => { cb.checked = state; });
+        }
+
+        async function loadInto(file, which) {
+            const parsed = await parseFileToRows(file);
+            if (parsed.columns.length === 0) throw new Error('No readable columns found.');
+
+            if (which === 'main') {
+                mainData = parsed;
+                document.getElementById('main-status').innerText = `${file.name} — ${parsed.rows.length.toLocaleString()} rows, ${parsed.columns.length} columns`;
+                document.getElementById('main-key-wrap').classList.remove('hidden');
+                fillSelect(document.getElementById('main-key'), parsed.columns, guessKey(parsed.columns));
+            } else {
+                lookupData = parsed;
+                document.getElementById('lookup-status').innerText = `${file.name} — ${parsed.rows.length.toLocaleString()} rows, ${parsed.columns.length} columns`;
+                document.getElementById('lookup-key-wrap').classList.remove('hidden');
+                fillSelect(document.getElementById('lookup-key'), parsed.columns, guessKey(parsed.columns));
+            }
+
+            maybeShowOptions();
+        }
+
+        document.getElementById('main-input').addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            try { await loadInto(file, 'main'); } catch (err) { showToast('Could not read that file: ' + err.message); }
+        });
+
+        document.getElementById('lookup-input').addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            try { await loadInto(file, 'lookup'); } catch (err) { showToast('Could not read that file: ' + err.message); }
+        });
+
+        document.getElementById('lookup-key').addEventListener('change', renderBringColumns);
+
+        function runMerge() {
+            if (!mainData || !lookupData) { showToast('Load both files first.'); return; }
+
+            const mainKey = document.getElementById('main-key').value;
+            const lookupKey = document.getElementById('lookup-key').value;
+            const joinType = document.getElementById('join-type').value;
+            const loose = document.getElementById('case-insensitive').checked;
+
+            const bring = Array.from(document.querySelectorAll('.bring-col:checked')).map(cb => cb.value);
+            if (bring.length === 0) { showToast('Pick at least one column to bring across.'); return; }
+
+            const index = new Map();
+            let duplicateKeys = 0;
+            for (const row of lookupData.rows) {
+                const k = normalizeKey(row[lookupKey], loose);
+                if (k === '') continue;
+                if (index.has(k)) { duplicateKeys++; continue; }
+                index.set(k, row);
+            }
+
+            const collisions = bring.filter(c => mainData.columns.includes(c));
+            const outColumns = mainData.columns.concat(bring.map(c => (collisions.includes(c) ? `${c} (lookup)` : c)));
+
+            const outRows = [];
+            let matched = 0;
+            let unmatched = 0;
+
+            for (const row of mainData.rows) {
+                const k = normalizeKey(row[mainKey], loose);
+                const hit = k === '' ? undefined : index.get(k);
+
+                if (hit) matched++;
+                else unmatched++;
+
+                if (joinType === 'inner' && !hit) continue;
+                if (joinType === 'unmatched' && hit) continue;
+
+                const out = {};
+                for (const c of mainData.columns) out[c] = row[c];
+                for (const c of bring) {
+                    const target = collisions.includes(c) ? `${c} (lookup)` : c;
+                    out[target] = hit ? hit[c] : null;
+                }
+                outRows.push(out);
+            }
+
+            merged = { columns: outColumns, rows: outRows };
+
+            document.getElementById('stat-rows').innerText = outRows.length.toLocaleString();
+            document.getElementById('stat-matched').innerText = matched.toLocaleString();
+            document.getElementById('stat-unmatched').innerText = unmatched.toLocaleString();
+            document.getElementById('stat-dupes').innerText = duplicateKeys.toLocaleString();
+
+            const warnings = [];
+            if (duplicateKeys > 0) {
+                warnings.push(`The lookup file has ${duplicateKeys.toLocaleString()} rows with a key that already appeared. Only the first row for each key was used.`);
+            }
+            if (collisions.length > 0) {
+                warnings.push(`These column names existed in both files and were renamed with a "(lookup)" suffix: ${collisions.join(', ')}.`);
+            }
+            if (unmatched > 0 && joinType === 'left') {
+                warnings.push(`${unmatched.toLocaleString()} rows found no match and have blank values in the new columns.`);
+            }
+
+            const warnBox = document.getElementById('warning-box');
+            if (warnings.length > 0) {
+                warnBox.classList.remove('hidden');
+                warnBox.innerText = warnings.join(' ');
+            } else {
+                warnBox.classList.add('hidden');
+            }
+
+            renderPreview();
+            document.getElementById('results').classList.remove('hidden');
+        }
+
+        function renderPreview() {
+            const preview = merged.rows.slice(0, 20);
+            document.getElementById('preview-container').innerHTML = `
+                <table class="w-full text-left text-xs">
+                    <thead><tr class="border-b border-slate-200 text-slate-600 uppercase">
+                        ${merged.columns.map(c => `<th class="py-2 px-3 whitespace-nowrap">${escapeHtml(c)}</th>`).join('')}
+                    </tr></thead>
+                    <tbody class="divide-y divide-slate-100">
+                        ${preview.map(r => `<tr class="hover:bg-slate-50">${merged.columns.map(c => `<td class="py-2 px-3 text-slate-700 whitespace-nowrap">${r[c] === null || r[c] === undefined || r[c] === '' ? '<span class="text-slate-300">blank</span>' : escapeHtml(r[c])}</td>`).join('')}</tr>`).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+
+        function exportMerged(format) {
+            if (!merged) return;
+            if (format === 'csv') downloadCSV('merged.csv', merged.columns, merged.rows);
+            else downloadExcel('merged.xlsx', merged.columns, merged.rows);
+        }
+    </script>
+</body>
+</html>

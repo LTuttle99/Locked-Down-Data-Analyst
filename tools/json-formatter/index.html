@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JSON Formatter — Team Analytics Hub</title>
+    <title>JSON Formatter — Data and Analytics Hub</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2300133C'/%3E%3Ctext x='16' y='23' font-family='Georgia,serif' font-size='19' fill='%230062F1' text-anchor='middle'%3EH%3C/text%3E%3C/svg%3E">
 </head>
@@ -26,6 +26,7 @@
             <button onclick="minifyJson()" class="bg-slate-100 hover:bg-slate-200 text-slate-900 text-sm font-semibold px-4 py-2 rounded-lg transition-colors">Minify</button>
             <button onclick="copyJson()" class="bg-slate-100 hover:bg-slate-200 text-slate-900 text-sm font-semibold px-4 py-2 rounded-lg transition-colors">Copy</button>
             <button onclick="downloadJson()" class="bg-slate-100 hover:bg-slate-200 text-slate-900 text-sm font-semibold px-4 py-2 rounded-lg transition-colors">Download .json</button>
+            <button onclick="convertToCsv()" class="bg-slate-100 hover:bg-slate-200 text-slate-900 text-sm font-semibold px-4 py-2 rounded-lg transition-colors">To CSV</button>
             <label class="bg-slate-100 hover:bg-slate-200 text-slate-900 text-sm font-semibold px-4 py-2 rounded-lg transition-colors cursor-pointer">
                 Upload .json
                 <input type="file" id="file-input" accept=".json" class="hidden">
@@ -119,6 +120,59 @@
             if (parsed === null) return;
             input.value = JSON.stringify(parsed);
             validate();
+        }
+
+        function flattenValue(value, prefix, out) {
+            if (value === null || value === undefined) {
+                out[prefix] = '';
+                return;
+            }
+            if (Array.isArray(value)) {
+                if (value.every(v => v === null || typeof v !== 'object')) {
+                    out[prefix] = value.join('; ');
+                } else {
+                    value.forEach((v, i) => flattenValue(v, `${prefix}[${i}]`, out));
+                }
+                return;
+            }
+            if (typeof value === 'object') {
+                for (const [k, v] of Object.entries(value)) {
+                    flattenValue(v, prefix ? `${prefix}.${k}` : k, out);
+                }
+                return;
+            }
+            out[prefix] = value;
+        }
+
+        function flattenRecord(record) {
+            const out = {};
+            flattenValue(record, '', out);
+            if (Object.keys(out).length === 1 && Object.keys(out)[0] === '') {
+                return { value: out[''] };
+            }
+            return out;
+        }
+
+        function convertToCsv() {
+            const parsed = validate();
+            if (parsed === undefined) { showToast('Fix the JSON error before converting.'); return; }
+            if (parsed === null) { showToast('Paste some JSON first.'); return; }
+
+            const records = Array.isArray(parsed) ? parsed : [parsed];
+            if (records.length === 0) { showToast('That array is empty, so there is nothing to convert.'); return; }
+
+            const rows = records.map(flattenRecord);
+            const columns = [];
+            for (const row of rows) {
+                for (const key of Object.keys(row)) {
+                    if (!columns.includes(key)) columns.push(key);
+                }
+            }
+
+            if (columns.length === 0) { showToast('No fields found to turn into columns.'); return; }
+
+            downloadCSV('data.csv', columns, rows);
+            showToast(`Converted ${rows.length.toLocaleString()} record${rows.length === 1 ? '' : 's'} into ${columns.length} columns.`);
         }
 
         function copyJson() {

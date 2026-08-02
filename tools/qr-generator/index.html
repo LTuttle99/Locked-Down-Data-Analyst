@@ -6,6 +6,14 @@
     <title>QR Code Generator — Data and Analytics Hub</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+    <style>
+        @media print {
+            header, .no-print, #single-output { display: none !important; }
+            body { background: white !important; }
+            #batch-output { border: none !important; padding: 0 !important; }
+        }
+    </style>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2300133C'/%3E%3Ctext x='16' y='23' font-family='Georgia,serif' font-size='19' fill='%230062F1' text-anchor='middle'%3EH%3C/text%3E%3C/svg%3E">
 </head>
 
@@ -23,11 +31,88 @@
 
     <main class="max-w-3xl mx-auto p-6 space-y-6">
         <div class="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
-            <div>
+            <div class="flex flex-wrap gap-1">
+                <button onclick="setPreset('text')" id="preset-text" class="preset-btn text-xs px-3 py-1.5 rounded-lg transition-colors">Text or URL</button>
+                <button onclick="setPreset('wifi')" id="preset-wifi" class="preset-btn text-xs px-3 py-1.5 rounded-lg transition-colors">WiFi network</button>
+                <button onclick="setPreset('vcard')" id="preset-vcard" class="preset-btn text-xs px-3 py-1.5 rounded-lg transition-colors">Contact card</button>
+                <button onclick="setPreset('batch')" id="preset-batch" class="preset-btn text-xs px-3 py-1.5 rounded-lg transition-colors">Batch from file</button>
+            </div>
+
+            <div id="panel-text">
                 <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2">Text or URL</label>
                 <textarea id="qr-input" rows="3"
                     class="w-full bg-slate-50 border border-slate-300 rounded-lg p-3 text-sm text-slate-900 focus:border-[#0062F1] focus:ring-2 focus:ring-[#0062F1]/20 focus:outline-none resize-y"
                     placeholder="https://example.com"></textarea>
+            </div>
+
+            <div id="panel-wifi" class="hidden grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                    <label for="wifi-ssid" class="block text-[10px] font-semibold text-slate-600 uppercase tracking-wider mb-1">Network name</label>
+                    <input type="text" id="wifi-ssid" class="wifi-field w-full bg-slate-50 border border-slate-300 rounded-lg text-sm p-2 text-slate-900">
+                </div>
+                <div>
+                    <label for="wifi-type" class="block text-[10px] font-semibold text-slate-600 uppercase tracking-wider mb-1">Security</label>
+                    <select id="wifi-type" class="wifi-field w-full bg-slate-50 border border-slate-300 rounded-lg text-sm p-2 text-slate-900">
+                        <option value="WPA">WPA / WPA2</option>
+                        <option value="WEP">WEP</option>
+                        <option value="nopass">Open (no password)</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="wifi-password" class="block text-[10px] font-semibold text-slate-600 uppercase tracking-wider mb-1">Password</label>
+                    <input type="text" id="wifi-password" class="wifi-field w-full bg-slate-50 border border-slate-300 rounded-lg text-sm p-2 text-slate-900">
+                </div>
+                <label class="flex items-end gap-2 text-sm text-slate-700 pb-2">
+                    <input type="checkbox" id="wifi-hidden" class="wifi-field accent-[#0062F1]"> Hidden network
+                </label>
+                <p class="sm:col-span-2 text-[10px] text-slate-500">The password is encoded into the QR code in plain text, which is how WiFi QR codes work. Anyone who can photograph the code can read it, so print and share it accordingly.</p>
+            </div>
+
+            <div id="panel-vcard" class="hidden grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                    <label for="vc-name" class="block text-[10px] font-semibold text-slate-600 uppercase tracking-wider mb-1">Full name</label>
+                    <input type="text" id="vc-name" class="vcard-field w-full bg-slate-50 border border-slate-300 rounded-lg text-sm p-2 text-slate-900">
+                </div>
+                <div>
+                    <label for="vc-org" class="block text-[10px] font-semibold text-slate-600 uppercase tracking-wider mb-1">Organization</label>
+                    <input type="text" id="vc-org" class="vcard-field w-full bg-slate-50 border border-slate-300 rounded-lg text-sm p-2 text-slate-900">
+                </div>
+                <div>
+                    <label for="vc-title" class="block text-[10px] font-semibold text-slate-600 uppercase tracking-wider mb-1">Job title</label>
+                    <input type="text" id="vc-title" class="vcard-field w-full bg-slate-50 border border-slate-300 rounded-lg text-sm p-2 text-slate-900">
+                </div>
+                <div>
+                    <label for="vc-phone" class="block text-[10px] font-semibold text-slate-600 uppercase tracking-wider mb-1">Phone</label>
+                    <input type="text" id="vc-phone" class="vcard-field w-full bg-slate-50 border border-slate-300 rounded-lg text-sm p-2 text-slate-900">
+                </div>
+                <div>
+                    <label for="vc-email" class="block text-[10px] font-semibold text-slate-600 uppercase tracking-wider mb-1">Email</label>
+                    <input type="text" id="vc-email" class="vcard-field w-full bg-slate-50 border border-slate-300 rounded-lg text-sm p-2 text-slate-900">
+                </div>
+                <div>
+                    <label for="vc-url" class="block text-[10px] font-semibold text-slate-600 uppercase tracking-wider mb-1">Website</label>
+                    <input type="text" id="vc-url" class="vcard-field w-full bg-slate-50 border border-slate-300 rounded-lg text-sm p-2 text-slate-900">
+                </div>
+            </div>
+
+            <div id="panel-batch" class="hidden space-y-3">
+                <label class="block bg-slate-50 border border-dashed border-slate-300 hover:border-[#0062F1] rounded-lg p-4 text-center cursor-pointer transition-colors">
+                    <span class="text-sm text-slate-600">Choose a CSV or Excel file</span>
+                    <input type="file" id="batch-file" accept=".csv,.xlsx,.xls,.xlsm,.json" class="hidden">
+                </label>
+                <div class="flex flex-wrap items-end gap-3">
+                    <div>
+                        <label for="batch-column" class="block text-[10px] font-semibold text-slate-600 uppercase tracking-wider mb-1">Column to encode</label>
+                        <select id="batch-column" class="bg-slate-50 border border-slate-300 rounded-lg text-sm p-2 text-slate-900 min-w-[10rem]"></select>
+                    </div>
+                    <div>
+                        <label for="batch-label" class="block text-[10px] font-semibold text-slate-600 uppercase tracking-wider mb-1">Caption column</label>
+                        <select id="batch-label" class="bg-slate-50 border border-slate-300 rounded-lg text-sm p-2 text-slate-900 min-w-[10rem]"></select>
+                    </div>
+                    <button onclick="renderBatch()" class="bg-[#0062F1] hover:bg-[#0050C7] text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors">Generate All</button>
+                    <button onclick="window.print()" class="bg-white border border-slate-300 hover:border-[#0062F1] text-[#00133C] text-sm font-medium px-4 py-2 rounded-lg transition-colors no-print">Print Sheet</button>
+                </div>
+                <p id="batch-status" class="text-xs text-slate-500">No file loaded.</p>
             </div>
 
             <div class="flex flex-wrap items-end gap-4">
@@ -55,11 +140,16 @@
             </div>
         </div>
 
-        <div class="bg-white border border-slate-200 rounded-xl p-8 flex items-center justify-center min-h-[16rem]">
+        <div id="single-output" class="bg-white border border-slate-200 rounded-xl p-8 flex items-center justify-center min-h-[16rem]">
             <div id="qr-container"></div>
+        </div>
+
+        <div id="batch-output" class="hidden bg-white border border-slate-200 rounded-xl p-6">
+            <div id="batch-grid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4"></div>
         </div>
     </main>
 
+    <script src="../shared/parse.js"></script>
     <script>
         let lastQR = null;
         let lastCellSize = 6;
@@ -90,7 +180,8 @@
         }
 
         function render() {
-            const text = document.getElementById('qr-input').value.trim();
+            if (currentPreset === 'batch') return;
+            const text = buildPayload();
             const errorLevel = document.getElementById('error-level').value;
             const cellSize = parseInt(document.getElementById('cell-size').value, 10);
             const container = document.getElementById('qr-container');
@@ -148,11 +239,138 @@
             document.body.removeChild(a);
         }
 
+        let currentPreset = 'text';
+        let batchData = null;
+
+        function escapeQrValue(value) {
+            return String(value ?? '').replace(/([\\;,:"])/g, '\\$1');
+        }
+
+        function buildPayload() {
+            if (currentPreset === 'wifi') {
+                const ssid = document.getElementById('wifi-ssid').value;
+                if (!ssid.trim()) return '';
+                const type = document.getElementById('wifi-type').value;
+                const pass = document.getElementById('wifi-password').value;
+                const hidden = document.getElementById('wifi-hidden').checked;
+                const parts = [`T:${type}`, `S:${escapeQrValue(ssid)}`];
+                if (type !== 'nopass') parts.push(`P:${escapeQrValue(pass)}`);
+                if (hidden) parts.push('H:true');
+                return `WIFI:${parts.join(';')};;`;
+            }
+
+            if (currentPreset === 'vcard') {
+                const name = document.getElementById('vc-name').value.trim();
+                const org = document.getElementById('vc-org').value.trim();
+                const title = document.getElementById('vc-title').value.trim();
+                const phone = document.getElementById('vc-phone').value.trim();
+                const email = document.getElementById('vc-email').value.trim();
+                const url = document.getElementById('vc-url').value.trim();
+                if (!name && !email && !phone) return '';
+
+                const lines = ['BEGIN:VCARD', 'VERSION:3.0'];
+                if (name) {
+                    lines.push(`FN:${name}`);
+                    const bits = name.split(/\s+/);
+                    const last = bits.length > 1 ? bits.pop() : '';
+                    lines.push(`N:${last};${bits.join(' ')};;;`);
+                }
+                if (org) lines.push(`ORG:${org}`);
+                if (title) lines.push(`TITLE:${title}`);
+                if (phone) lines.push(`TEL;TYPE=WORK,VOICE:${phone}`);
+                if (email) lines.push(`EMAIL;TYPE=WORK:${email}`);
+                if (url) lines.push(`URL:${url}`);
+                lines.push('END:VCARD');
+                return lines.join('\n');
+            }
+
+            return document.getElementById('qr-input').value.trim();
+        }
+
+        function setPreset(preset) {
+            currentPreset = preset;
+
+            ['text', 'wifi', 'vcard', 'batch'].forEach(p => {
+                document.getElementById(`panel-${p}`).classList.toggle('hidden', p !== preset);
+                const btn = document.getElementById(`preset-${p}`);
+                btn.className = `preset-btn text-xs px-3 py-1.5 rounded-lg transition-colors ${p === preset ? 'bg-[#00133C] text-white font-semibold' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`;
+            });
+
+            const isBatch = preset === 'batch';
+            document.getElementById('single-output').classList.toggle('hidden', isBatch);
+            document.getElementById('batch-output').classList.toggle('hidden', !isBatch);
+            document.getElementById('download-btn').disabled = isBatch || !lastQR;
+
+            if (!isBatch) render();
+        }
+
+        document.getElementById('batch-file').addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            try {
+                batchData = await parseFileToRows(file);
+                if (batchData.columns.length === 0) throw new Error('No readable columns found.');
+
+                const options = batchData.columns.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+                document.getElementById('batch-column').innerHTML = options;
+                document.getElementById('batch-label').innerHTML = `<option value="">No caption</option>${options}`;
+                document.getElementById('batch-status').innerText = `${file.name} — ${batchData.rows.length.toLocaleString()} rows`;
+            } catch (err) {
+                showToast('Could not read that file: ' + err.message);
+            } finally {
+                e.target.value = '';
+            }
+        });
+
+        function renderBatch() {
+            if (!batchData) { showToast('Load a file first.'); return; }
+
+            const column = document.getElementById('batch-column').value;
+            const labelColumn = document.getElementById('batch-label').value;
+            const errorLevel = document.getElementById('error-level').value;
+            const cellSize = Math.max(3, Math.round(parseInt(document.getElementById('cell-size').value, 10) * 0.6));
+            const grid = document.getElementById('batch-grid');
+
+            const items = batchData.rows
+                .map(r => ({ value: String(r[column] ?? '').trim(), label: labelColumn ? String(r[labelColumn] ?? '') : '' }))
+                .filter(item => item.value !== '')
+                .slice(0, 200);
+
+            if (items.length === 0) { showToast('That column has no values to encode.'); return; }
+
+            const cards = [];
+            let failed = 0;
+
+            for (const item of items) {
+                try {
+                    const qr = generateQR(item.value, errorLevel);
+                    cards.push(`
+                        <div class="border border-slate-200 rounded-lg p-3 text-center break-inside-avoid">
+                            <div class="flex justify-center">${qr.createSvgTag(cellSize, 2)}</div>
+                            <p class="text-[10px] text-slate-700 mt-2 font-semibold break-words">${escapeHtml(item.label || item.value)}</p>
+                            ${item.label ? `<p class="text-[9px] text-slate-400 break-all">${escapeHtml(item.value)}</p>` : ''}
+                        </div>
+                    `);
+                } catch (err) {
+                    failed++;
+                }
+            }
+
+            grid.innerHTML = cards.join('');
+            document.getElementById('batch-status').innerText =
+                `${cards.length.toLocaleString()} codes generated${failed > 0 ? `, ${failed} skipped because the value was too long to encode` : ''}${batchData.rows.length > 200 ? '. Only the first 200 rows are shown.' : '.'}`;
+        }
+
         document.getElementById('qr-input').addEventListener('input', render);
         document.getElementById('error-level').addEventListener('change', render);
         document.getElementById('cell-size').addEventListener('change', render);
+        document.querySelectorAll('.wifi-field, .vcard-field').forEach(el => {
+            el.addEventListener('input', render);
+            el.addEventListener('change', render);
+        });
 
-        render();
+        setPreset('text');
     </script>
 </body>
 </html>

@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Code Helper — Data and Analytics Hub</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2300133C'/%3E%3Ctext x='16' y='23' font-family='Georgia,serif' font-size='19' fill='%230062F1' text-anchor='middle'%3EH%3C/text%3E%3C/svg%3E">
+</head>
+
+<body class="bg-slate-50 text-slate-900 min-h-screen font-sans">
+    <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2"></div>
+
+    <header class="border-b border-slate-200 bg-white px-8 py-4 flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+            <a href="../../index.html" class="text-xs text-slate-500 hover:text-[#0062F1]">&larr; Hub</a>
+            <div class="h-6 w-px bg-slate-100"></div>
+            <h1 class="text-lg font-semibold text-[#00133C]">Code Helper</h1>
+        </div>
+        <div class="text-xs text-slate-600 bg-slate-50 px-3 py-1 rounded-full border border-slate-200">Python &middot; R &middot; SQL &middot; JavaScript &middot; Java</div>
+    </header>
+
+    <main class="max-w-6xl mx-auto p-6 space-y-4">
+        <p class="text-sm text-slate-600 max-w-3xl">
+            Pick a task and a language to get working code for it. Load a file first and the snippets
+            use your real file name and column names, so you can paste them straight into a notebook
+            or script.
+        </p>
+
+        <div class="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
+            <div class="flex flex-wrap items-center gap-3">
+                <label class="bg-white border border-slate-300 hover:border-[#0062F1] text-[#00133C] text-sm font-medium px-4 py-2 rounded-lg transition-colors cursor-pointer">
+                    Load a File (optional)
+                    <input type="file" id="file-input" accept=".csv,.xlsx,.xls,.xlsm,.json" class="hidden">
+                </label>
+                <button onclick="resetSchema()" type="button" class="bg-white border border-slate-300 hover:border-red-400 text-slate-600 hover:text-red-500 text-sm font-medium px-3 py-2 rounded-lg transition-colors">
+                    Use Generic Names
+                </button>
+                <span id="file-status" class="text-xs text-slate-500">Using placeholder column names.</span>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+                <div>
+                    <label for="col-category" class="block text-[10px] font-semibold text-slate-600 uppercase tracking-wider mb-1">Category column</label>
+                    <select id="col-category" class="w-full bg-slate-50 border border-slate-300 rounded-lg text-sm p-2 text-slate-900"></select>
+                </div>
+                <div>
+                    <label for="col-numeric" class="block text-[10px] font-semibold text-slate-600 uppercase tracking-wider mb-1">Numeric column</label>
+                    <select id="col-numeric" class="w-full bg-slate-50 border border-slate-300 rounded-lg text-sm p-2 text-slate-900"></select>
+                </div>
+                <div>
+                    <label for="col-date" class="block text-[10px] font-semibold text-slate-600 uppercase tracking-wider mb-1">Date column</label>
+                    <select id="col-date" class="w-full bg-slate-50 border border-slate-300 rounded-lg text-sm p-2 text-slate-900"></select>
+                </div>
+                <div>
+                    <label for="col-key" class="block text-[10px] font-semibold text-slate-600 uppercase tracking-wider mb-1">Key column (for joins)</label>
+                    <select id="col-key" class="w-full bg-slate-50 border border-slate-300 rounded-lg text-sm p-2 text-slate-900"></select>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-4 gap-4">
+            <div class="bg-white border border-slate-200 rounded-xl p-4 lg:col-span-1">
+                <p class="text-xs font-semibold text-slate-600 uppercase tracking-wider mb-3">Task</p>
+                <div id="task-list" class="space-y-1"></div>
+            </div>
+
+            <div class="lg:col-span-3 space-y-4">
+                <div class="bg-white border border-slate-200 rounded-xl p-4">
+                    <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+                        <div id="language-tabs" class="flex flex-wrap gap-1"></div>
+                        <button onclick="copyCode()" class="text-xs text-[#0062F1] hover:text-[#00133C] font-medium">Copy Code</button>
+                    </div>
+
+                    <h2 id="snippet-title" class="text-sm font-semibold text-[#00133C] mb-1"></h2>
+                    <p id="snippet-note" class="text-xs text-slate-500 mb-3"></p>
+
+                    <pre class="bg-slate-900 text-slate-100 rounded-lg p-4 overflow-x-auto text-xs leading-relaxed"><code id="code-output"></code></pre>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="../shared/parse.js"></script>
+    <script>
+        const LANGUAGES = [
+            { id: 'python', label: 'Python (pandas)' },
+            { id: 'r', label: 'R (tidyverse)' },
+            { id: 'sql', label: 'SQL' },
+            { id: 'javascript', label: 'JavaScript' },
+            { id: 'java', label: 'Java' }
+        ];
+
+        let currentLanguage = 'python';
+        let currentTask = 'load';
+
+        let schema = {
+            file: 'data.csv',
+            table: 'data',
+            columns: [],
+            category: 'category',
+            numeric: 'amount',
+            date: 'order_date',
+            key: 'id'
+        };
+
+        function showToast(message) {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = 'text-sm rounded-lg px-4 py-3 shadow-2xl max-w-md bg-emerald-50 border border-emerald-300 text-emerald-700';
+            toast.innerText = message;
+            container.appendChild(toast);
+            setTimeout(() => toast.remove(), 2500);
+        }
+
+        function pyName(col) {
+            return /^[A-Za-z_][A-Za-z0-9_]*$/.test(col) ? col : null;
+        }
+
+        function pyCol(df, col) {
+            const safe = pyName(col);
+            return safe ? `${df}.${safe}` : `${df}[${JSON.stringify(col)}]`;
+        }
+
+        function rCol(col) {
+            return /^[A-Za-z.][A-Za-z0-9._]*$/.test(col) ? col : '`' + col + '`';
+        }
+
+        function sqlCol(col) {
+            return /^[A-Za-z_][A-Za-z0-9_]*$/.test(col) ? col : `"${col.replaceAll('"', '""')}"`;
+        }
+
+        const TASKS = [
+            { id: 'load', label: 'Load the file' },
+            { id: 'inspect', label: 'Inspect and describe' },
+            { id: 'select', label: 'Select columns' },
+            { id: 'filter', label: 'Filter rows' },
+            { id: 'sort', label: 'Sort' },
+            { id: 'group', label: 'Group and aggregate' },
+            { id: 'join', label: 'Join two datasets' },
+            { id: 'dupes', label: 'Remove duplicates' },
+            { id: 'missing', label: 'Handle missing values' },
+            { id: 'dates', label: 'Parse dates and extract parts' },
+            { id: 'pivot', label: 'Pivot to a wide table' },
+            { id: 'export', label: 'Export the result' }
+        ];
+
+        const NOTES = {
+            load: 'Reads the file into a table you can work with.',
+            inspect: 'First look at shape, column types, and summary statistics.',
+            select: 'Keep only the columns you care about.',
+            filter: 'Keep only the rows that match a condition.',
+            sort: 'Order rows by a column, largest first.',
+            group: 'Aggregate a numeric column within each category.',
+            join: 'Combine two datasets on a shared key column.',
+            dupes: 'Drop repeated rows, keeping the first occurrence.',
+            missing: 'Count blanks, then fill or drop them.',
+            dates: 'Convert text to real dates and pull out year and month.',
+            pivot: 'Turn one column of categories into several columns.',
+            export: 'Write the result back out to a file.'
+        };
+
+        function snippet(task, lang) {
+            const s = schema;
+            const f = s.file;
+            const t = s.table;
+            const cat = s.category;
+            const num = s.numeric;
+            const dt = s.date;
+            const key = s.key;
+            const isExcel = /\.xlsx?$|\.xlsm$/i.test(f);
+            const isJson = /\.json$/i.test(f);
+
+            if (lang === 'python') {
+                const read = isExcel ? `pd.read_excel(${JSON.stringify(f)})` : isJson ? `pd.read_json(${JSON.stringify(f)})` : `pd.read_csv(${JSON.stringify(f)})`;
+                const map = {
+                    load: `import pandas as pd\n\ndf = ${read}\nprint(df.shape)\ndf.head()`,
+                    inspect: `df.info()\ndf.describe(include="all")\ndf.isna().sum()`,
+                    select: `subset = df[[${JSON.stringify(cat)}, ${JSON.stringify(num)}]]\nsubset.head()`,
+                    filter: `mask = ${pyCol('df', num)} > 100\nfiltered = df[mask]\nprint(len(filtered), "rows kept")`,
+                    sort: `df.sort_values(${JSON.stringify(num)}, ascending=False).head(10)`,
+                    group: `summary = (\n    df.groupby(${JSON.stringify(cat)})[${JSON.stringify(num)}]\n      .agg(["sum", "mean", "count"])\n      .sort_values("sum", ascending=False)\n      .reset_index()\n)\nsummary`,
+                    join: `other = pd.read_csv("other.csv")\nmerged = df.merge(other, on=${JSON.stringify(key)}, how="left")\nprint(merged[${JSON.stringify(key)}].isna().sum(), "unmatched rows")`,
+                    dupes: `print(df.duplicated().sum(), "duplicate rows")\ndeduped = df.drop_duplicates()`,
+                    missing: `df.isna().sum()\n\nfilled = df.fillna({${JSON.stringify(num)}: 0, ${JSON.stringify(cat)}: "Unknown"})\ndropped = df.dropna(subset=[${JSON.stringify(num)}])`,
+                    dates: `df[${JSON.stringify(dt)}] = pd.to_datetime(df[${JSON.stringify(dt)}], errors="coerce")\ndf["year"] = df[${JSON.stringify(dt)}].dt.year\ndf["month"] = df[${JSON.stringify(dt)}].dt.to_period("M")`,
+                    pivot: `wide = df.pivot_table(\n    index=${JSON.stringify(dt)},\n    columns=${JSON.stringify(cat)},\n    values=${JSON.stringify(num)},\n    aggfunc="sum",\n    fill_value=0,\n)\nwide.head()`,
+                    export: `df.to_csv("output.csv", index=False)\ndf.to_excel("output.xlsx", index=False)`
+                };
+                return map[task];
+            }
+
+            if (lang === 'r') {
+                const read = isExcel ? `readxl::read_excel(${JSON.stringify(f)})` : isJson ? `jsonlite::fromJSON(${JSON.stringify(f)})` : `readr::read_csv(${JSON.stringify(f)})`;
+                const map = {
+                    load: `library(tidyverse)\n\ndf <- ${read}\ndim(df)\nhead(df)`,
+                    inspect: `glimpse(df)\nsummary(df)\ncolSums(is.na(df))`,
+                    select: `subset <- df %>% select(${rCol(cat)}, ${rCol(num)})\nhead(subset)`,
+                    filter: `filtered <- df %>% filter(${rCol(num)} > 100)\nnrow(filtered)`,
+                    sort: `df %>% arrange(desc(${rCol(num)})) %>% head(10)`,
+                    group: `summary <- df %>%\n  group_by(${rCol(cat)}) %>%\n  summarise(\n    total = sum(${rCol(num)}, na.rm = TRUE),\n    average = mean(${rCol(num)}, na.rm = TRUE),\n    n = n()\n  ) %>%\n  arrange(desc(total))\n\nsummary`,
+                    join: `other <- read_csv("other.csv")\nmerged <- df %>% left_join(other, by = ${JSON.stringify(key)})\nsum(is.na(merged$${rCol(key)}))`,
+                    dupes: `sum(duplicated(df))\ndeduped <- df %>% distinct()`,
+                    missing: `colSums(is.na(df))\n\nfilled <- df %>% replace_na(list(${rCol(num)} = 0, ${rCol(cat)} = "Unknown"))\ndropped <- df %>% drop_na(${rCol(num)})`,
+                    dates: `df <- df %>%\n  mutate(\n    ${rCol(dt)} = as.Date(${rCol(dt)}),\n    year = lubridate::year(${rCol(dt)}),\n    month = lubridate::floor_date(${rCol(dt)}, "month")\n  )`,
+                    pivot: `wide <- df %>%\n  group_by(${rCol(dt)}, ${rCol(cat)}) %>%\n  summarise(total = sum(${rCol(num)}, na.rm = TRUE), .groups = "drop") %>%\n  pivot_wider(names_from = ${rCol(cat)}, values_from = total, values_fill = 0)\n\nhead(wide)`,
+                    export: `write_csv(df, "output.csv")\nwritexl::write_xlsx(df, "output.xlsx")`
+                };
+                return map[task];
+            }
+
+            if (lang === 'sql') {
+                const map = {
+                    load: `-- Most databases load a CSV with a COPY or bulk import statement.\n-- PostgreSQL:\nCOPY ${t} FROM '${f}' WITH (FORMAT csv, HEADER true);\n\n-- SQLite command line:\n.mode csv\n.import ${f} ${t}`,
+                    inspect: `SELECT COUNT(*) AS row_count FROM ${t};\n\nSELECT\n  COUNT(*) AS total,\n  COUNT(${sqlCol(num)}) AS non_null,\n  MIN(${sqlCol(num)}) AS min_value,\n  MAX(${sqlCol(num)}) AS max_value,\n  AVG(${sqlCol(num)}) AS avg_value\nFROM ${t};`,
+                    select: `SELECT ${sqlCol(cat)}, ${sqlCol(num)}\nFROM ${t};`,
+                    filter: `SELECT *\nFROM ${t}\nWHERE ${sqlCol(num)} > 100;`,
+                    sort: `SELECT *\nFROM ${t}\nORDER BY ${sqlCol(num)} DESC\nLIMIT 10;`,
+                    group: `SELECT\n  ${sqlCol(cat)},\n  SUM(${sqlCol(num)}) AS total,\n  AVG(${sqlCol(num)}) AS average,\n  COUNT(*) AS n\nFROM ${t}\nGROUP BY ${sqlCol(cat)}\nORDER BY total DESC;`,
+                    join: `SELECT a.*, b.*\nFROM ${t} a\nLEFT JOIN other b\n  ON b.${sqlCol(key)} = a.${sqlCol(key)};`,
+                    dupes: `SELECT ${sqlCol(key)}, COUNT(*) AS copies\nFROM ${t}\nGROUP BY ${sqlCol(key)}\nHAVING COUNT(*) > 1;\n\nSELECT DISTINCT * FROM ${t};`,
+                    missing: `SELECT\n  SUM(CASE WHEN ${sqlCol(num)} IS NULL THEN 1 ELSE 0 END) AS missing_numeric,\n  SUM(CASE WHEN ${sqlCol(cat)} IS NULL THEN 1 ELSE 0 END) AS missing_category\nFROM ${t};\n\nSELECT COALESCE(${sqlCol(num)}, 0) AS ${sqlCol(num)} FROM ${t};`,
+                    dates: `SELECT\n  ${sqlCol(dt)},\n  strftime('%Y', ${sqlCol(dt)}) AS year,\n  strftime('%Y-%m', ${sqlCol(dt)}) AS month\nFROM ${t};`,
+                    pivot: `SELECT\n  strftime('%Y-%m', ${sqlCol(dt)}) AS month,\n  SUM(CASE WHEN ${sqlCol(cat)} = 'A' THEN ${sqlCol(num)} ELSE 0 END) AS category_a,\n  SUM(CASE WHEN ${sqlCol(cat)} = 'B' THEN ${sqlCol(num)} ELSE 0 END) AS category_b\nFROM ${t}\nGROUP BY month\nORDER BY month;`,
+                    export: `-- PostgreSQL:\nCOPY (SELECT * FROM ${t}) TO 'output.csv' WITH (FORMAT csv, HEADER true);\n\n-- SQLite command line:\n.headers on\n.mode csv\n.output output.csv\nSELECT * FROM ${t};`
+                };
+                return map[task];
+            }
+
+            if (lang === 'javascript') {
+                const map = {
+                    load: `import fs from "node:fs";\nimport { parse } from "csv-parse/sync";\n\nconst rows = parse(fs.readFileSync(${JSON.stringify(f)}), {\n  columns: true,\n  skip_empty_lines: true,\n});\n\nconsole.log(rows.length, "rows");`,
+                    inspect: `console.log("rows:", rows.length);\nconsole.log("columns:", Object.keys(rows[0] ?? {}));\n\nconst values = rows.map(r => Number(r[${JSON.stringify(num)}])).filter(Number.isFinite);\nconsole.log("min", Math.min(...values), "max", Math.max(...values));`,
+                    select: `const subset = rows.map(r => ({\n  ${JSON.stringify(cat)}: r[${JSON.stringify(cat)}],\n  ${JSON.stringify(num)}: r[${JSON.stringify(num)}],\n}));`,
+                    filter: `const filtered = rows.filter(r => Number(r[${JSON.stringify(num)}]) > 100);\nconsole.log(filtered.length, "rows kept");`,
+                    sort: `const sorted = [...rows].sort(\n  (a, b) => Number(b[${JSON.stringify(num)}]) - Number(a[${JSON.stringify(num)}])\n);\nconsole.log(sorted.slice(0, 10));`,
+                    group: `const groups = new Map();\n\nfor (const r of rows) {\n  const key = r[${JSON.stringify(cat)}] ?? "Unknown";\n  const value = Number(r[${JSON.stringify(num)}]) || 0;\n  const g = groups.get(key) ?? { total: 0, count: 0 };\n  g.total += value;\n  g.count += 1;\n  groups.set(key, g);\n}\n\nconst summary = [...groups.entries()]\n  .map(([key, g]) => ({ key, total: g.total, average: g.total / g.count, n: g.count }))\n  .sort((a, b) => b.total - a.total);`,
+                    join: `const lookup = new Map(other.map(r => [r[${JSON.stringify(key)}], r]));\n\nconst merged = rows.map(r => ({\n  ...r,\n  ...(lookup.get(r[${JSON.stringify(key)}]) ?? {}),\n}));\n\nconst unmatched = rows.filter(r => !lookup.has(r[${JSON.stringify(key)}]));\nconsole.log(unmatched.length, "unmatched rows");`,
+                    dupes: `const seen = new Set();\nconst deduped = rows.filter(r => {\n  const fingerprint = JSON.stringify(r);\n  if (seen.has(fingerprint)) return false;\n  seen.add(fingerprint);\n  return true;\n});\n\nconsole.log(rows.length - deduped.length, "duplicates removed");`,
+                    missing: `const isBlank = v => v === null || v === undefined || String(v).trim() === "";\n\nconst missingCount = rows.filter(r => isBlank(r[${JSON.stringify(num)}])).length;\nconsole.log(missingCount, "missing values");\n\nconst filled = rows.map(r => ({\n  ...r,\n  [${JSON.stringify(num)}]: isBlank(r[${JSON.stringify(num)}]) ? 0 : r[${JSON.stringify(num)}],\n}));`,
+                    dates: `const withDates = rows.map(r => {\n  const d = new Date(r[${JSON.stringify(dt)}]);\n  const valid = !Number.isNaN(d.getTime());\n  return {\n    ...r,\n    year: valid ? d.getUTCFullYear() : null,\n    month: valid ? \`\${d.getUTCFullYear()}-\${String(d.getUTCMonth() + 1).padStart(2, "0")}\` : null,\n  };\n});`,
+                    pivot: `const categories = [...new Set(rows.map(r => r[${JSON.stringify(cat)}]))];\nconst byPeriod = new Map();\n\nfor (const r of rows) {\n  const period = String(r[${JSON.stringify(dt)}]).slice(0, 7);\n  const row = byPeriod.get(period) ?? Object.fromEntries(categories.map(c => [c, 0]));\n  row[r[${JSON.stringify(cat)}]] += Number(r[${JSON.stringify(num)}]) || 0;\n  byPeriod.set(period, row);\n}\n\nconst wide = [...byPeriod.entries()].map(([period, values]) => ({ period, ...values }));`,
+                    export: `import fs from "node:fs";\nimport { stringify } from "csv-stringify/sync";\n\nfs.writeFileSync("output.csv", stringify(rows, { header: true }));`
+                };
+                return map[task];
+            }
+
+            const map = {
+                load: `import java.nio.file.*;\nimport java.util.*;\nimport java.util.stream.*;\n\nList<String> lines = Files.readAllLines(Path.of(${JSON.stringify(f)}));\nString[] headers = lines.get(0).split(",");\n\nList<Map<String, String>> rows = lines.stream()\n    .skip(1)\n    .map(line -> line.split(",", -1))\n    .map(parts -> {\n        Map<String, String> row = new LinkedHashMap<>();\n        for (int i = 0; i < headers.length && i < parts.length; i++) {\n            row.put(headers[i], parts[i]);\n        }\n        return row;\n    })\n    .collect(Collectors.toList());\n\nSystem.out.println(rows.size() + " rows");`,
+                inspect: `System.out.println("rows: " + rows.size());\nSystem.out.println("columns: " + rows.get(0).keySet());\n\nDoubleSummaryStatistics stats = rows.stream()\n    .map(r -> r.get(${JSON.stringify(num)}))\n    .filter(v -> v != null && !v.isBlank())\n    .mapToDouble(Double::parseDouble)\n    .summaryStatistics();\n\nSystem.out.println(stats);`,
+                select: `List<Map<String, String>> subset = rows.stream()\n    .map(r -> Map.of(\n        ${JSON.stringify(cat)}, r.getOrDefault(${JSON.stringify(cat)}, ""),\n        ${JSON.stringify(num)}, r.getOrDefault(${JSON.stringify(num)}, "")\n    ))\n    .collect(Collectors.toList());`,
+                filter: `List<Map<String, String>> filtered = rows.stream()\n    .filter(r -> {\n        String v = r.get(${JSON.stringify(num)});\n        return v != null && !v.isBlank() && Double.parseDouble(v) > 100;\n    })\n    .collect(Collectors.toList());\n\nSystem.out.println(filtered.size() + " rows kept");`,
+                sort: `List<Map<String, String>> sorted = rows.stream()\n    .sorted(Comparator.comparingDouble(\n        (Map<String, String> r) -> Double.parseDouble(r.getOrDefault(${JSON.stringify(num)}, "0"))\n    ).reversed())\n    .limit(10)\n    .collect(Collectors.toList());`,
+                group: `Map<String, Double> totals = rows.stream()\n    .collect(Collectors.groupingBy(\n        r -> r.getOrDefault(${JSON.stringify(cat)}, "Unknown"),\n        Collectors.summingDouble(r -> {\n            String v = r.get(${JSON.stringify(num)});\n            return (v == null || v.isBlank()) ? 0 : Double.parseDouble(v);\n        })\n    ));\n\ntotals.entrySet().stream()\n    .sorted(Map.Entry.<String, Double>comparingByValue().reversed())\n    .forEach(e -> System.out.println(e.getKey() + ": " + e.getValue()));`,
+                join: `Map<String, Map<String, String>> lookup = other.stream()\n    .collect(Collectors.toMap(r -> r.get(${JSON.stringify(key)}), r -> r, (a, b) -> a));\n\nList<Map<String, String>> merged = rows.stream()\n    .map(r -> {\n        Map<String, String> combined = new LinkedHashMap<>(r);\n        Map<String, String> match = lookup.get(r.get(${JSON.stringify(key)}));\n        if (match != null) combined.putAll(match);\n        return combined;\n    })\n    .collect(Collectors.toList());`,
+                dupes: `Set<Map<String, String>> seen = new LinkedHashSet<>(rows);\nList<Map<String, String>> deduped = new ArrayList<>(seen);\n\nSystem.out.println((rows.size() - deduped.size()) + " duplicates removed");`,
+                missing: `long missing = rows.stream()\n    .filter(r -> {\n        String v = r.get(${JSON.stringify(num)});\n        return v == null || v.isBlank();\n    })\n    .count();\n\nSystem.out.println(missing + " missing values");\n\nrows.forEach(r -> r.merge(${JSON.stringify(num)}, "0", (old, def) -> old.isBlank() ? def : old));`,
+                dates: `import java.time.*;\nimport java.time.format.*;\n\nDateTimeFormatter fmt = DateTimeFormatter.ISO_LOCAL_DATE;\n\nrows.forEach(r -> {\n    String raw = r.get(${JSON.stringify(dt)});\n    try {\n        LocalDate d = LocalDate.parse(raw, fmt);\n        r.put("year", String.valueOf(d.getYear()));\n        r.put("month", d.format(DateTimeFormatter.ofPattern("yyyy-MM")));\n    } catch (DateTimeParseException e) {\n        r.put("year", "");\n        r.put("month", "");\n    }\n});`,
+                pivot: `Map<String, Map<String, Double>> wide = new TreeMap<>();\n\nfor (Map<String, String> r : rows) {\n    String period = r.getOrDefault(${JSON.stringify(dt)}, "").substring(0, 7);\n    String category = r.getOrDefault(${JSON.stringify(cat)}, "Unknown");\n    String raw = r.get(${JSON.stringify(num)});\n    double value = (raw == null || raw.isBlank()) ? 0 : Double.parseDouble(raw);\n\n    wide.computeIfAbsent(period, k -> new TreeMap<>())\n        .merge(category, value, Double::sum);\n}`,
+                export: `try (BufferedWriter out = Files.newBufferedWriter(Path.of("output.csv"))) {\n    out.write(String.join(",", rows.get(0).keySet()));\n    out.newLine();\n    for (Map<String, String> r : rows) {\n        out.write(String.join(",", r.values()));\n        out.newLine();\n    }\n}`
+            };
+            return map[task];
+        }
+
+        function renderTasks() {
+            document.getElementById('task-list').innerHTML = TASKS.map(t => `
+                <button type="button" onclick="setTask('${t.id}')" class="w-full text-left text-xs px-3 py-2 rounded-lg transition-colors ${t.id === currentTask ? 'bg-[#0062F1] text-white font-semibold' : 'text-slate-700 hover:bg-slate-100'}">
+                    ${escapeHtml(t.label)}
+                </button>
+            `).join('');
+        }
+
+        function renderLanguages() {
+            document.getElementById('language-tabs').innerHTML = LANGUAGES.map(l => `
+                <button type="button" onclick="setLanguage('${l.id}')" class="text-xs px-3 py-1.5 rounded-lg transition-colors ${l.id === currentLanguage ? 'bg-[#00133C] text-white font-semibold' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}">
+                    ${escapeHtml(l.label)}
+                </button>
+            `).join('');
+        }
+
+        function renderCode() {
+            const task = TASKS.find(t => t.id === currentTask);
+            document.getElementById('snippet-title').innerText = task ? task.label : '';
+            document.getElementById('snippet-note').innerText = NOTES[currentTask] || '';
+            document.getElementById('code-output').innerText = snippet(currentTask, currentLanguage) || '';
+        }
+
+        function setTask(id) {
+            currentTask = id;
+            renderTasks();
+            renderCode();
+        }
+
+        function setLanguage(id) {
+            currentLanguage = id;
+            renderLanguages();
+            renderCode();
+        }
+
+        function copyCode() {
+            const text = document.getElementById('code-output').innerText;
+            if (!text) return;
+            navigator.clipboard.writeText(text).then(() => showToast('Code copied to clipboard.'));
+        }
+
+        function populateColumnSelects() {
+            const targets = [
+                ['col-category', 'category'],
+                ['col-numeric', 'numeric'],
+                ['col-date', 'date'],
+                ['col-key', 'key']
+            ];
+
+            for (const [elId, field] of targets) {
+                const el = document.getElementById(elId);
+                if (schema.columns.length === 0) {
+                    el.innerHTML = `<option value="${escapeHtml(schema[field])}">${escapeHtml(schema[field])}</option>`;
+                    el.disabled = true;
+                    continue;
+                }
+                el.disabled = false;
+                el.innerHTML = schema.columns.map(c =>
+                    `<option value="${escapeHtml(c)}" ${c === schema[field] ? 'selected' : ''}>${escapeHtml(c)}</option>`
+                ).join('');
+            }
+        }
+
+        function wireColumnSelects() {
+            const targets = [
+                ['col-category', 'category'],
+                ['col-numeric', 'numeric'],
+                ['col-date', 'date'],
+                ['col-key', 'key']
+            ];
+            for (const [elId, field] of targets) {
+                document.getElementById(elId).addEventListener('change', (e) => {
+                    schema[field] = e.target.value;
+                    renderCode();
+                });
+            }
+        }
+
+        function guessColumns(columns, rows) {
+            const lower = columns.map(c => String(c).toLowerCase());
+
+            const findBy = (words, fallbackIndex) => {
+                for (let i = 0; i < columns.length; i++) {
+                    if (words.some(w => lower[i].includes(w))) return columns[i];
+                }
+                return columns[fallbackIndex] ?? columns[0];
+            };
+
+            const isNumericCol = (col) => {
+                let seen = 0;
+                for (const r of rows.slice(0, 200)) {
+                    const v = r[col];
+                    if (v === null || v === undefined || String(v).trim() === '') continue;
+                    if (Number.isNaN(Number(v))) return false;
+                    seen++;
+                }
+                return seen > 0;
+            };
+
+            const numericCol = columns.find(isNumericCol) ?? columns[0];
+            const textCols = columns.filter(c => !isNumericCol(c));
+
+            return {
+                category: findBy(['category', 'region', 'type', 'segment', 'channel', 'group', 'status'], columns.indexOf(textCols[0] ?? columns[0])),
+                numeric: findBy(['amount', 'revenue', 'total', 'value', 'price', 'sales', 'qty', 'quantity', 'units'], columns.indexOf(numericCol)),
+                date: findBy(['date', 'time', 'created', 'period', 'timestamp'], 0),
+                key: findBy(['id', 'key', 'code', 'number', 'ref'], 0)
+            };
+        }
+
+        document.getElementById('file-input').addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            try {
+                const parsed = await parseFileToRows(file);
+                if (parsed.columns.length === 0) {
+                    showToast('That file has no readable columns.');
+                    return;
+                }
+
+                const guessed = guessColumns(parsed.columns, parsed.rows);
+                schema = {
+                    file: file.name,
+                    table: file.name.replace(/\.[^.]+$/, '').toLowerCase().replace(/[^a-z0-9_]+/g, '_').replace(/^_+|_+$/g, '') || 'data',
+                    columns: parsed.columns,
+                    ...guessed
+                };
+
+                document.getElementById('file-status').innerText = `${file.name} — ${parsed.rows.length.toLocaleString()} rows, ${parsed.columns.length} columns`;
+                populateColumnSelects();
+                renderCode();
+            } catch (err) {
+                showToast('Could not read that file: ' + err.message);
+            } finally {
+                e.target.value = '';
+            }
+        });
+
+        function resetSchema() {
+            schema = { file: 'data.csv', table: 'data', columns: [], category: 'category', numeric: 'amount', date: 'order_date', key: 'id' };
+            document.getElementById('file-status').innerText = 'Using placeholder column names.';
+            populateColumnSelects();
+            renderCode();
+        }
+
+        wireColumnSelects();
+        populateColumnSelects();
+        renderTasks();
+        renderLanguages();
+        renderCode();
+    </script>
+</body>
+</html>

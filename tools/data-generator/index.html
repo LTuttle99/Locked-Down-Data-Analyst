@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Data Generator — Data and Analytics Hub</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2300133C'/%3E%3Ctext x='16' y='23' font-family='Georgia,serif' font-size='19' fill='%230062F1' text-anchor='middle'%3EH%3C/text%3E%3C/svg%3E">
+</head>
+
+<body class="bg-slate-50 text-slate-900 min-h-screen font-sans">
+    <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2"></div>
+
+    <header class="border-b border-slate-200 bg-white px-8 py-4 flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+            <a href="../../index.html" class="text-xs text-slate-500 hover:text-[#0062F1]">&larr; Hub</a>
+            <div class="h-6 w-px bg-slate-100"></div>
+            <h1 class="text-lg font-semibold text-[#00133C]">Test Data Generator</h1>
+        </div>
+        <div class="text-xs text-slate-600 bg-slate-50 px-3 py-1 rounded-full border border-slate-200">Realistic sample files</div>
+    </header>
+
+    <main class="max-w-6xl mx-auto p-6 space-y-4">
+        <p class="text-sm text-slate-600 max-w-3xl">
+            Build a sample file to test the other tools with, or to share a data shape with someone
+            without sharing real records. Everything is invented locally, so nothing here comes from
+            a real person or account.
+        </p>
+
+        <div class="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
+            <div class="flex flex-wrap items-end gap-4">
+                <div>
+                    <label for="row-count" class="block text-[10px] font-semibold text-slate-600 uppercase tracking-wider mb-1">Rows</label>
+                    <input type="number" id="row-count" value="500" min="1" max="100000" class="bg-slate-50 border border-slate-300 rounded-lg text-sm p-2 text-slate-900 w-28">
+                </div>
+                <div>
+                    <label for="seed" class="block text-[10px] font-semibold text-slate-600 uppercase tracking-wider mb-1">Seed</label>
+                    <input type="number" id="seed" value="1234" class="bg-slate-50 border border-slate-300 rounded-lg text-sm p-2 text-slate-900 w-28">
+                </div>
+                <div>
+                    <label for="null-rate" class="block text-[10px] font-semibold text-slate-600 uppercase tracking-wider mb-1">
+                        Blank cells: <span id="null-label" class="text-[#0062F1] font-bold">0%</span>
+                    </label>
+                    <input type="range" id="null-rate" min="0" max="40" value="0" class="w-40 accent-[#0062F1]">
+                </div>
+                <button onclick="generate()" class="bg-[#0062F1] hover:bg-[#0050C7] text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition-colors">Generate</button>
+                <button onclick="loadPreset('orders')" class="bg-white border border-slate-300 hover:border-[#0062F1] text-[#00133C] text-sm font-medium px-3 py-2 rounded-lg transition-colors">Orders preset</button>
+                <button onclick="loadPreset('people')" class="bg-white border border-slate-300 hover:border-[#0062F1] text-[#00133C] text-sm font-medium px-3 py-2 rounded-lg transition-colors">People preset</button>
+            </div>
+
+            <div>
+                <div class="flex items-center justify-between mb-2">
+                    <label class="block text-[10px] font-semibold text-slate-600 uppercase tracking-wider">Columns</label>
+                    <button onclick="addColumn()" class="text-xs text-[#0062F1] hover:text-[#00133C] font-medium">+ Add column</button>
+                </div>
+                <div id="column-list" class="space-y-2"></div>
+            </div>
+        </div>
+
+        <div id="results" class="hidden bg-white border border-slate-200 rounded-xl p-4">
+            <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+                <h3 class="text-sm font-medium text-slate-700">Preview (first 20 rows)</h3>
+                <div class="flex gap-2">
+                    <button onclick="exportData('csv')" class="bg-white border border-slate-300 hover:border-[#0062F1] text-[#00133C] text-xs font-medium px-3 py-1.5 rounded-lg transition-colors">Export CSV</button>
+                    <button onclick="exportData('xlsx')" class="bg-white border border-slate-300 hover:border-[#0062F1] text-[#00133C] text-xs font-medium px-3 py-1.5 rounded-lg transition-colors">Export Excel</button>
+                    <button onclick="exportData('json')" class="bg-white border border-slate-300 hover:border-[#0062F1] text-[#00133C] text-xs font-medium px-3 py-1.5 rounded-lg transition-colors">Export JSON</button>
+                </div>
+            </div>
+            <p id="result-status" class="text-xs text-slate-500 mb-3"></p>
+            <div id="preview-container" class="overflow-x-auto"></div>
+        </div>
+    </main>
+
+    <script src="../shared/parse.js"></script>
+    <script>
+        const FIRST_NAMES = ['Avery', 'Jordan', 'Riley', 'Casey', 'Morgan', 'Taylor', 'Quinn', 'Rowan', 'Sage', 'Emerson', 'Harper', 'Reese', 'Devon', 'Marley', 'Elliot', 'Skyler', 'Payton', 'Alexis', 'Dakota', 'Finley'];
+        const LAST_NAMES = ['Whitfield', 'Barlow', 'Nguyen', 'Okafor', 'Castellanos', 'Lindqvist', 'Rahman', 'Kowalski', 'Ferreira', 'Yamamoto', 'Delgado', 'Novak', 'Adeyemi', 'Brennan', 'Sorensen', 'Marchetti', 'Ibrahim', 'Fitzgerald', 'Petrov', 'Ashworth'];
+        const COMPANIES = ['Northwind Traders', 'Contoso Ltd', 'Fabrikam Inc', 'Litware Group', 'Proseware Systems', 'Adventure Works', 'Tailspin Toys', 'Wide World Importers', 'Lucerne Publishing', 'Fourth Coffee'];
+        const CITIES = ['Portland', 'Austin', 'Columbus', 'Raleigh', 'Boise', 'Madison', 'Providence', 'Tacoma', 'Fresno', 'Akron'];
+        const CATEGORIES = ['Software Licenses', 'Hardware', 'Professional Services', 'Training', 'Support Contracts'];
+        const REGIONS = ['North America', 'EMEA', 'APAC', 'Latin America'];
+        const STATUSES = ['Open', 'Pending', 'Closed', 'Cancelled'];
+
+        const TYPES = [
+            { id: 'id', label: 'ID (sequential)' },
+            { id: 'uuid', label: 'ID (random)' },
+            { id: 'first_name', label: 'First name' },
+            { id: 'last_name', label: 'Last name' },
+            { id: 'full_name', label: 'Full name' },
+            { id: 'email', label: 'Email' },
+            { id: 'company', label: 'Company' },
+            { id: 'city', label: 'City' },
+            { id: 'category', label: 'Product category' },
+            { id: 'region', label: 'Region' },
+            { id: 'status', label: 'Status' },
+            { id: 'integer', label: 'Whole number' },
+            { id: 'decimal', label: 'Decimal number' },
+            { id: 'currency', label: 'Currency amount' },
+            { id: 'date', label: 'Date' },
+            { id: 'boolean', label: 'Yes / No' }
+        ];
+
+        let columns = [];
+        let generated = null;
+        let nextId = 1;
+
+        function showToast(message, isError = true) {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `text-sm rounded-lg px-4 py-3 shadow-2xl max-w-md ${isError ? 'bg-red-50 border border-red-300 text-red-500' : 'bg-emerald-50 border border-emerald-300 text-emerald-700'}`;
+            toast.innerText = message;
+            container.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        }
+
+        function makeRandom(seed) {
+            let s = (seed >>> 0) || 1;
+            return function () {
+                s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
+                return s / 4294967296;
+            };
+        }
+
+        function pick(rand, list) {
+            return list[Math.floor(rand() * list.length)];
+        }
+
+        function addColumn(name, type) {
+            columns.push({ uid: nextId++, name: name || `column_${columns.length + 1}`, type: type || 'category' });
+            renderColumns();
+        }
+
+        function removeColumn(uid) {
+            columns = columns.filter(c => c.uid !== uid);
+            renderColumns();
+        }
+
+        function renderColumns() {
+            const container = document.getElementById('column-list');
+
+            if (columns.length === 0) {
+                container.innerHTML = '<p class="text-sm text-slate-400 italic">No columns yet. Add one, or start from a preset.</p>';
+                return;
+            }
+
+            container.innerHTML = columns.map(c => `
+                <div class="flex flex-wrap items-center gap-2">
+                    <input type="text" value="${escapeHtml(c.name)}" data-uid="${c.uid}" class="col-name bg-slate-50 border border-slate-300 rounded-lg text-sm p-2 text-slate-900 flex-1 min-w-[10rem]">
+                    <select data-uid="${c.uid}" class="col-type bg-slate-50 border border-slate-300 rounded-lg text-sm p-2 text-slate-900 min-w-[12rem]">
+                        ${TYPES.map(t => `<option value="${t.id}" ${t.id === c.type ? 'selected' : ''}>${escapeHtml(t.label)}</option>`).join('')}
+                    </select>
+                    <button onclick="removeColumn(${c.uid})" class="text-slate-400 hover:text-red-500 font-bold px-2" title="Remove column" aria-label="Remove ${escapeHtml(c.name)}">&times;</button>
+                </div>
+            `).join('');
+
+            container.querySelectorAll('.col-name').forEach(el => {
+                el.addEventListener('input', (e) => {
+                    const col = columns.find(c => c.uid === Number(e.target.dataset.uid));
+                    if (col) col.name = e.target.value;
+                });
+            });
+
+            container.querySelectorAll('.col-type').forEach(el => {
+                el.addEventListener('change', (e) => {
+                    const col = columns.find(c => c.uid === Number(e.target.dataset.uid));
+                    if (col) col.type = e.target.value;
+                });
+            });
+        }
+
+        function loadPreset(which) {
+            columns = [];
+            nextId = 1;
+
+            if (which === 'orders') {
+                addColumn('order_id', 'id');
+                addColumn('order_date', 'date');
+                addColumn('customer', 'company');
+                addColumn('region', 'region');
+                addColumn('product_category', 'category');
+                addColumn('units', 'integer');
+                addColumn('revenue', 'currency');
+            } else {
+                addColumn('employee_id', 'id');
+                addColumn('first_name', 'first_name');
+                addColumn('last_name', 'last_name');
+                addColumn('email', 'email');
+                addColumn('city', 'city');
+                addColumn('start_date', 'date');
+                addColumn('active', 'boolean');
+            }
+
+            renderColumns();
+            generate();
+        }
+
+        function valueFor(type, rand, index, cache) {
+            if (type === 'id') return `ID${String(index + 1).padStart(5, '0')}`;
+            if (type === 'uuid') return Array.from({ length: 8 }, () => Math.floor(rand() * 16).toString(16)).join('') + '-' + Array.from({ length: 4 }, () => Math.floor(rand() * 16).toString(16)).join('');
+            if (type === 'first_name') return pick(rand, FIRST_NAMES);
+            if (type === 'last_name') return pick(rand, LAST_NAMES);
+            if (type === 'full_name') return `${pick(rand, FIRST_NAMES)} ${pick(rand, LAST_NAMES)}`;
+            if (type === 'email') {
+                const f = pick(rand, FIRST_NAMES).toLowerCase();
+                const l = pick(rand, LAST_NAMES).toLowerCase();
+                return `${f}.${l}@example.com`;
+            }
+            if (type === 'company') return pick(rand, COMPANIES);
+            if (type === 'city') return pick(rand, CITIES);
+            if (type === 'category') return pick(rand, CATEGORIES);
+            if (type === 'region') return pick(rand, REGIONS);
+            if (type === 'status') return pick(rand, STATUSES);
+            if (type === 'integer') return 1 + Math.floor(rand() * 500);
+            if (type === 'decimal') return Number((rand() * 1000).toFixed(3));
+            if (type === 'currency') return Number((50 + rand() * 9950).toFixed(2));
+            if (type === 'boolean') return rand() > 0.5 ? 'Yes' : 'No';
+            if (type === 'date') {
+                const daysBack = Math.floor(rand() * 730);
+                const d = new Date(Date.UTC(cache.today.getUTCFullYear(), cache.today.getUTCMonth(), cache.today.getUTCDate() - daysBack));
+                return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+            }
+            return '';
+        }
+
+        function generate() {
+            if (columns.length === 0) { showToast('Add at least one column first.'); return; }
+
+            const names = columns.map(c => c.name.trim()).filter(Boolean);
+            if (names.length !== columns.length) { showToast('Every column needs a name.'); return; }
+            if (new Set(names).size !== names.length) { showToast('Column names must be unique.'); return; }
+
+            const rowCount = Math.max(1, Math.min(100000, Number(document.getElementById('row-count').value) || 1));
+            const seed = Number(document.getElementById('seed').value) || 1;
+            const nullRate = Number(document.getElementById('null-rate').value) / 100;
+
+            const rand = makeRandom(seed);
+            const cache = { today: new Date() };
+            const rows = [];
+
+            for (let i = 0; i < rowCount; i++) {
+                const row = {};
+                for (const col of columns) {
+                    const blank = col.type !== 'id' && nullRate > 0 && rand() < nullRate;
+                    row[col.name] = blank ? '' : valueFor(col.type, rand, i, cache);
+                }
+                rows.push(row);
+            }
+
+            generated = { columns: names, rows };
+
+            document.getElementById('result-status').innerText = `${rows.length.toLocaleString()} rows across ${names.length} columns. Same seed and settings always produce the same file.`;
+            renderPreview();
+            document.getElementById('results').classList.remove('hidden');
+        }
+
+        function renderPreview() {
+            const preview = generated.rows.slice(0, 20);
+            document.getElementById('preview-container').innerHTML = `
+                <table class="w-full text-left text-xs">
+                    <thead><tr class="border-b border-slate-200 text-slate-600 uppercase">
+                        ${generated.columns.map(c => `<th class="py-2 px-3 whitespace-nowrap">${escapeHtml(c)}</th>`).join('')}
+                    </tr></thead>
+                    <tbody class="divide-y divide-slate-100">
+                        ${preview.map(r => `<tr class="hover:bg-slate-50">${generated.columns.map(c => `<td class="py-2 px-3 text-slate-700 whitespace-nowrap">${r[c] === '' ? '<span class="text-slate-300">blank</span>' : escapeHtml(r[c])}</td>`).join('')}</tr>`).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+
+        function exportData(format) {
+            if (!generated) return;
+            if (format === 'csv') downloadCSV('test_data.csv', generated.columns, generated.rows);
+            else if (format === 'xlsx') downloadExcel('test_data.xlsx', generated.columns, generated.rows);
+            else downloadJSON('test_data.json', generated.rows);
+        }
+
+        document.getElementById('null-rate').addEventListener('input', (e) => {
+            document.getElementById('null-label').innerText = `${e.target.value}%`;
+        });
+
+        loadPreset('orders');
+    </script>
+</body>
+</html>

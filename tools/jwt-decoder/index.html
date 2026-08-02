@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JWT Decoder — Data and Analytics Hub</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2300133C'/%3E%3Ctext x='16' y='23' font-family='Georgia,serif' font-size='19' fill='%230062F1' text-anchor='middle'%3EH%3C/text%3E%3C/svg%3E">
+</head>
+
+<body class="bg-slate-50 text-slate-900 min-h-screen font-sans">
+    <header class="border-b border-slate-200 bg-white px-8 py-4 flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+            <a href="../../index.html" class="text-xs text-slate-500 hover:text-[#0062F1]">&larr; Hub</a>
+            <div class="h-6 w-px bg-slate-100"></div>
+            <h1 class="text-lg font-semibold text-[#00133C]">JWT Decoder</h1>
+        </div>
+        <div class="text-xs text-slate-600 bg-slate-50 px-3 py-1 rounded-full border border-slate-200">Header &middot; payload &middot; expiry</div>
+    </header>
+
+    <main class="max-w-5xl mx-auto p-6 space-y-4">
+        <div class="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-800">
+            This decodes a token so you can read it. It does not verify the signature, which would need
+            the issuer's secret or public key. Treat anything you read here as unverified, and remember
+            that a token is a live credential while it is valid: decode test tokens rather than
+            production ones where you can.
+        </div>
+
+        <div class="bg-white border border-slate-200 rounded-xl p-5">
+            <label for="token-input" class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2">Token</label>
+            <textarea id="token-input" spellcheck="false" rows="5"
+                class="w-full bg-slate-50 border border-slate-300 rounded-lg p-3 text-sm font-mono text-slate-900 focus:border-[#0062F1] focus:ring-2 focus:ring-[#0062F1]/20 focus:outline-none resize-y"
+                placeholder="Paste a JWT here (three sections separated by dots)"></textarea>
+            <p id="token-error" class="hidden text-xs text-red-600 mt-2"></p>
+        </div>
+
+        <div id="output" class="hidden space-y-4">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div class="bg-white border border-slate-200 p-4 rounded-xl">
+                    <p class="text-xs font-semibold uppercase tracking-wider text-slate-600">Algorithm</p>
+                    <p id="stat-alg" class="text-xl font-bold text-[#00133C] mt-1">—</p>
+                </div>
+                <div class="bg-white border border-slate-200 p-4 rounded-xl">
+                    <p class="text-xs font-semibold uppercase tracking-wider text-slate-600">Status</p>
+                    <p id="stat-status" class="text-xl font-bold mt-1">—</p>
+                </div>
+                <div class="bg-white border border-slate-200 p-4 rounded-xl">
+                    <p class="text-xs font-semibold uppercase tracking-wider text-slate-600">Expires</p>
+                    <p id="stat-expiry" class="text-sm font-semibold text-slate-700 mt-2">—</p>
+                </div>
+            </div>
+
+            <div id="claims-card" class="hidden bg-white border border-slate-200 rounded-xl p-5">
+                <h3 class="text-sm font-medium text-slate-700 mb-3">Registered claims</h3>
+                <div id="claims-list" class="space-y-2 text-sm"></div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div class="bg-white border border-slate-200 rounded-xl p-5">
+                    <h3 class="text-sm font-medium text-slate-700 mb-3">Header</h3>
+                    <pre class="bg-slate-900 text-slate-100 rounded-lg p-4 overflow-x-auto text-xs leading-relaxed"><code id="header-output"></code></pre>
+                </div>
+                <div class="bg-white border border-slate-200 rounded-xl p-5">
+                    <h3 class="text-sm font-medium text-slate-700 mb-3">Payload</h3>
+                    <pre class="bg-slate-900 text-slate-100 rounded-lg p-4 overflow-x-auto text-xs leading-relaxed"><code id="payload-output"></code></pre>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const CLAIM_LABELS = {
+            iss: 'Issuer',
+            sub: 'Subject',
+            aud: 'Audience',
+            exp: 'Expires at',
+            nbf: 'Not valid before',
+            iat: 'Issued at',
+            jti: 'Token ID'
+        };
+
+        const TIME_CLAIMS = new Set(['exp', 'nbf', 'iat']);
+
+        function escapeHtml(value) {
+            return String(value ?? "")
+                .replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")
+                .replaceAll('"', "&quot;").replaceAll("'", "&#039;");
+        }
+
+        function base64UrlDecode(segment) {
+            let s = segment.replaceAll('-', '+').replaceAll('_', '/');
+            while (s.length % 4 !== 0) s += '=';
+
+            const binary = atob(s);
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+            return new TextDecoder().decode(bytes);
+        }
+
+        function formatTimestamp(seconds) {
+            const d = new Date(seconds * 1000);
+            if (Number.isNaN(d.getTime())) return 'Not a valid time';
+            return `${d.toISOString().replace('T', ' ').slice(0, 19)} UTC`;
+        }
+
+        function relativeTo(seconds) {
+            const diff = seconds * 1000 - Date.now();
+            const abs = Math.abs(diff);
+            const units = [['day', 86400000], ['hour', 3600000], ['minute', 60000], ['second', 1000]];
+
+            for (const [unit, ms] of units) {
+                if (abs >= ms || unit === 'second') {
+                    const n = Math.round(diff / ms);
+                    const rtf = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
+                    return rtf.format(n, unit);
+                }
+            }
+            return '';
+        }
+
+        function showError(message) {
+            document.getElementById('output').classList.add('hidden');
+            const el = document.getElementById('token-error');
+            el.classList.remove('hidden');
+            el.innerText = message;
+        }
+
+        function decode() {
+            const raw = document.getElementById('token-input').value.trim();
+            const errorEl = document.getElementById('token-error');
+
+            if (raw === '') {
+                errorEl.classList.add('hidden');
+                document.getElementById('output').classList.add('hidden');
+                return;
+            }
+
+            const cleaned = raw.replace(/^Bearer\s+/i, '').trim();
+            const parts = cleaned.split('.');
+
+            if (parts.length !== 3) {
+                showError(`A JWT has three sections separated by dots. This one has ${parts.length}.`);
+                return;
+            }
+
+            let header;
+            let payload;
+
+            try {
+                header = JSON.parse(base64UrlDecode(parts[0]));
+            } catch (err) {
+                showError('The header section could not be decoded as JSON.');
+                return;
+            }
+
+            try {
+                payload = JSON.parse(base64UrlDecode(parts[1]));
+            } catch (err) {
+                showError('The payload section could not be decoded as JSON.');
+                return;
+            }
+
+            errorEl.classList.add('hidden');
+            document.getElementById('output').classList.remove('hidden');
+
+            document.getElementById('header-output').innerText = JSON.stringify(header, null, 2);
+            document.getElementById('payload-output').innerText = JSON.stringify(payload, null, 2);
+            document.getElementById('stat-alg').innerText = header.alg || 'Not stated';
+
+            const nowSeconds = Date.now() / 1000;
+            const statusEl = document.getElementById('stat-status');
+            const expiryEl = document.getElementById('stat-expiry');
+
+            if (typeof payload.exp === 'number') {
+                const expired = payload.exp < nowSeconds;
+                statusEl.innerText = expired ? 'Expired' : 'Not expired';
+                statusEl.className = `text-xl font-bold mt-1 ${expired ? 'text-red-600' : 'text-emerald-600'}`;
+                expiryEl.innerText = `${formatTimestamp(payload.exp)} (${relativeTo(payload.exp)})`;
+            } else {
+                statusEl.innerText = 'No expiry set';
+                statusEl.className = 'text-xl font-bold mt-1 text-slate-500';
+                expiryEl.innerText = 'This token has no exp claim.';
+            }
+
+            if (typeof payload.nbf === 'number' && payload.nbf > nowSeconds) {
+                statusEl.innerText = 'Not valid yet';
+                statusEl.className = 'text-xl font-bold mt-1 text-amber-600';
+            }
+
+            const claims = Object.keys(CLAIM_LABELS).filter(k => payload[k] !== undefined);
+            const claimsCard = document.getElementById('claims-card');
+
+            if (claims.length === 0) {
+                claimsCard.classList.add('hidden');
+            } else {
+                claimsCard.classList.remove('hidden');
+                document.getElementById('claims-list').innerHTML = claims.map(k => {
+                    const value = payload[k];
+                    const display = TIME_CLAIMS.has(k) && typeof value === 'number'
+                        ? `${formatTimestamp(value)} (${relativeTo(value)})`
+                        : typeof value === 'object' ? JSON.stringify(value) : String(value);
+
+                    return `
+                        <div class="flex flex-wrap items-baseline justify-between gap-3 bg-slate-50 rounded-lg px-3 py-2">
+                            <span class="text-xs uppercase tracking-wider text-slate-500">${escapeHtml(CLAIM_LABELS[k])} <span class="font-mono text-slate-400 normal-case">${escapeHtml(k)}</span></span>
+                            <span class="font-mono text-slate-800 text-xs break-all">${escapeHtml(display)}</span>
+                        </div>
+                    `;
+                }).join('');
+            }
+        }
+
+        document.getElementById('token-input').addEventListener('input', decode);
+    </script>
+</body>
+</html>

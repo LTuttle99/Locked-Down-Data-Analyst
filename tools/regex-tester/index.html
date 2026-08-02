@@ -41,7 +41,7 @@
             <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2">Test String</label>
             <textarea id="test-input" spellcheck="false" rows="8"
                 class="w-full bg-slate-50 border border-slate-300 rounded-lg p-3 text-sm font-mono text-slate-900 focus:border-[#0062F1] focus:ring-2 focus:ring-[#0062F1]/20 focus:outline-none resize-y"
-                placeholder="Paste text to test the pattern against...">Contact us at hello@example.com or admin@brotherhoodmutual.com for help.</textarea>
+                placeholder="Paste text to test the pattern against...">Contact us at hello@example.com or admin@example.org for help.</textarea>
         </div>
 
         <div class="bg-white border border-slate-200 rounded-xl p-5">
@@ -50,6 +50,17 @@
                 <span id="match-count" class="text-xs font-semibold text-[#0062F1]">0 matches</span>
             </div>
             <div id="highlighted-output" class="text-sm font-mono whitespace-pre-wrap break-words leading-relaxed bg-slate-50 border border-slate-200 rounded-lg p-3 min-h-[3rem]"></div>
+        </div>
+
+        <div class="bg-white border border-slate-200 rounded-xl p-5">
+            <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+                <label for="replace-input" class="block text-xs font-semibold text-slate-600 uppercase tracking-wider">Replace With</label>
+                <button onclick="copyReplaced()" class="text-xs text-[#0062F1] hover:text-[#00133C] font-medium">Copy Result</button>
+            </div>
+            <input type="text" id="replace-input" placeholder="Replacement, e.g. $1 or [redacted]"
+                class="w-full bg-slate-50 border border-slate-300 rounded-lg text-sm p-2.5 text-slate-900 focus:border-[#0062F1] focus:ring-2 focus:ring-[#0062F1]/20 focus:outline-none font-mono">
+            <p class="text-[10px] text-slate-500 mt-1">Use $1, $2 for capture groups, $&amp; for the whole match, and $$ for a literal dollar sign.</p>
+            <div id="replace-output" class="mt-3 text-sm font-mono whitespace-pre-wrap break-words leading-relaxed bg-slate-50 border border-slate-200 rounded-lg p-3 min-h-[3rem]"></div>
         </div>
 
         <div class="bg-white border border-slate-200 rounded-xl p-4">
@@ -96,6 +107,7 @@
                 outputEl.innerText = text;
                 matchCountEl.innerText = '0 matches';
                 matchListEl.innerHTML = '<p class="text-slate-400 italic">Enter a pattern to see matches.</p>';
+                clearReplacement('Enter a pattern to preview a replacement.');
                 return;
             }
 
@@ -109,6 +121,7 @@
                 outputEl.innerText = text;
                 matchCountEl.innerText = '0 matches';
                 matchListEl.innerHTML = '';
+                clearReplacement('Fix the pattern to preview a replacement.');
                 return;
             }
 
@@ -135,6 +148,8 @@
             outputEl.innerHTML = html || '<span class="text-slate-400 italic">(empty test string)</span>';
             matchCountEl.innerText = `${matches.length} match${matches.length === 1 ? '' : 'es'}`;
 
+            renderReplacement(re, text);
+
             if (matches.length === 0) {
                 matchListEl.innerHTML = '<p class="text-slate-400 italic">No matches.</p>';
             } else {
@@ -154,9 +169,43 @@
             }
         }
 
+        const replaceInput = document.getElementById('replace-input');
+        const replaceOutputEl = document.getElementById('replace-output');
+        let lastReplaced = '';
+
+        function clearReplacement(message) {
+            lastReplaced = '';
+            replaceOutputEl.innerHTML = `<span class="text-slate-400 italic">${escapeHtml(message)}</span>`;
+        }
+
+        function renderReplacement(re, text) {
+            const replacement = replaceInput.value;
+
+            if (replacement === '') {
+                lastReplaced = '';
+                replaceOutputEl.innerHTML = '<span class="text-slate-400 italic">Type a replacement above to preview the result.</span>';
+                return;
+            }
+
+            try {
+                const replaceRe = new RegExp(re.source, re.flags);
+                lastReplaced = text.replace(replaceRe, replacement);
+                replaceOutputEl.innerText = lastReplaced;
+            } catch (err) {
+                lastReplaced = '';
+                replaceOutputEl.innerHTML = `<span class="text-red-600">${escapeHtml(err.message)}</span>`;
+            }
+        }
+
+        function copyReplaced() {
+            if (!lastReplaced) return;
+            navigator.clipboard.writeText(lastReplaced);
+        }
+
         patternInput.addEventListener('input', render);
         flagsInput.addEventListener('input', () => { syncCheckboxesFromFlags(); render(); });
         testInput.addEventListener('input', render);
+        replaceInput.addEventListener('input', render);
         flagCheckboxes.forEach(cb => cb.addEventListener('change', () => { syncFlagsFromCheckboxes(); render(); }));
 
         syncCheckboxesFromFlags();
