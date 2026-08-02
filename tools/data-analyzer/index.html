@@ -1677,7 +1677,7 @@
 
                 return `
                     <span class="inline-flex items-center gap-2 bg-white border ${g.locked ? 'border-amber-300' : 'border-slate-300'} rounded-full px-3 py-1.5 text-xs text-slate-800">
-                        ${g.locked ? '<span title="Locked">&#128274;</span>' : ''}
+                        ${g.locked ? '<span class="text-[9px] font-bold uppercase tracking-wide text-amber-600">Locked</span>' : ''}
                         <span class="font-semibold">${escapeHtml(g.label)}</span>
                         <span class="text-slate-500">&middot;</span>
                         <span class="text-slate-600">${escapeHtml(scopeLabel)}</span>
@@ -2721,10 +2721,15 @@
                         titleClass = "text-red-500";
                     }
 
+                    let badgeClass = "bg-slate-200 text-slate-600";
+                    if (item.severity === "positive") badgeClass = "bg-emerald-100 text-emerald-700";
+                    else if (item.severity === "warning") badgeClass = "bg-amber-100 text-amber-700";
+                    else if (item.severity === "risk") badgeClass = "bg-red-100 text-red-600";
+
                     return `
                         <div class="bg-slate-100 border ${borderClass} rounded-lg p-4">
                             <div class="flex items-start gap-3">
-                                <div class="text-xl">${item.icon || "🤖"}</div>
+                                <div class="h-8 w-8 shrink-0 rounded-lg ${badgeClass} flex items-center justify-center text-xs font-bold" aria-hidden="true">${escapeHtml(item.icon || "In")}</div>
                                 <div>
                                     <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">${escapeHtml(item.category || "Insight")}</p>
                                     <p class="text-sm font-bold ${titleClass} mt-1">${escapeHtml(item.title || "AI Insight")}</p>
@@ -2904,7 +2909,7 @@
                         <div class="flex items-center justify-between mb-3">
                             <div>
                                 <p class="text-sm font-semibold text-[#00133C]">
-                                    ${locked ? '<span title="Locked" class="mr-1">&#128274;</span>' : ''}${escapeHtml(gp.label)}
+                                    ${locked ? '<span class="mr-1.5 text-[9px] font-bold uppercase tracking-wide text-amber-600 align-middle">Locked</span>' : ''}${escapeHtml(gp.label)}
                                 </p>
                                 <p class="text-[10px] text-slate-500 uppercase tracking-wider mt-0.5">
                                     ${escapeHtml(scopeLabel)} &middot; ${escapeHtml(gp.period)} &middot; ${escapeHtml(gp.period_start)} to ${escapeHtml(gp.period_end)}
@@ -2913,8 +2918,8 @@
 
                             <div class="flex items-center gap-2">
                                 <span class="text-xs font-semibold px-3 py-1 rounded-full ${cfg.bg}">${cfg.label}</span>
-                                <button onclick="toggleGoalLock('${gp.id}')" title="${locked ? 'Unlock goal' : 'Lock goal'}" aria-label="${locked ? 'Unlock goal' : 'Lock goal'}" class="text-slate-500 hover:text-amber-600 text-sm">
-                                    ${locked ? '&#128274;' : '&#128275;'}
+                                <button onclick="toggleGoalLock('${gp.id}')" title="${locked ? 'Unlock goal' : 'Lock goal'}" aria-label="${locked ? 'Unlock goal' : 'Lock goal'}" class="text-slate-500 hover:text-amber-600 text-xs font-semibold border border-slate-300 hover:border-amber-400 rounded px-2 py-0.5 transition-colors">
+                                    ${locked ? 'Unlock' : 'Lock'}
                                 </button>
                                 <button ${removeAttr} title="Remove goal" aria-label="Remove goal ${escapeHtml(gp.label)}" class="text-slate-500 hover:text-red-600 text-sm font-bold">&times;</button>
                             </div>

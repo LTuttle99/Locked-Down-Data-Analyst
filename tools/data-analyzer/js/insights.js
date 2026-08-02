@@ -203,54 +203,54 @@ BookOfBusinessAnalyzer.prototype.generateAiInsights = function (params) {
 
   if (projectedYearEnd > 0) {
     insights.push({
-      category: "Forecast", icon: "\u{1F52E}", severity: growthPct >= 0 ? "positive" : "warning", title: "Year-End Projection",
+      category: "Forecast", icon: "Fc", severity: growthPct >= 0 ? "positive" : "warning", title: "Year-End Projection",
       message: `Based on current monthly performance, the selected data is projected to finish at approximately ${fmt0(projectedYearEnd)} in ${metricLabel}. Forecast confidence is ${confidenceLabel.toLowerCase()}.`
     });
   } else {
     insights.push({
-      category: "Forecast", icon: "\u{1F52E}", severity: "neutral", title: "Forecast Availability",
+      category: "Forecast", icon: "Fc", severity: "neutral", title: "Forecast Availability",
       message: "There is not enough monthly history available to produce a reliable year-end forecast."
     });
   }
 
   if (growthLevel === "Accelerating") {
     insights.push({
-      category: "Growth", icon: "\u{1F4C8}", severity: "positive", title: "Growth Momentum Is Strong",
+      category: "Growth", icon: "Gr", severity: "positive", title: "Growth Momentum Is Strong",
       message: `The forecast indicates accelerating growth of approximately ${fmt1(growthPct)}% versus the prior year. Current trend direction is ${trendDirection.toLowerCase()}.`
     });
     actionItems.push("Review the highest-performing dimensions to identify where growth is coming from and whether it can be replicated.");
   } else if (growthLevel === "Growing") {
     insights.push({
-      category: "Growth", icon: "\u{1F4C8}", severity: "positive", title: "Growth Trend Is Positive",
+      category: "Growth", icon: "Gr", severity: "positive", title: "Growth Trend Is Positive",
       message: `The data is projected to grow by approximately ${fmt1(growthPct)}% versus the prior year, suggesting positive but controlled expansion.`
     });
   } else if (growthLevel === "Declining") {
     insights.push({
-      category: "Growth", icon: "\u{1F4C8}", severity: "risk", title: "Growth Trend Is Declining",
+      category: "Growth", icon: "Gr", severity: "risk", title: "Growth Trend Is Declining",
       message: `The forecast indicates a decline of approximately ${fmt1(Math.abs(growthPct))}% versus the prior year. This may warrant review of where volume is being lost.`
     });
     actionItems.push("Investigate whether the decline is concentrated in specific dimensions (regions, categories, channels, etc.).");
   } else {
     insights.push({
-      category: "Growth", icon: "\u{1F4C8}", severity: "neutral", title: "Growth Trend Is Relatively Flat",
+      category: "Growth", icon: "Gr", severity: "neutral", title: "Growth Trend Is Relatively Flat",
       message: `The current forecast shows limited movement versus the prior year at approximately ${fmt1(growthPct)}%.`
     });
   }
 
   if (goalStatus === "Projected Above Goal") {
     insights.push({
-      category: "Goal", icon: "\u{1F3C1}", severity: "positive", title: "Projected Above Goal",
+      category: "Goal", icon: "Gl", severity: "positive", title: "Projected Above Goal",
       message: `Current trends suggest the selected scope may finish above goal by approximately ${fmt0(Math.abs(projectedGapToGoal))}.`
     });
   } else if (goalStatus === "Projected Below Goal") {
     insights.push({
-      category: "Goal", icon: "\u{1F3C1}", severity: "risk", title: "Projected Below Goal",
+      category: "Goal", icon: "Gl", severity: "risk", title: "Projected Below Goal",
       message: `Current trends suggest the selected scope may finish below goal by approximately ${fmt0(Math.abs(projectedGapToGoal))}.`
     });
     actionItems.push("Compare the required pace to recent performance to determine whether the gap is realistically recoverable.");
   } else {
     insights.push({
-      category: "Goal", icon: "\u{1F3C1}", severity: "neutral", title: "No Goal Applied",
+      category: "Goal", icon: "Gl", severity: "neutral", title: "No Goal Applied",
       message: "No goal is currently applied, so goal-based variance is not being evaluated."
     });
   }
@@ -258,18 +258,18 @@ BookOfBusinessAnalyzer.prototype.generateAiInsights = function (params) {
   if (recurrenceAvailable) {
     if (retentionLevel === "Strong") {
       insights.push({
-        category: "Retention", icon: "✅", severity: "positive", title: "Repeat Rate Is Strong",
+        category: "Retention", icon: "Rt", severity: "positive", title: "Repeat Rate Is Strong",
         message: `The repeat rate is currently ${fmt1(repeatRate)}%, indicating healthy persistency across the selected data.`
       });
     } else if (retentionLevel === "Watch") {
       insights.push({
-        category: "Retention", icon: "✅", severity: "warning", title: "Repeat Rate Should Be Watched",
+        category: "Retention", icon: "Rt", severity: "warning", title: "Repeat Rate Should Be Watched",
         message: `The repeat rate is currently ${fmt1(repeatRate)}%. This is not critical, but it may deserve monitoring.`
       });
       actionItems.push("Look at repeat entities by dimension to identify where retention is softening.");
     } else {
       insights.push({
-        category: "Retention", icon: "✅", severity: "risk", title: "Retention Risk Detected",
+        category: "Retention", icon: "Rt", severity: "risk", title: "Retention Risk Detected",
         message: `The repeat rate is currently ${fmt1(repeatRate)}%, which may indicate elevated attrition risk.`
       });
       actionItems.push("Prioritize reviewing entities that were active in the prior year but are not appearing in the current year.");
@@ -278,18 +278,18 @@ BookOfBusinessAnalyzer.prototype.generateAiInsights = function (params) {
 
   if (concentrationLevel === "High") {
     insights.push({
-      category: "Risk", icon: "⚠️", severity: "risk", title: "High Concentration Risk",
+      category: "Risk", icon: "Rk", severity: "risk", title: "High Concentration Risk",
       message: `The HHI concentration index is ${fmt0(hhiIndex)}, which suggests elevated concentration exposure. ${anomalyCount} concentration outlier(s) were detected.`
     });
     actionItems.push("Review the largest entities and determine whether the selected scope is overly dependent on a small number of high-value relationships.");
   } else if (concentrationLevel === "Moderate") {
     insights.push({
-      category: "Risk", icon: "⚠️", severity: "warning", title: "Moderate Concentration Risk",
+      category: "Risk", icon: "Rk", severity: "warning", title: "Moderate Concentration Risk",
       message: `The HHI concentration index is ${fmt0(hhiIndex)}, suggesting moderate concentration. This is manageable, but still worth monitoring.`
     });
   } else {
     insights.push({
-      category: "Risk", icon: "⚠️", severity: "positive", title: "Concentration Appears Controlled",
+      category: "Risk", icon: "Rk", severity: "positive", title: "Concentration Appears Controlled",
       message: `The HHI concentration index is ${fmt0(hhiIndex)}, suggesting the selected data is not overly concentrated.`
     });
   }
@@ -297,31 +297,31 @@ BookOfBusinessAnalyzer.prototype.generateAiInsights = function (params) {
   if (recurrenceAvailable && totalSplitValue > 0) {
     if (newValueShare >= 35) {
       insights.push({
-        category: "Mix", icon: "\u{1F9ED}", severity: "positive", title: "New Entity Contribution Is Strong",
+        category: "Mix", icon: "Mx", severity: "positive", title: "New Entity Contribution Is Strong",
         message: `New entities represent approximately ${fmt1(newValueShare)}% of ${metricLabel}, indicating strong contribution from new activity.`
       });
     } else if (newValueShare >= 15) {
       insights.push({
-        category: "Mix", icon: "\u{1F9ED}", severity: "neutral", title: "Mix Is Repeat-Led With Meaningful New Activity",
+        category: "Mix", icon: "Mx", severity: "neutral", title: "Mix Is Repeat-Led With Meaningful New Activity",
         message: `Repeat entities represent approximately ${fmt1(repeatValueShare)}% of ${metricLabel}, while new entities contribute ${fmt1(newValueShare)}%.`
       });
     } else {
       insights.push({
-        category: "Mix", icon: "\u{1F9ED}", severity: "warning", title: "Heavily Repeat-Dependent",
+        category: "Mix", icon: "Mx", severity: "warning", title: "Heavily Repeat-Dependent",
         message: `New entities represent only ${fmt1(newValueShare)}% of ${metricLabel}. The selected data appears highly dependent on repeat activity.`
       });
       actionItems.push("Review whether new-entity activity is sufficient to offset future attrition.");
     }
   } else if (recurrenceAvailable && totalSplitCount > 0) {
     insights.push({
-      category: "Mix", icon: "\u{1F9ED}", severity: "neutral", title: "Mix Available By Entity Count",
+      category: "Mix", icon: "Mx", severity: "neutral", title: "Mix Available By Entity Count",
       message: `New entities represent approximately ${fmt1(newCountShare)}% of records, while repeat entities represent ${fmt1(repeatCountShare)}%.`
     });
   }
 
   if (topDimensionName) {
     insights.push({
-      category: "Opportunity", icon: "\u{1F3AF}", severity: topDimensionShare >= 20 ? "positive" : "neutral", title: "Largest Segment Opportunity",
+      category: "Opportunity", icon: "Op", severity: topDimensionShare >= 20 ? "positive" : "neutral", title: "Largest Segment Opportunity",
       message: `${topDimensionName} is the largest visible group in the selected scope, representing approximately ${fmt1(topDimensionShare)}% of measured volume. This may be useful for deeper opportunity review.`
     });
     if (topDimensionShare >= 35) {
@@ -331,12 +331,12 @@ BookOfBusinessAnalyzer.prototype.generateAiInsights = function (params) {
 
   if (paretoRatio <= 10) {
     insights.push({
-      category: "Risk", icon: "⚠️", severity: "risk", title: "Pareto Dependency Is Elevated",
+      category: "Risk", icon: "Rk", severity: "risk", title: "Pareto Dependency Is Elevated",
       message: `Approximately ${fmt1(paretoRatio)}% of entities appear to drive 80% of selected ${metricLabel}, which suggests a concentrated dependency profile.`
     });
   } else if (paretoRatio <= 25) {
     insights.push({
-      category: "Risk", icon: "⚠️", severity: "warning", title: "Pareto Distribution Is Moderately Concentrated",
+      category: "Risk", icon: "Rk", severity: "warning", title: "Pareto Distribution Is Moderately Concentrated",
       message: `Approximately ${fmt1(paretoRatio)}% of entities appear to drive 80% of selected ${metricLabel}.`
     });
   }
