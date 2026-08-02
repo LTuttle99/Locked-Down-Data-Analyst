@@ -27,9 +27,9 @@
         </button>
     </div>
 
-    <main class="page max-w-2xl mx-auto bg-white shadow-sm border border-slate-200 rounded-xl p-10 mb-10">
+    <main class="page max-w-2xl mx-auto bg-white shadow-sm border border-slate-200 rounded-xl p-6 sm:p-10 mb-10">
 
-        <div class="flex items-center justify-between mb-8">
+        <div class="flex flex-wrap items-center justify-between gap-3 mb-8">
             <div class="flex items-center gap-3">
                 <div class="h-10 w-10 rounded bg-[#00133C] flex items-center justify-center font-bold text-white text-lg" aria-hidden="true">H</div>
                 <h1 class="text-xl font-semibold tracking-wide text-[#00133C]">
@@ -45,7 +45,7 @@
             Welcome to the Data and <span class="text-[#DC6803]">Analytics</span> Hub
         </h2>
         <p class="text-slate-600 leading-relaxed mb-8">
-            This is a quick guide to getting started. It takes about two minutes to read, and you
+            This is a quick guide to getting started. It takes about three minutes to read, and you
             won't need anything besides the code you were given.
         </p>
 
@@ -54,7 +54,7 @@
             <p class="text-slate-700 leading-relaxed mb-3">
                 When you open the hub, you'll see a black screen with a number pad and the words
                 <span class="font-semibold">"Enter Access Code."</span> Type in the code you were
-                given. That's it — no username, no password, no account to create.
+                given. That's it. No username, no password, no account to create.
             </p>
             <p class="text-slate-700 leading-relaxed">
                 If you type the code correctly, you'll see a quick "Access Granted" message before
@@ -63,39 +63,75 @@
         </section>
 
         <section class="mb-8">
-            <h3 class="text-sm font-semibold uppercase tracking-wider text-[#0062F1] mb-3">2. What You'll See</h3>
+            <h3 class="text-sm font-semibold uppercase tracking-wider text-[#0062F1] mb-3">2. Finding Your Way Around</h3>
             <p class="text-slate-700 leading-relaxed mb-3">
-                Your code unlocks a specific set of tools picked for your team — not the whole
-                hub. That's intentional: everyone sees exactly what's relevant to their work, and
-                nothing they don't need. If you think you're missing a tool you need, just reach
-                out (see the bottom of this page).
+                Your code unlocks a specific set of tools picked for your team, not the whole hub.
+                That's intentional: everyone sees what's relevant to their work and nothing they
+                don't need. If you think you're missing something you need, just reach out (see the
+                bottom of this page).
             </p>
+            <p class="text-slate-700 leading-relaxed mb-3">
+                Tools are grouped into four sections so you can scan by what you're trying to do:
+            </p>
+            <ul class="space-y-2 text-slate-700 mb-4">
+                <li class="flex gap-2"><span class="text-[#0062F1] font-bold">&bull;</span><span><span class="font-semibold">Explore and Analyze</span> for understanding a file you already have: totals, trends, forecasts, charts, and summary statistics.</span></li>
+                <li class="flex gap-2"><span class="text-[#0062F1] font-bold">&bull;</span><span><span class="font-semibold">Clean and Combine</span> for tidying up messy data or putting two files together.</span></li>
+                <li class="flex gap-2"><span class="text-[#0062F1] font-bold">&bull;</span><span><span class="font-semibold">Generate and Encode</span> for making something new, like sample data or a QR code.</span></li>
+                <li class="flex gap-2"><span class="text-[#0062F1] font-bold">&bull;</span><span><span class="font-semibold">Text and Dev Utilities</span> for everyday odds and ends: comparing text, checking a date, converting units.</span></li>
+            </ul>
             <p class="text-slate-700 leading-relaxed">
-                There's a search box at the top of the page if you're looking for something
-                specific by name.
+                There are three ways to reach a tool. Click its card, type in the search box at the
+                top to filter, or press <span class="font-semibold">Ctrl and K together</span>
+                (<span class="font-semibold">Command and K</span> on a Mac) to open a jump box, type
+                a few letters, and press Enter. Tools you've opened recently also appear as
+                shortcuts near the top of the page.
             </p>
         </section>
 
         <section class="mb-8">
             <h3 class="text-sm font-semibold uppercase tracking-wider text-[#0062F1] mb-3">3. Using a Tool</h3>
             <p class="text-slate-700 leading-relaxed mb-3">
-                Click any card to open that tool. Each one does one thing — cleaning up a file,
-                comparing two documents, building a chart, generating a QR code, and so on. Most
-                either ask you to upload a file or just let you start typing right away.
+                Each tool does one thing. Most either ask you to pick a file or let you start typing
+                right away. Nothing installs, and there's no setup.
+            </p>
+            <p class="text-slate-700 leading-relaxed mb-3">
+                If you want to try something without hunting for a file first, several tools can
+                load their own example data. The Data Analyzer has a
+                <span class="font-semibold">"Load sample data"</span> button, the SQL Workbench has
+                <span class="font-semibold">"Load Sample Tables"</span>, and the Test Data Generator
+                builds a file to whatever shape you describe. Those are good places to start if you
+                just want to see what a tool does.
             </p>
             <p class="text-slate-700 leading-relaxed">
-                Everything runs right in your browser. Nothing you upload or type is ever sent
-                anywhere or saved on a server — there isn't one. Closing the tab clears whatever
-                you were working on, the same way closing a document without saving would.
+                Most tools let you download the result as a CSV or Excel file when you're done, so
+                you can carry it into a spreadsheet or into another tool here.
             </p>
         </section>
 
         <section class="mb-8">
-            <h3 class="text-sm font-semibold uppercase tracking-wider text-[#0062F1] mb-3">A Few Things to Know</h3>
+            <h3 class="text-sm font-semibold uppercase tracking-wider text-[#0062F1] mb-3">4. Where Your Data Goes</h3>
+            <p class="text-slate-700 leading-relaxed mb-3">
+                Nowhere. Every tool runs inside your own browser tab. There is no server behind this
+                hub to send anything to, so files you pick are read on your own machine and never
+                uploaded. Closing the tab clears whatever you were working on, the same way closing
+                a document without saving would.
+            </p>
+            <p class="text-slate-700 leading-relaxed">
+                Two small exceptions worth knowing. The hub remembers which tools you opened most
+                recently so it can offer shortcuts, and the Data Analyzer can save your filter
+                setups as named views. Both are kept only in your own browser on your own device,
+                and neither one stores any of your data. Your access code is never saved anywhere.
+            </p>
+        </section>
+
+        <section class="mb-8">
+            <h3 class="text-sm font-semibold uppercase tracking-wider text-slate-500 mb-3">A Few Things to Know</h3>
             <ul class="space-y-2 text-slate-700">
-                <li class="flex gap-2"><span class="text-[#0062F1]">•</span><span>You'll need to re-enter your code each time you open the hub — it isn't remembered between visits, by design.</span></li>
-                <li class="flex gap-2"><span class="text-[#0062F1]">•</span><span>Works on your phone or tablet too — the code screen and every tool adjust to a smaller screen.</span></li>
-                <li class="flex gap-2"><span class="text-[#0062F1]">•</span><span>Nothing to install and nothing to update — you're always using the latest version.</span></li>
+                <li class="flex gap-2"><span class="text-[#0062F1] font-bold">&bull;</span><span>You'll need to re-enter your code each time you open the hub. It isn't remembered between visits, by design.</span></li>
+                <li class="flex gap-2"><span class="text-[#0062F1] font-bold">&bull;</span><span>Works on your phone or tablet, though the tools that show wide tables are easier to read on a laptop.</span></li>
+                <li class="flex gap-2"><span class="text-[#0062F1] font-bold">&bull;</span><span>Nothing to install and nothing to update. You're always using the latest version.</span></li>
+                <li class="flex gap-2"><span class="text-[#0062F1] font-bold">&bull;</span><span>Very large files (hundreds of thousands of rows) will feel slow, because all the work happens on your own machine rather than on a server.</span></li>
+                <li class="flex gap-2"><span class="text-[#0062F1] font-bold">&bull;</span><span>When a tool reads an Excel workbook, it uses the first sheet.</span></li>
             </ul>
         </section>
 

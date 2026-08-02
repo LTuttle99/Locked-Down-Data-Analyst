@@ -233,7 +233,7 @@
 
             button.disabled = true;
             status.innerText = 'Running...';
-            await new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)));
+            await new Promise((resolve) => setTimeout(resolve, 0));
 
             try {
                 const result = runSqlOn(database, document.getElementById('sql-editor').value);

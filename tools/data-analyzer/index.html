@@ -1488,7 +1488,7 @@
 
             button.disabled = true;
             status.innerText = 'Running...';
-            await new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)));
+            await new Promise((resolve) => setTimeout(resolve, 0));
 
             try {
                 if (!SQL_DATABASE) await buildSqlDatabase();

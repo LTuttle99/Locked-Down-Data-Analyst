@@ -43,7 +43,14 @@ fully self-contained.
 WebAssembly and loaded lazily from a CDN the first time a query runs). It
 turns any set of parsed datasets into in-memory SQL tables. SQL Workbench
 uses it directly; Data Analyzer has its own copy in
-`tools/data-analyzer/js/sql-query.js` for the same self-containment reason. The purely text/paste-based tools (JSON Formatter,
+`tools/data-analyzer/js/sql-query.js` for the same self-containment reason.
+
+Three more shared modules hold logic that used to be duplicated inside
+individual tools, so it can be tested once rather than per tool:
+`tools/shared/stats.js` (mean, median, standard deviation, percentiles,
+histogram buckets), `tools/shared/match.js` (text normalization, business
+suffix stripping, Levenshtein distance, similarity), and
+`tools/shared/flatten.js` (nested JSON to flat rows). The purely text/paste-based tools (JSON Formatter,
 Timestamp Converter, Regex Tester, Text Diff, Color Tools, Text Analyzer,
 Base64/URL Encoder, Unit Converter) need no file parsing at all. Markdown
 Previewer is the only text-based tool with an external dependency (`marked`).
@@ -112,6 +119,16 @@ in your own browser tab; there's no server to send data to — which is also
 what keeps this safe to share as a team hub with no login and no backend.
 
 ## Testing
+
+There are two in-browser suites, both dependency-free. Open either via
+`./serve.sh` or by double-clicking it, and re-run them after touching the
+code they cover.
+
+`tests/shared.test.html` covers `tools/shared/`: CSV parsing and export,
+HTML escaping, SQL table-name sanitizing and type inference, summary
+statistics and percentiles, fuzzy matching, and JSON flattening. It loads the
+exact files the tools load, so a failure here means a failure in every tool
+that depends on that module (34 assertions).
 
 `tests/data-analyzer.test.html` is a small, self-contained in-browser test
 suite for the Data Analyzer's engine — regression math, seasonal forecasting,

@@ -44,6 +44,7 @@
     </main>
 
     <script src="../shared/parse.js"></script>
+    <script src="../shared/flatten.js"></script>
     <script>
         const input = document.getElementById('json-input');
         const statusBadge = document.getElementById('status-badge');
@@ -122,37 +123,6 @@
             validate();
         }
 
-        function flattenValue(value, prefix, out) {
-            if (value === null || value === undefined) {
-                out[prefix] = '';
-                return;
-            }
-            if (Array.isArray(value)) {
-                if (value.every(v => v === null || typeof v !== 'object')) {
-                    out[prefix] = value.join('; ');
-                } else {
-                    value.forEach((v, i) => flattenValue(v, `${prefix}[${i}]`, out));
-                }
-                return;
-            }
-            if (typeof value === 'object') {
-                for (const [k, v] of Object.entries(value)) {
-                    flattenValue(v, prefix ? `${prefix}.${k}` : k, out);
-                }
-                return;
-            }
-            out[prefix] = value;
-        }
-
-        function flattenRecord(record) {
-            const out = {};
-            flattenValue(record, '', out);
-            if (Object.keys(out).length === 1 && Object.keys(out)[0] === '') {
-                return { value: out[''] };
-            }
-            return out;
-        }
-
         function convertToCsv() {
             const parsed = validate();
             if (parsed === undefined) { showToast('Fix the JSON error before converting.'); return; }
@@ -162,12 +132,7 @@
             if (records.length === 0) { showToast('That array is empty, so there is nothing to convert.'); return; }
 
             const rows = records.map(flattenRecord);
-            const columns = [];
-            for (const row of rows) {
-                for (const key of Object.keys(row)) {
-                    if (!columns.includes(key)) columns.push(key);
-                }
-            }
+            const columns = unionColumns(rows);
 
             if (columns.length === 0) { showToast('No fields found to turn into columns.'); return; }
 
