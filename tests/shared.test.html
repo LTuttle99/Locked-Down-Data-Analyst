@@ -33,6 +33,7 @@
     <script src="../tools/shared/stats.js"></script>
     <script src="../tools/shared/match.js"></script>
     <script src="../tools/shared/flatten.js"></script>
+    <script src="../tools/shared/profile.js"></script>
 
     <script>
         const results = [];
@@ -273,6 +274,159 @@
         test('unionColumns keeps first-seen order across ragged records', () => {
             const cols = unionColumns([{ a: 1, b: 2 }, { b: 3, c: 4 }, { a: 5 }]);
             assertDeep(cols, ['a', 'b', 'c']);
+        });
+
+        function makeRows(n, fn) {
+            return Array.from({ length: n }, (_, i) => fn(i));
+        }
+
+        test('profileToDate accepts real date formats', () => {
+            assertTrue(profileToDate('2026-03-15') instanceof Date, 'ISO');
+            assertTrue(profileToDate('03/15/2026') instanceof Date, 'US slash');
+            assertTrue(profileToDate('3-15-2026') instanceof Date, 'US dash');
+            assertTrue(profileToDate(new Date(Date.UTC(2026, 2, 15))) instanceof Date, 'Date object');
+        });
+
+        test('profileToDate refuses prefixed ids and junk', () => {
+            assertEqual(profileToDate('CUST-0042'), null, 'prefixed id');
+            assertEqual(profileToDate('2042'), null, 'bare year');
+            assertEqual(profileToDate('not a date'), null, 'junk');
+            assertEqual(profileToDate('2026-13-45'), null, 'impossible date');
+        });
+
+        test('profileToNumber handles currency, commas and percent', () => {
+            assertEqual(profileToNumber('1234'), 1234);
+            assertEqual(profileToNumber('1,234.50'), 1234.5);
+            assertEqual(profileToNumber('$99.99'), 99.99);
+            assertEqual(profileToNumber('45%'), 45);
+            assertEqual(profileToNumber('abc'), null);
+        });
+
+        test('profileColumn detects a date column', () => {
+            const rows = makeRows(40, i => ({ d: `2026-0${(i % 9) + 1}-15` }));
+            const p = profileColumn(rows, 'd');
+            assertEqual(p.type, 'date');
+            assertTrue(p.monthsSpanned >= 2, 'spans months');
+        });
+
+        test('profileColumn detects a measure and excludes id columns', () => {
+            const rows = makeRows(60, i => ({ revenue: (i + 1) * 12.5, order_id: i + 1 }));
+            assertEqual(profileColumn(rows, 'revenue').type, 'number');
+            assertEqual(profileColumn(rows, 'order_id').type, 'identifier');
+        });
+
+        test('profileColumn treats a prefixed key as an identifier, not a date', () => {
+            const rows = makeRows(60, i => ({ customer_id: `CUST-${String(i).padStart(4, '0')}` }));
+            assertEqual(profileColumn(rows, 'customer_id').type, 'identifier');
+        });
+
+        test('profileColumn recognizes categories, booleans and constants', () => {
+            const rows = makeRows(60, i => ({
+                region: ['North', 'South', 'East'][i % 3],
+                active: i % 2 ? 'Yes' : 'No',
+                company: 'Acme'
+            }));
+            assertEqual(profileColumn(rows, 'region').type, 'category');
+            assertEqual(profileColumn(rows, 'active').type, 'boolean');
+            assertEqual(profileColumn(rows, 'company').type, 'constant');
+        });
+
+        test('profileColumn separates free text from identifiers', () => {
+            const rows = makeRows(80, i => ({
+                notes: `Some free text note number ${i} about the issue`,
+                ticket: `TKT-${1000 + i}`
+            }));
+            assertEqual(profileColumn(rows, 'notes').type, 'text');
+            assertEqual(profileColumn(rows, 'ticket').type, 'identifier');
+        });
+
+        test('profileColumn flags empty columns', () => {
+            const rows = makeRows(20, () => ({ notes: '' }));
+            assertEqual(profileColumn(rows, 'notes').type, 'empty');
+        });
+
+        test('profileColumn measures blank rate', () => {
+            const rows = makeRows(10, i => ({ v: i < 3 ? '' : 'x' }));
+            assertClose(profileColumn(rows, 'v').blankRate, 0.3, 0.001);
+        });
+
+        test('planDashboard makes a trend the hero when dates and a measure exist', () => {
+            const rows = makeRows(120, i => ({
+                'Order Date': `2026-${String((i % 12) + 1).padStart(2, '0')}-10`,
+                'Revenue': 100 + (i % 40),
+                'Region': ['North', 'South', 'East'][i % 3]
+            }));
+            const plan = planDashboard(profileDataset(['Order Date', 'Revenue', 'Region'], rows), rows);
+            assertEqual(plan.date, 'Order Date');
+            assertEqual(plan.measure, 'Revenue');
+            assertEqual(plan.blocks[0].kind, 'trend');
+            assertTrue(plan.blocks[0].hero, 'trend is hero');
+        });
+
+        test('planDashboard falls back to distribution when there is no date', () => {
+            const rows = makeRows(120, i => ({
+                'Score': (i % 50) + 1,
+                'Department': ['Finance', 'IT', 'HR'][i % 3]
+            }));
+            const plan = planDashboard(profileDataset(['Score', 'Department'], rows), rows);
+            assertEqual(plan.date, null);
+            assertEqual(plan.blocks[0].kind, 'distribution');
+        });
+
+        test('planDashboard still produces a view with no measure at all', () => {
+            const rows = makeRows(90, i => ({
+                'Department': ['Finance', 'IT', 'HR'][i % 3],
+                'Answer': i % 2 ? 'Yes' : 'No'
+            }));
+            const plan = planDashboard(profileDataset(['Department', 'Answer'], rows), rows);
+            assertEqual(plan.measure, null);
+            assertTrue(plan.blocks.length > 0, 'produced blocks');
+        });
+
+        test('planDashboard reports data quality issues', () => {
+            const rows = makeRows(40, i => ({
+                'Region': ['North', 'South'][i % 2],
+                'Empty': '',
+                'Same': 'constant',
+                'Patchy': i < 30 ? '' : 'value'
+            }));
+            const plan = planDashboard(profileDataset(['Region', 'Empty', 'Same', 'Patchy'], rows), rows);
+            assertTrue(plan.issues.some(i => i.includes('Empty')), 'flags empty column');
+            assertTrue(plan.issues.some(i => i.includes('Same')), 'flags constant column');
+            assertTrue(plan.issues.some(i => i.includes('Patchy')), 'flags mostly blank column');
+        });
+
+        test('planDashboard prefers a named measure over an arbitrary number', () => {
+            const rows = makeRows(80, i => ({ 'Revenue': 500 + i, 'Line Number': i % 7 }));
+            const plan = planDashboard(profileDataset(['Revenue', 'Line Number'], rows), rows);
+            assertEqual(plan.measure, 'Revenue');
+        });
+
+        test('aggregateBy rolls up and caps the long tail into Other', () => {
+            const rows = makeRows(300, i => ({ cat: `C${i % 40}`, amt: 1 }));
+            const out = aggregateBy(rows, 'cat', 'amt', 12);
+            assertEqual(out.length, 12);
+            assertTrue(out[out.length - 1].label.startsWith('Other'), 'has Other bucket');
+            assertEqual(out.reduce((s, r) => s + r.value, 0), 300);
+        });
+
+        test('aggregateBy counts rows when no measure is given', () => {
+            const rows = makeRows(30, i => ({ cat: i < 20 ? 'A' : 'B' }));
+            const out = aggregateBy(rows, 'cat', null);
+            assertEqual(out[0].label, 'A');
+            assertEqual(out[0].value, 20);
+        });
+
+        test('aggregateByMonth returns chronological months', () => {
+            const rows = [
+                { d: '2026-03-05', v: 1 },
+                { d: '2026-01-20', v: 2 },
+                { d: '2026-01-02', v: 3 },
+                { d: 'not a date', v: 9 }
+            ];
+            const out = aggregateByMonth(rows, 'd', 'v');
+            assertDeep(out.map(o => o.label), ['2026-01', '2026-03']);
+            assertEqual(out[0].value, 5);
         });
 
         const passed = results.filter(r => r.pass).length;

@@ -1,4 +1,4 @@
-# Team Analytics Hub
+# Data and Analytics Hub
 
 A static, backend-free home page for the team's data tools. `index.html` at
 the repo root is the hub landing page; each tool lives in its own folder
@@ -17,6 +17,7 @@ and a card on the landing page, and it's a new tool.
 | JSON Formatter | `tools/json-formatter/` | Validates, pretty-prints, and minifies JSON |
 | Timestamp Converter | `tools/timestamp-converter/` | Unix/date conversion across timezones, ISO 8601, relative time |
 | Column Statistics | `tools/column-stats/` | Per-column min/max/mean/median/stddev/nulls — instant data profiling, no mapping step |
+| Instant Dashboard | `tools/instant-dashboard/` | Profiles any file and builds a dashboard shaped around what it finds, with no column mapping or setup |
 | SQL Workbench | `tools/sql-workbench/` | Load CSV/Excel/JSON files as tables and query them with standard SQLite, including joins across files |
 | Lookup & Merge | `tools/lookup-merge/` | Match two files on a shared key and pull columns across, reporting unmatched rows |
 | Fuzzy Duplicate Finder | `tools/fuzzy-dupes/` | Finds near-duplicate values that exact deduplication misses, with an adjustable similarity threshold |
@@ -50,10 +51,17 @@ individual tools, so it can be tested once rather than per tool:
 `tools/shared/stats.js` (mean, median, standard deviation, percentiles,
 histogram buckets), `tools/shared/match.js` (text normalization, business
 suffix stripping, Levenshtein distance, similarity), and
-`tools/shared/flatten.js` (nested JSON to flat rows). The purely text/paste-based tools (JSON Formatter,
-Timestamp Converter, Regex Tester, Text Diff, Color Tools, Text Analyzer,
-Base64/URL Encoder, Unit Converter) need no file parsing at all. Markdown
-Previewer is the only text-based tool with an external dependency (`marked`).
+`tools/shared/flatten.js` (nested JSON to flat rows).
+
+`tools/shared/profile.js` holds the column profiling and dashboard planning
+that Instant Dashboard runs on. It decides what each column actually is
+(date, measure, category, identifier, free text) and which charts are worth
+drawing for the shape it found.
+
+The purely text/paste-based tools (JSON Formatter, Timestamp Converter, Regex
+Tester, Text Diff, Color Tools, Text Analyzer, Base64/URL Encoder, Unit
+Converter, JWT Decoder) need no file parsing at all. Markdown Previewer is the
+only text-based tool with an external dependency (`marked`).
 
 ## Hub features
 
@@ -66,8 +74,9 @@ Previewer is the only text-based tool with an external dependency (`marked`).
   the hub, stored in `localStorage` under `hub_recent_tools` and filtered to
   the current code's tools. This is the one thing the hub remembers between
   visits; the access code itself is still never stored.
-- **Categories** — tools are grouped into "Data & Files" (upload-a-file tools)
-  and "Text & Dev Utilities" (paste/type tools).
+- **Categories** — tools are grouped into four sections by what you are trying
+  to do: "Explore & Analyze", "Clean & Combine", "Generate & Encode", and
+  "Text & Dev Utilities". Sections with no visible tools hide themselves.
 - **Favicon** — every page (hub + all tools) shares the same navy/blue "H"
   favicon so browser tabs are recognizable.
 - **"What's New in Data"** — a static card near the top linking out to
@@ -89,12 +98,12 @@ Previewer is the only text-based tool with an external dependency (`marked`).
 
   | Code | View | Tools |
   |---|---|---|
-  | `1159` | Data Analyst | all 23 tools |
-  | `7284` | Leadership | Data Analyzer, Pivot & Chart Explorer, Chart Builder |
-  | `5931` | Marketing | QR Generator, Color Tools, Markdown Previewer, Text Analyzer, Chart Builder |
-  | `4067` | IT / Dev | JSON Formatter, Regex Tester, Base64/URL Encoder, Timestamp Converter, Text Diff, File Diff, SQL Workbench, Code Helper, JWT Decoder, Test Data Generator |
-  | `8412` | HR / Operations | Data Cleaner, Format Converter, Column Statistics, Timestamp Converter, Lookup & Merge, Fuzzy Duplicate Finder |
-  | `2650` | Finance | Data Analyzer, Column Statistics, Pivot & Chart Explorer, File Diff, SQL Workbench, Lookup & Merge, Chart Builder |
+  | `1159` | Data Analyst | all 24 tools |
+  | `7284` | Leadership | Data Analyzer, Instant Dashboard, Pivot & Chart Explorer, Chart Builder |
+  | `5931` | Marketing | QR Generator, Color Tools, Markdown Previewer, Text Analyzer, Chart Builder, Instant Dashboard |
+  | `4067` | IT / Dev | JSON Formatter, Regex Tester, Base64/URL Encoder, Timestamp Converter, Text Diff, File Diff, SQL Workbench, Code Helper, JWT Decoder, Test Data Generator, Instant Dashboard |
+  | `8412` | HR / Operations | Data Cleaner, Format Converter, Column Statistics, Timestamp Converter, Lookup & Merge, Fuzzy Duplicate Finder, Instant Dashboard |
+  | `2650` | Finance | Data Analyzer, Column Statistics, Pivot & Chart Explorer, File Diff, SQL Workbench, Lookup & Merge, Chart Builder, Instant Dashboard |
 
   A code is not remembered anywhere (no `localStorage`, no URL param), so it
   has to be re-entered on every fresh load by design, and there's no way to
@@ -126,9 +135,10 @@ code they cover.
 
 `tests/shared.test.html` covers `tools/shared/`: CSV parsing and export,
 HTML escaping, SQL table-name sanitizing and type inference, summary
-statistics and percentiles, fuzzy matching, and JSON flattening. It loads the
-exact files the tools load, so a failure here means a failure in every tool
-that depends on that module (34 assertions).
+statistics and percentiles, fuzzy matching, JSON flattening, and the column
+profiling behind Instant Dashboard. It loads the exact files the tools load, so
+a failure here means a failure in every tool that depends on that module
+(52 assertions).
 
 `tests/data-analyzer.test.html` is a small, self-contained in-browser test
 suite for the Data Analyzer's engine — regression math, seasonal forecasting,
@@ -181,7 +191,7 @@ every push to `main`. No server to restart, nothing to redeploy manually.
 ## Renaming the hub
 
 The landing page title, header text, and tagline are plain text/HTML at the
-top of the root `index.html` — edit `Team Analytics Hub` and the intro
+top of the root `index.html` — edit `Data and Analytics Hub` and the intro
 paragraph to your team's actual name. No build step, just save and push.
 
 ## Adding another tool

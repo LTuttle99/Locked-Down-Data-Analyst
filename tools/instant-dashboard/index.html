@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Instant Dashboard — Data and Analytics Hub</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600;700&display=swap" rel="stylesheet">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2300133C'/%3E%3Ctext x='16' y='23' font-family='Georgia,serif' font-size='19' fill='%230062F1' text-anchor='middle'%3EH%3C/text%3E%3C/svg%3E">
+    <style>
+        .font-serif-brand { font-family: 'Lora', ui-serif, Georgia, serif; }
+        @keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .rise { animation: rise 0.35s ease-out both; }
+        @media print {
+            header, .no-print { display: none !important; }
+            body { background: white !important; }
+        }
+    </style>
+</head>
+
+<body class="bg-slate-50 text-slate-900 min-h-screen font-sans">
+    <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2"></div>
+
+    <header class="border-b border-slate-200 bg-white px-8 py-4 flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+            <a href="../../index.html" class="text-xs text-slate-500 hover:text-[#0062F1]">&larr; Hub</a>
+            <div class="h-6 w-px bg-slate-100"></div>
+            <h1 class="text-lg font-semibold text-[#00133C]">Instant Dashboard</h1>
+        </div>
+        <div class="text-xs text-slate-600 bg-slate-50 px-3 py-1 rounded-full border border-slate-200">Drop a file, get a dashboard</div>
+    </header>
+
+    <main class="max-w-6xl mx-auto p-6 space-y-5">
+
+        <section id="intro" class="max-w-3xl">
+            <h2 class="font-serif-brand text-3xl leading-tight text-[#00133C] mb-3">
+                Give it any file. It decides what matters.
+            </h2>
+            <p class="text-sm text-slate-600 leading-relaxed">
+                No column mapping, no setup. It reads your file, works out which columns are dates,
+                measures, and categories, then builds a dashboard shaped around what it found. Sales
+                data gets a trend. Survey answers get distributions. Same tool, different result.
+            </p>
+        </section>
+
+        <section id="drop-card" class="bg-white border border-slate-200 rounded-xl p-6">
+            <div id="drop-zone" class="border-2 border-dashed border-slate-300 hover:border-[#0062F1] rounded-lg p-10 text-center cursor-pointer bg-slate-50 transition-colors">
+                <input type="file" id="file-input" accept=".csv,.xlsx,.xls,.xlsm,.json" class="hidden">
+                <svg class="mx-auto h-10 w-10 text-slate-400 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                <p class="text-sm font-medium text-slate-700">Drop a CSV, Excel, or JSON file here, or click to choose one</p>
+            </div>
+
+            <div class="mt-5 pt-5 border-t border-slate-200 flex flex-wrap items-center justify-center gap-3">
+                <p class="text-sm text-slate-600">No file handy? Try one of these shapes:</p>
+                <button onclick="loadDemo('sales')" type="button" class="bg-slate-50 hover:bg-slate-100 border border-slate-300 hover:border-[#0062F1] text-[#00133C] text-xs font-medium px-3 py-1.5 rounded-lg transition-colors">Sales over time</button>
+                <button onclick="loadDemo('survey')" type="button" class="bg-slate-50 hover:bg-slate-100 border border-slate-300 hover:border-[#0062F1] text-[#00133C] text-xs font-medium px-3 py-1.5 rounded-lg transition-colors">Survey responses</button>
+                <button onclick="loadDemo('inventory')" type="button" class="bg-slate-50 hover:bg-slate-100 border border-slate-300 hover:border-[#0062F1] text-[#00133C] text-xs font-medium px-3 py-1.5 rounded-lg transition-colors">Inventory list</button>
+            </div>
+        </section>
+
+        <section id="dashboard" class="hidden space-y-5">
+
+            <div class="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                    <h2 id="dash-title" class="text-lg font-semibold text-[#00133C]"></h2>
+                    <p id="dash-reading" class="text-xs text-slate-500 mt-1"></p>
+                </div>
+                <div class="flex flex-wrap gap-2 no-print">
+                    <button onclick="rebuild()" type="button" class="bg-white border border-slate-300 hover:border-[#0062F1] text-[#00133C] text-xs font-medium px-3 py-1.5 rounded-lg transition-colors">Rebuild</button>
+                    <button onclick="window.print()" type="button" class="bg-white border border-slate-300 hover:border-[#0062F1] text-[#00133C] text-xs font-medium px-3 py-1.5 rounded-lg transition-colors">Print / PDF</button>
+                    <button onclick="startOver()" type="button" class="bg-white border border-slate-300 hover:border-red-400 text-slate-600 hover:text-red-500 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors">New file</button>
+                </div>
+            </div>
+
+            <div id="kpi-row" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3"></div>
+
+            <div id="blocks" class="grid grid-cols-1 lg:grid-cols-2 gap-5"></div>
+
+            <div id="issues-card" class="hidden bg-amber-50 border border-amber-200 rounded-xl p-5">
+                <h3 class="text-sm font-semibold text-amber-800 mb-2">Worth knowing about this file</h3>
+                <ul id="issues-list" class="space-y-1 text-sm text-amber-800"></ul>
+            </div>
+
+            <details class="bg-white border border-slate-200 rounded-xl p-5">
+                <summary class="text-sm font-semibold text-slate-700 cursor-pointer">How it read your columns</summary>
+                <p class="text-[11px] text-slate-500 mt-2 mb-3">Every column, and what it was classified as. This is what drove the layout above.</p>
+                <div id="profile-table" class="overflow-x-auto"></div>
+            </details>
+
+        </section>
+    </main>
+
+    <script src="../shared/parse.js"></script>
+    <script src="../shared/profile.js"></script>
+    <script>
+        const TONES = {
+            navy: 'text-[#00133C]',
+            blue: 'text-[#0062F1]',
+            slate: 'text-slate-700',
+            amber: 'text-[#DC6803]',
+            emerald: 'text-emerald-600',
+            red: 'text-red-600'
+        };
+
+        const PALETTE = ['#0062F1', '#00133C', '#DC6803', '#059669', '#7C3AED', '#DB2777', '#0891B2', '#CA8A04', '#65A30D', '#E11D48', '#4F46E5', '#0D9488'];
+
+        let dataset = null;
+        let charts = [];
+
+        function showToast(message) {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = 'text-sm rounded-lg px-4 py-3 shadow-2xl max-w-md bg-red-50 border border-red-300 text-red-500';
+            toast.innerText = message;
+            container.appendChild(toast);
+            setTimeout(() => toast.remove(), 4000);
+        }
+
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+
+        dropZone.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) ingestFile(file);
+            e.target.value = '';
+        });
+
+        ['dragenter', 'dragover'].forEach((evt) => {
+            dropZone.addEventListener(evt, (e) => {
+                e.preventDefault();
+                dropZone.classList.add('border-[#0062F1]', 'bg-blue-50');
+            });
+        });
+
+        ['dragleave', 'drop'].forEach((evt) => {
+            dropZone.addEventListener(evt, (e) => {
+                e.preventDefault();
+                dropZone.classList.remove('border-[#0062F1]', 'bg-blue-50');
+            });
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            const file = e.dataTransfer.files[0];
+            if (file) ingestFile(file);
+        });
+
+        async function ingestFile(file) {
+            try {
+                const parsed = await parseFileToRows(file);
+                if (parsed.columns.length === 0 || parsed.rows.length === 0) {
+                    showToast('That file has no readable rows.');
+                    return;
+                }
+                dataset = { name: file.name, columns: parsed.columns, rows: parsed.rows };
+                rebuild();
+            } catch (err) {
+                showToast('Could not read that file: ' + err.message);
+            }
+        }
+
+        function destroyCharts() {
+            charts.forEach((c) => c.destroy());
+            charts = [];
+        }
+
+        function rebuild() {
+            if (!dataset) return;
+
+            destroyCharts();
+
+            const profiles = profileDataset(dataset.columns, dataset.rows);
+            const plan = planDashboard(profiles, dataset.rows);
+            const kpis = buildKpis(profiles, plan, dataset.rows);
+
+            document.getElementById('intro').classList.add('hidden');
+            document.getElementById('drop-card').classList.add('hidden');
+            document.getElementById('dashboard').classList.remove('hidden');
+
+            document.getElementById('dash-title').innerText = dataset.name;
+            document.getElementById('dash-reading').innerText = describePlan(plan, profiles);
+
+            renderKpis(kpis);
+            renderBlocks(plan);
+            renderIssues(plan.issues);
+            renderProfiles(profiles, plan);
+        }
+
+        function describePlan(plan, profiles) {
+            const bits = [`${plan.rowCount.toLocaleString()} rows`, `${profiles.length} columns`];
+            if (plan.date) bits.push(`dated by "${plan.date}"`);
+            if (plan.measure) bits.push(`measuring "${plan.measure}"`);
+            if (plan.dimensions.length > 0) bits.push(`grouped by ${plan.dimensions.slice(0, 3).map((d) => `"${d}"`).join(', ')}`);
+            else if (!plan.measure) bits.push('no obvious measure found, so this is a count-based view');
+            return bits.join(' &middot; ').replace(/&middot;/g, '·');
+        }
+
+        function renderKpis(kpis) {
+            document.getElementById('kpi-row').innerHTML = kpis.map((k, i) => `
+                <div class="bg-white border border-slate-200 rounded-xl p-4 rise" style="animation-delay:${i * 40}ms">
+                    <p class="text-[10px] font-semibold uppercase tracking-wider text-slate-500 truncate" title="${escapeHtml(k.label)}">${escapeHtml(k.label)}</p>
+                    <p class="text-2xl font-bold mt-1 ${TONES[k.tone] || TONES.navy}">${escapeHtml(k.value)}</p>
+                </div>
+            `).join('');
+        }
+
+        function blockTitle(block) {
+            if (block.kind === 'trend') return `${block.measure} over time`;
+            if (block.kind === 'volume') return 'Records over time';
+            if (block.kind === 'breakdown') return block.measure ? `${block.measure} by ${block.dimension}` : `Records by ${block.dimension}`;
+            if (block.kind === 'composition') return block.measure ? `Share of ${block.measure} by ${block.dimension}` : `Share of records by ${block.dimension}`;
+            if (block.kind === 'distribution') return `Spread of ${block.measure}`;
+            if (block.kind === 'compare') return `${block.measures[0]} against ${block.measures[1]}`;
+            return 'Chart';
+        }
+
+        function renderBlocks(plan) {
+            const container = document.getElementById('blocks');
+
+            container.innerHTML = plan.blocks.map((block, i) => `
+                <div class="bg-white border border-slate-200 rounded-xl p-5 rise ${block.hero ? 'lg:col-span-2' : ''}" style="animation-delay:${120 + i * 60}ms">
+                    <h3 class="text-sm font-semibold text-[#00133C] mb-1">${escapeHtml(blockTitle(block))}</h3>
+                    <p class="text-[10px] text-slate-500 mb-3">${escapeHtml(blockCaption(block))}</p>
+                    <div class="${block.hero ? 'h-80' : 'h-64'}">
+                        <canvas id="chart-${i}"></canvas>
+                    </div>
+                </div>
+            `).join('');
+
+            plan.blocks.forEach((block, i) => drawBlock(block, `chart-${i}`));
+        }
+
+        function blockCaption(block) {
+            if (block.kind === 'trend') return 'Totalled by month.';
+            if (block.kind === 'volume') return 'How many rows fall in each month.';
+            if (block.kind === 'breakdown') return 'Largest first. Small groups are combined into Other.';
+            if (block.kind === 'composition') return 'Few enough values to read as a share of the whole.';
+            if (block.kind === 'distribution') return 'How the values are spread across their range.';
+            if (block.kind === 'compare') return 'Each dot is one row.';
+            return '';
+        }
+
+        function baseOptions(extra = {}) {
+            return Object.assign({
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { ticks: { color: '#475569', font: { size: 10 } }, grid: { display: false } },
+                    y: { ticks: { color: '#475569', font: { size: 10 } }, grid: { color: '#e2e8f0' }, beginAtZero: true }
+                }
+            }, extra);
+        }
+
+        function drawBlock(block, canvasId) {
+            const ctx = document.getElementById(canvasId);
+            if (!ctx) return;
+            const rows = dataset.rows;
+
+            if (block.kind === 'trend' || block.kind === 'volume') {
+                const series = aggregateByMonth(rows, block.date, block.measure || null);
+                charts.push(new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: series.map((s) => s.label),
+                        datasets: [{
+                            data: series.map((s) => s.value),
+                            borderColor: PALETTE[0],
+                            backgroundColor: 'rgba(0,98,241,0.12)',
+                            fill: true,
+                            tension: 0.3,
+                            pointRadius: series.length > 40 ? 0 : 3
+                        }]
+                    },
+                    options: baseOptions()
+                }));
+                return;
+            }
+
+            if (block.kind === 'breakdown') {
+                const series = aggregateBy(rows, block.dimension, block.measure);
+                charts.push(new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: series.map((s) => s.label),
+                        datasets: [{ data: series.map((s) => s.value), backgroundColor: PALETTE[0] }]
+                    },
+                    options: baseOptions({ indexAxis: series.length > 6 ? 'y' : 'x' })
+                }));
+                return;
+            }
+
+            if (block.kind === 'composition') {
+                const series = aggregateBy(rows, block.dimension, block.measure, 6);
+                charts.push(new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: series.map((s) => s.label),
+                        datasets: [{
+                            data: series.map((s) => s.value),
+                            backgroundColor: series.map((_, i) => PALETTE[i % PALETTE.length]),
+                            borderColor: '#ffffff',
+                            borderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: true, position: 'right', labels: { boxWidth: 12, font: { size: 10 } } } }
+                    }
+                }));
+                return;
+            }
+
+            if (block.kind === 'distribution') {
+                const nums = rows.map((r) => profileToNumber(r[block.measure])).filter((n) => n !== null).sort((a, b) => a - b);
+                const buckets = 14;
+                const min = nums[0];
+                const max = nums[nums.length - 1];
+                const width = (max - min) / buckets || 1;
+                const counts = new Array(buckets).fill(0);
+
+                for (const n of nums) {
+                    let idx = Math.floor((n - min) / width);
+                    if (idx >= buckets) idx = buckets - 1;
+                    if (idx < 0) idx = 0;
+                    counts[idx]++;
+                }
+
+                charts.push(new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: counts.map((_, i) => formatCompact(min + i * width)),
+                        datasets: [{ data: counts, backgroundColor: PALETTE[0] }]
+                    },
+                    options: baseOptions({ scales: Object.assign(baseOptions().scales, { x: { ticks: { color: '#475569', font: { size: 9 }, maxRotation: 0 }, grid: { display: false } } }) })
+                }));
+                return;
+            }
+
+            if (block.kind === 'compare') {
+                const points = rows.map((r) => ({
+                    x: profileToNumber(r[block.measures[0]]),
+                    y: profileToNumber(r[block.measures[1]])
+                })).filter((p) => p.x !== null && p.y !== null).slice(0, 3000);
+
+                charts.push(new Chart(ctx, {
+                    type: 'scatter',
+                    data: { datasets: [{ data: points, backgroundColor: 'rgba(0,98,241,0.45)', pointRadius: 3 }] },
+                    options: baseOptions({
+                        scales: {
+                            x: { title: { display: true, text: block.measures[0], font: { size: 10 } }, ticks: { color: '#475569', font: { size: 10 } }, grid: { color: '#f1f5f9' } },
+                            y: { title: { display: true, text: block.measures[1], font: { size: 10 } }, ticks: { color: '#475569', font: { size: 10 } }, grid: { color: '#e2e8f0' } }
+                        }
+                    })
+                }));
+            }
+        }
+
+        function renderIssues(issues) {
+            const card = document.getElementById('issues-card');
+            if (!issues || issues.length === 0) {
+                card.classList.add('hidden');
+                return;
+            }
+            card.classList.remove('hidden');
+            document.getElementById('issues-list').innerHTML = issues.slice(0, 8)
+                .map((i) => `<li class="flex gap-2"><span class="font-bold">&bull;</span><span>${escapeHtml(i)}</span></li>`).join('');
+        }
+
+        function renderProfiles(profiles, plan) {
+            const roleOf = (p) => {
+                if (p.name === plan.date) return 'timeline';
+                if (p.name === plan.measure) return 'main measure';
+                if (plan.dimensions.includes(p.name)) return 'grouping';
+                return '';
+            };
+
+            document.getElementById('profile-table').innerHTML = `
+                <table class="w-full text-left text-xs">
+                    <thead><tr class="border-b border-slate-200 text-slate-600 uppercase">
+                        <th class="py-2 px-3">Column</th>
+                        <th class="py-2 px-3">Read as</th>
+                        <th class="py-2 px-3">Used for</th>
+                        <th class="py-2 px-3 text-right">Distinct</th>
+                        <th class="py-2 px-3 text-right">Blank</th>
+                    </tr></thead>
+                    <tbody class="divide-y divide-slate-100">
+                        ${profiles.map((p) => `
+                            <tr class="hover:bg-slate-50">
+                                <td class="py-2 px-3 font-medium text-slate-800 whitespace-nowrap">${escapeHtml(p.name)}</td>
+                                <td class="py-2 px-3"><span class="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">${escapeHtml(p.type)}</span></td>
+                                <td class="py-2 px-3 text-[#0062F1] font-medium">${escapeHtml(roleOf(p))}</td>
+                                <td class="py-2 px-3 text-right text-slate-700">${p.distinctCount.toLocaleString()}</td>
+                                <td class="py-2 px-3 text-right text-slate-700">${Math.round(p.blankRate * 100)}%</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+
+        function startOver() {
+            destroyCharts();
+            dataset = null;
+            document.getElementById('dashboard').classList.add('hidden');
+            document.getElementById('drop-card').classList.remove('hidden');
+            document.getElementById('intro').classList.remove('hidden');
+        }
+
+        function demoRandom(seed) {
+            let s = seed >>> 0;
+            return () => {
+                s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
+                return s / 4294967296;
+            };
+        }
+
+        function loadDemo(kind) {
+            const rand = demoRandom(20240115);
+            const today = new Date();
+            let columns;
+            let rows = [];
+
+            if (kind === 'sales') {
+                columns = ['Order Date', 'Region', 'Product', 'Channel', 'Revenue', 'Units'];
+                for (let i = 0; i < 900; i++) {
+                    const back = Math.floor(rand() * 540);
+                    const d = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() - back));
+                    const units = 1 + Math.floor(rand() * 9);
+                    rows.push({
+                        'Order Date': `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`,
+                        'Region': ['North America', 'EMEA', 'APAC', 'Latin America'][Math.floor(rand() * 4)],
+                        'Product': ['Software', 'Hardware', 'Services', 'Training', 'Support'][Math.floor(rand() * 5)],
+                        'Channel': ['Direct', 'Partner', 'Online'][Math.floor(rand() * 3)],
+                        'Revenue': Number((units * (400 + rand() * 4000)).toFixed(2)),
+                        'Units': units
+                    });
+                }
+            } else if (kind === 'survey') {
+                columns = ['Respondent', 'Department', 'Satisfaction', 'Would Recommend', 'Tenure Band', 'Comment'];
+                const openers = ['Overall', 'Honestly', 'On the whole', 'Day to day', 'Lately', 'In my team'];
+                const middles = ['the tooling', 'communication', 'workload', 'the onboarding', 'our process', 'scheduling'];
+                const enders = ['has improved a lot this year.', 'could be a lot better.', 'is about the same as last year.', 'is the main thing holding us back.', 'works well for me.', 'depends heavily on the project.'];
+                for (let i = 0; i < 420; i++) {
+                    rows.push({
+                        'Respondent': `R${String(i + 1).padStart(4, '0')}`,
+                        'Department': ['Finance', 'Operations', 'Marketing', 'IT', 'HR', 'Sales'][Math.floor(rand() * 6)],
+                        'Satisfaction': 1 + Math.floor(rand() * 5),
+                        'Would Recommend': rand() > 0.35 ? 'Yes' : 'No',
+                        'Tenure Band': ['Under 1 year', '1-3 years', '3-5 years', '5+ years'][Math.floor(rand() * 4)],
+                        'Comment': `${openers[Math.floor(rand() * openers.length)]}, ${middles[Math.floor(rand() * middles.length)]} ${enders[Math.floor(rand() * enders.length)]}`
+                    });
+                }
+            } else {
+                columns = ['SKU', 'Category', 'Warehouse', 'On Hand', 'Reorder Point', 'Unit Cost'];
+                for (let i = 0; i < 600; i++) {
+                    rows.push({
+                        'SKU': `SKU${String(1000 + i)}`,
+                        'Category': ['Fasteners', 'Tooling', 'Safety', 'Electrical', 'Consumables'][Math.floor(rand() * 5)],
+                        'Warehouse': ['Main', 'Overflow', 'East Dock'][Math.floor(rand() * 3)],
+                        'On Hand': Math.floor(rand() * 500),
+                        'Reorder Point': 20 + Math.floor(rand() * 80),
+                        'Unit Cost': Number((0.5 + rand() * 120).toFixed(2))
+                    });
+                }
+            }
+
+            dataset = { name: `${kind} sample`, columns, rows };
+            rebuild();
+        }
+    </script>
+</body>
+</html>
