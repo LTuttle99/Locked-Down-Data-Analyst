@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shared Modules — Test Suite</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2300133C'/%3E%3Ctext x='16' y='23' font-family='Georgia,serif' font-size='19' fill='%230062F1' text-anchor='middle'%3EH%3C/text%3E%3C/svg%3E">
+</head>
+<body class="bg-slate-50 text-slate-900 min-h-screen font-sans">
+
+    <header class="border-b border-slate-200 bg-white px-8 py-4">
+        <div class="flex items-center gap-3">
+            <a href="../index.html" class="text-xs text-slate-500 hover:text-[#0062F1]">&larr; Hub</a>
+            <div class="h-6 w-px bg-slate-100"></div>
+            <h1 class="text-xl font-semibold tracking-wide text-[#00133C]">Shared Modules <span class="text-[#0062F1] font-normal">Test Suite</span></h1>
+        </div>
+        <p class="text-xs text-slate-500 mt-1">
+            Covers the code in <code>tools/shared/</code> that the file-based tools all depend on:
+            CSV parsing and export, SQL table building, summary statistics, fuzzy matching, and
+            JSON flattening. These load the same files the real tools load, so a regression here
+            means a regression in every tool that uses them.
+        </p>
+    </header>
+
+    <main class="max-w-4xl mx-auto p-6 space-y-4">
+        <div id="summary" class="bg-white border border-slate-200 rounded-xl p-5"></div>
+        <div id="results" class="space-y-2"></div>
+    </main>
+
+    <script src="../tools/shared/parse.js"></script>
+    <script src="../tools/shared/sql.js"></script>
+    <script src="../tools/shared/stats.js"></script>
+    <script src="../tools/shared/match.js"></script>
+    <script src="../tools/shared/flatten.js"></script>
+
+    <script>
+        const results = [];
+
+        function test(name, fn) {
+            try {
+                fn();
+                results.push({ name, pass: true });
+            } catch (e) {
+                results.push({ name, pass: false, error: e.message });
+            }
+        }
+
+        function assertEqual(actual, expected, label) {
+            if (actual !== expected) {
+                throw new Error(`${label || 'assertEqual'}: expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
+            }
+        }
+
+        function assertDeep(actual, expected, label) {
+            const a = JSON.stringify(actual);
+            const b = JSON.stringify(expected);
+            if (a !== b) throw new Error(`${label || 'assertDeep'}: expected ${b}, got ${a}`);
+        }
+
+        function assertClose(actual, expected, tolerance, label) {
+            if (typeof actual !== 'number' || Number.isNaN(actual) || Math.abs(actual - expected) > tolerance) {
+                throw new Error(`${label || 'assertClose'}: expected ~${expected} (±${tolerance}), got ${actual}`);
+            }
+        }
+
+        function assertTrue(cond, label) {
+            if (!cond) throw new Error(label || 'assertTrue failed');
+        }
+
+        test('parseCSVText reads a simple table', () => {
+            const r = parseCSVText('a,b\n1,2\n3,4');
+            assertDeep(r.columns, ['a', 'b']);
+            assertEqual(r.rows.length, 2);
+            assertEqual(r.rows[0].a, '1');
+            assertEqual(r.rows[1].b, '4');
+        });
+
+        test('parseCSVText handles quoted fields with commas and escaped quotes', () => {
+            const r = parseCSVText('name,note\n"Gadget, Deluxe","He said ""hi"""');
+            assertEqual(r.rows[0].name, 'Gadget, Deluxe');
+            assertEqual(r.rows[0].note, 'He said "hi"');
+        });
+
+        test('parseCSVText turns empty cells into null', () => {
+            const r = parseCSVText('a,b,c\n1,,3');
+            assertEqual(r.rows[0].b, null);
+            assertEqual(r.rows[0].a, '1');
+        });
+
+        test('parseCSVText tolerates CRLF line endings and a trailing newline', () => {
+            const r = parseCSVText('a,b\r\n1,2\r\n');
+            assertEqual(r.rows.length, 1);
+            assertEqual(r.rows[0].b, '2');
+        });
+
+        test('parseCSVText handles newlines inside quoted fields', () => {
+            const r = parseCSVText('a,b\n"line one\nline two",x');
+            assertEqual(r.rows.length, 1);
+            assertEqual(r.rows[0].a, 'line one\nline two');
+        });
+
+        test('parseCSVText pads short rows rather than dropping columns', () => {
+            const r = parseCSVText('a,b,c\n1,2');
+            assertEqual(r.rows[0].c, null);
+        });
+
+        test('parseCSVText returns empty structures for empty input', () => {
+            const r = parseCSVText('');
+            assertDeep(r.columns, []);
+            assertDeep(r.rows, []);
+        });
+
+        test('rowsToCSV quotes only the cells that need it', () => {
+            const csv = rowsToCSV(['a', 'b'], [{ a: 'plain', b: 'has,comma' }]);
+            assertEqual(csv, 'a,b\nplain,"has,comma"');
+        });
+
+        test('rowsToCSV survives a round trip through parseCSVText', () => {
+            const columns = ['name', 'note'];
+            const rows = [{ name: 'Gadget, Deluxe', note: 'He said "hi"' }];
+            const back = parseCSVText(rowsToCSV(columns, rows));
+            assertEqual(back.rows[0].name, 'Gadget, Deluxe');
+            assertEqual(back.rows[0].note, 'He said "hi"');
+        });
+
+        test('escapeHtml neutralizes tag and attribute characters', () => {
+            assertEqual(escapeHtml('<script>'), '&lt;script&gt;');
+            assertEqual(escapeHtml('a"b\'c&d'), 'a&quot;b&#039;c&amp;d');
+            assertEqual(escapeHtml(null), '');
+        });
+
+        test('sqlTableNameFor sanitizes filenames into identifiers', () => {
+            const used = new Set();
+            assertEqual(sqlTableNameFor('Product Catalog 2026.csv', used), 'product_catalog_2026');
+            assertEqual(sqlTableNameFor('weird!!name.xlsx', used), 'weird_name');
+        });
+
+        test('sqlTableNameFor prefixes names that start with a digit', () => {
+            assertEqual(sqlTableNameFor('2026 report.csv', new Set()), 't_2026_report');
+        });
+
+        test('sqlTableNameFor resolves collisions with a numeric suffix', () => {
+            const used = new Set();
+            assertEqual(sqlTableNameFor('data.csv', used), 'data');
+            assertEqual(sqlTableNameFor('data.xlsx', used), 'data_2');
+            assertEqual(sqlTableNameFor('data.json', used), 'data_3');
+        });
+
+        test('quoteSqlIdentifier wraps and escapes embedded quotes', () => {
+            assertEqual(quoteSqlIdentifier('Order Date'), '"Order Date"');
+            assertEqual(quoteSqlIdentifier('we"ird'), '"we""ird"');
+        });
+
+        test('sqlColumnIsNumeric requires every non-blank value to be numeric', () => {
+            const rows = [{ n: '1' }, { n: '2.5' }, { n: '' }, { n: null }];
+            assertTrue(sqlColumnIsNumeric(rows, 'n'), 'numeric column');
+            assertTrue(!sqlColumnIsNumeric([{ n: '1' }, { n: 'abc' }], 'n'), 'mixed column');
+            assertTrue(!sqlColumnIsNumeric([{ n: '' }, { n: null }], 'n'), 'all blank column');
+        });
+
+        test('sqlColumnIsNumeric does not treat prefixed ids as numbers', () => {
+            const rows = [{ id: 'CUST0001' }, { id: 'CUST0002' }];
+            assertTrue(!sqlColumnIsNumeric(rows, 'id'), 'prefixed ids stay text');
+        });
+
+        test('sqlValueFor coerces by column type and preserves dates as ISO text', () => {
+            assertEqual(sqlValueFor('42', true), 42);
+            assertEqual(sqlValueFor('42', false), '42');
+            assertEqual(sqlValueFor('', true), null);
+            assertEqual(sqlValueFor(new Date(Date.UTC(2026, 0, 15)), false), '2026-01-15');
+        });
+
+        test('sqlToNumber rejects values that only look numeric', () => {
+            assertEqual(sqlToNumber('12'), 12);
+            assertEqual(sqlToNumber('1,234'), null);
+            assertEqual(sqlToNumber('12px'), null);
+            assertEqual(sqlToNumber(''), null);
+        });
+
+        test('statsPercentile interpolates between neighbours', () => {
+            const sorted = Array.from({ length: 100 }, (_, i) => i + 1);
+            assertClose(statsPercentile(sorted, 0.25), 25.75, 0.001);
+            assertClose(statsPercentile(sorted, 0.5), 50.5, 0.001);
+            assertClose(statsPercentile(sorted, 0.75), 75.25, 0.001);
+            assertEqual(statsPercentile([7], 0.5), 7);
+            assertEqual(statsPercentile([], 0.5), null);
+        });
+
+        test('statsMedian handles odd and even lengths', () => {
+            assertEqual(statsMedian([1, 2, 3]), 2);
+            assertEqual(statsMedian([1, 2, 3, 4]), 2.5);
+            assertEqual(statsMedian([]), null);
+        });
+
+        test('statsStdDev matches a hand-computed population value', () => {
+            assertClose(statsStdDev([2, 4, 4, 4, 5, 5, 7, 9]), 2, 0.0001);
+            assertEqual(statsStdDev([5]), 0);
+        });
+
+        test('statsHistogram distributes values across buckets', () => {
+            const counts = statsHistogram([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], 12);
+            assertEqual(counts.length, 12);
+            assertEqual(counts.reduce((a, b) => a + b, 0), 12);
+        });
+
+        test('statsHistogram collapses when every value is identical', () => {
+            assertDeep(statsHistogram([5, 5, 5]), [3]);
+        });
+
+        test('normalizeForMatch strips punctuation and case', () => {
+            assertEqual(normalizeForMatch('Acme Corp.', false), 'acme corp');
+            assertEqual(normalizeForMatch('  ACME   CORP  ', false), 'acme corp');
+        });
+
+        test('normalizeForMatch removes business suffixes when asked', () => {
+            assertEqual(normalizeForMatch('Acme Corporation', true), 'acme');
+            assertEqual(normalizeForMatch('Globex Inc', true), 'globex');
+            assertEqual(normalizeForMatch('Acme Holdings Group', true), 'acme');
+        });
+
+        test('normalizeForMatch never strips a name down to nothing', () => {
+            assertEqual(normalizeForMatch('Corp', true), 'corp');
+            assertEqual(normalizeForMatch('Inc', true), 'inc');
+        });
+
+        test('levenshtein counts single edits correctly', () => {
+            assertEqual(levenshtein('kitten', 'sitting'), 3);
+            assertEqual(levenshtein('abc', 'abc'), 0);
+            assertEqual(levenshtein('', 'abc'), 3);
+        });
+
+        test('similarity is symmetric and bounded', () => {
+            assertEqual(similarity('abc', 'abc'), 1);
+            assertClose(similarity('kitten', 'sitting'), 1 - 3 / 7, 0.0001);
+            assertEqual(similarity('kitten', 'sitting'), similarity('sitting', 'kitten'));
+            assertEqual(similarity('', ''), 1);
+        });
+
+        test('suffix stripping makes Acme variants an exact match', () => {
+            const a = normalizeForMatch('Acme Corp', true);
+            const b = normalizeForMatch('ACME CORPORATION', true);
+            assertEqual(a, b);
+            assertEqual(similarity(a, b), 1);
+        });
+
+        test('flattenRecord expands nested objects with dot paths', () => {
+            const out = flattenRecord({ id: 1, meta: { tier: 'Gold', score: 9 } });
+            assertEqual(out['meta.tier'], 'Gold');
+            assertEqual(out['meta.score'], 9);
+            assertEqual(out.id, 1);
+        });
+
+        test('flattenRecord joins scalar arrays and indexes object arrays', () => {
+            const scalars = flattenRecord({ tags: ['a', 'b'] });
+            assertEqual(scalars.tags, 'a; b');
+
+            const objects = flattenRecord({ items: [{ n: 1 }, { n: 2 }] });
+            assertEqual(objects['items[0].n'], 1);
+            assertEqual(objects['items[1].n'], 2);
+        });
+
+        test('flattenRecord wraps a bare scalar under a value key', () => {
+            assertDeep(flattenRecord('hello'), { value: 'hello' });
+        });
+
+        test('flattenRecord turns null and undefined into empty strings', () => {
+            const out = flattenRecord({ a: null, b: undefined });
+            assertEqual(out.a, '');
+            assertEqual(out.b, '');
+        });
+
+        test('unionColumns keeps first-seen order across ragged records', () => {
+            const cols = unionColumns([{ a: 1, b: 2 }, { b: 3, c: 4 }, { a: 5 }]);
+            assertDeep(cols, ['a', 'b', 'c']);
+        });
+
+        const passed = results.filter(r => r.pass).length;
+        const total = results.length;
+
+        document.getElementById('summary').innerHTML = `
+            <p class="text-2xl font-bold ${passed === total ? 'text-emerald-600' : 'text-red-600'}">${passed} / ${total} tests passed</p>
+        `;
+
+        document.getElementById('results').innerHTML = results.map(r => `
+            <div class="bg-white border ${r.pass ? 'border-slate-200' : 'border-red-300'} rounded-lg px-4 py-2.5 flex items-start gap-3">
+                <span class="text-[10px] font-bold px-1.5 py-0.5 rounded ${r.pass ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}">${r.pass ? 'PASS' : 'FAIL'}</span>
+                <div>
+                    <p class="text-sm text-slate-800">${escapeHtml(r.name)}</p>
+                    ${r.pass ? '' : `<p class="text-xs text-red-600 font-mono mt-1">${escapeHtml(r.error)}</p>`}
+                </div>
+            </div>
+        `).join('');
+
+        console.log(`${passed}/${total} tests passed`);
+    </script>
+</body>
+</html>

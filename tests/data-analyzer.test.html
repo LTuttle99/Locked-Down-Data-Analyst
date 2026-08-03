@@ -25,7 +25,6 @@
         <div id="results" class="space-y-2"></div>
     </main>
 
-    <!-- Same engine files the Data Analyzer itself loads, in the same order. -->
     <script src="../tools/data-analyzer/js/core.js"></script>
     <script src="../tools/data-analyzer/js/schema.js"></script>
     <script src="../tools/data-analyzer/js/forecast.js"></script>
@@ -65,10 +64,6 @@
             const [y, m, day] = iso.split('-').map(Number);
             return new Date(Date.UTC(y, m - 1, day));
         }
-
-        // ============================================================
-        // Core helpers: coercion, stats, regression, dates
-        // ============================================================
 
         test('toNumber parses numeric strings and rejects junk', () => {
             assertEqual(toNumber('123.45'), 123.45);
@@ -119,10 +114,6 @@
             assertClose(reg.predict(10), 5, 1e-9);
         });
 
-        // ============================================================
-        // CSV parsing
-        // ============================================================
-
         test('parseCSVText handles quoted fields with embedded commas and escaped quotes', () => {
             const csv = 'name,note\n"Acme, Inc.","She said ""hi"""\nGlobex,plain\n';
             const { columns, rows } = parseCSVText(csv);
@@ -148,10 +139,6 @@
             ];
             assertEqual(countDuplicateRows(rows, columns), 1);
         });
-
-        // ============================================================
-        // Schema inference
-        // ============================================================
 
         test('inferSchema picks the right metric, timeline, entity, and dimension columns', () => {
             const columns = ['order_id', 'order_date', 'revenue', 'region', 'customer'];
@@ -191,10 +178,6 @@
             assertTrue(quality.warnings.some((w) => w.toLowerCase().includes('duplicate')), 'should warn about duplicates');
         });
 
-        // ============================================================
-        // runAnalysis: KPIs and HHI concentration
-        // ============================================================
-
         test('runAnalysis computes total, average, and HHI correctly for a known split', () => {
             const columns = ['date', 'amount', 'region'];
             const rows = [
@@ -215,21 +198,16 @@
 
             assertEqual(res.kpis.total_metric_value, 1000);
             assertClose(res.kpis.avg_entity_value, 1000 / 3, 1e-6);
-            // Shares are 60%, 30%, 10% -> HHI = 60^2 + 30^2 + 10^2 = 4600
             assertClose(res.kpis.hhi_index, 4600, 1e-6);
             assertEqual(res.entity_split.classification_method, 'unavailable');
         });
 
-        // ============================================================
-        // New vs. Repeat entity classification (the 30-day rule)
-        // ============================================================
-
         test('entity split classifies New vs Repeat using the 30-day first-seen rule', () => {
             const columns = ['date', 'amount', 'customer'];
             const rows = [
-                { date: '2024-01-01', amount: 100, customer: 'Cust1' },   // New (first-ever row)
-                { date: '2024-01-05', amount: 200, customer: 'Cust2' },   // New (first-seen)
-                { date: '2024-03-10', amount: 50, customer: 'Cust2' }     // Repeat (65 days after first-seen)
+                { date: '2024-01-01', amount: 100, customer: 'Cust1' },
+                { date: '2024-01-05', amount: 200, customer: 'Cust2' },
+                { date: '2024-03-10', amount: 50, customer: 'Cust2' }
             ];
             const analyzer = new BookOfBusinessAnalyzer(rows, columns, 'fixture.csv');
             const res = analyzer.runAnalysis({
@@ -248,10 +226,6 @@
             assertEqual(res.entity_split.new_value, 300, '100 (Cust1) + 200 (Cust2 first purchase)');
             assertEqual(res.entity_split.repeat_value, 50);
         });
-
-        // ============================================================
-        // Goal pacing status
-        // ============================================================
 
         test('computeGoals classifies ahead / on_pace / behind / no_goal_set correctly', () => {
             const columns = ['date', 'amount'];
@@ -285,19 +259,13 @@
             assertEqual(analyzer.roundTarget(-5), 0);
         });
 
-        // ============================================================
-        // Month-over-month anomaly detection
-        // ============================================================
-
         test('detectTrendAnomalies flags a real spike but not a flat series', () => {
             const columns = ['date', 'amount', 'region'];
             const rows = [];
-            // Region X: flat at 1000 for 4 months, then spikes to 2000.
             ['2024-01-05', '2024-02-05', '2024-03-05', '2024-04-05'].forEach((date) => {
                 rows.push({ date, amount: 1000, region: 'X' });
             });
             rows.push({ date: '2024-05-05', amount: 2000, region: 'X' });
-            // Region Y: flat the whole time, should never be flagged.
             ['2024-01-05', '2024-02-05', '2024-03-05', '2024-04-05', '2024-05-05'].forEach((date) => {
                 rows.push({ date, amount: 500, region: 'Y' });
             });
@@ -310,10 +278,6 @@
             assertEqual(flags[0].scope_value, 'X');
             assertEqual(flags[0].direction, 'spike');
         });
-
-        // ============================================================
-        // Seasonal trend forecast — sanity checks on shape, not exact values
-        // ============================================================
 
         test('seasonalTrendForecast on a steady upward trend projects further growth with tight bands', () => {
             const columns = ['date', 'amount'];
@@ -333,10 +297,6 @@
             assertTrue(future[0].conservative_value <= future[0].expected_value && future[0].expected_value <= future[0].aggressive_value, 'conservative <= expected <= aggressive');
         });
 
-        // ============================================================
-        // Render results
-        // ============================================================
-
         const passCount = results.filter((r) => r.pass).length;
         const failCount = results.length - passCount;
 
@@ -350,7 +310,7 @@
         const resultsEl = document.getElementById('results');
         resultsEl.innerHTML = results.map((r) => `
             <div class="bg-white border ${r.pass ? 'border-slate-200' : 'border-red-300'} rounded-lg p-3 flex items-start gap-3">
-                <span class="text-sm font-bold ${r.pass ? 'text-emerald-600' : 'text-red-600'}">${r.pass ? '✓' : '✗'}</span>
+                <span class="text-[10px] font-bold px-1.5 py-0.5 rounded ${r.pass ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}">${r.pass ? 'PASS' : 'FAIL'}</span>
                 <div>
                     <p class="text-sm text-slate-800">${r.name}</p>
                     ${r.pass ? '' : `<p class="text-xs text-red-600 mt-1 font-mono">${r.error}</p>`}

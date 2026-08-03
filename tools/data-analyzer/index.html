@@ -160,6 +160,9 @@
                         </label>
 
                         <div class="flex gap-1">
+                            <button onclick="toggleCustomizePanel()" type="button" class="bg-slate-50 border border-slate-300 hover:border-[#0062F1] text-slate-900 text-xs font-medium px-3 py-2 rounded-lg transition-colors">
+                                Customize
+                            </button>
                             <button onclick="toggleSavedViewsPanel()" type="button" class="bg-slate-50 border border-slate-300 hover:border-[#0062F1] text-slate-900 text-xs font-medium px-3 py-2 rounded-lg transition-colors">
                                 Saved Views
                             </button>
@@ -321,6 +324,23 @@
                     <div id="data-files-list" class="flex flex-wrap gap-2"></div>
                 </div>
 
+                <div id="customize-panel" class="hidden bg-slate-100 border border-slate-200 rounded-lg p-4 space-y-3">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <p class="text-xs font-semibold text-slate-700">Choose What You See</p>
+                        <div class="flex flex-wrap gap-2">
+                            <button onclick="applyPanelPreset('all')" type="button" class="text-xs text-[#0062F1] hover:text-[#00133C] font-medium">Show all</button>
+                            <span class="text-slate-300">|</span>
+                            <button onclick="applyPanelPreset('leadership')" type="button" class="text-xs text-[#0062F1] hover:text-[#00133C] font-medium">Leadership</button>
+                            <button onclick="applyPanelPreset('finance')" type="button" class="text-xs text-[#0062F1] hover:text-[#00133C] font-medium">Finance</button>
+                            <button onclick="applyPanelPreset('minimal')" type="button" class="text-xs text-[#0062F1] hover:text-[#00133C] font-medium">Just the numbers</button>
+                        </div>
+                    </div>
+
+                    <p class="text-[10px] text-slate-500">Untick anything you do not need. Your choice is remembered on this device and is included when you save a view. Hidden panels are also left out of Print / PDF.</p>
+
+                    <div id="customize-list" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2"></div>
+                </div>
+
                 <div id="sql-panel" class="hidden bg-slate-100 border border-slate-200 rounded-lg p-4 space-y-3">
                     <div class="flex flex-wrap items-center justify-between gap-2">
                         <p class="text-xs font-semibold text-slate-700">Query Your Data With SQL</p>
@@ -410,7 +430,7 @@
 
             <div id="future-date-diagnostic" class="hidden text-xs text-amber-600 text-center bg-amber-50 border border-amber-200 rounded-lg py-2 px-4 mx-auto max-w-3xl"></div>
 
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+            <div data-panel="kpis" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
                 <div class="bg-white border border-slate-200 p-5 rounded-xl">
                     <p class="text-xs font-semibold uppercase tracking-wider text-slate-600">Total Metric Value</p>
                     <p class="text-2xl font-bold text-[#00133C] mt-1 tracking-tight" id="kpi-premium">$0</p>
@@ -442,7 +462,7 @@
                 </div>
             </div>
 
-            <section id="forecast-outlook-card" class="bg-white border border-purple-200 rounded-xl p-6">
+            <section id="forecast-outlook-card" data-panel="forecast" class="bg-white border border-purple-200 rounded-xl p-6">
                 <div class="flex items-center justify-between mb-4">
                     <div>
                         <h4 class="text-sm font-medium tracking-wide text-purple-600">Executive Forecast Outlook</h4>
@@ -503,7 +523,7 @@
                 </div>
             </section>
 
-            <section id="ai-insight-card" class="bg-white border border-cyan-200 rounded-xl p-6">
+            <section id="ai-insight-card" data-panel="insights" class="bg-white border border-cyan-200 rounded-xl p-6">
                 <div class="flex items-center justify-between mb-4">
                     <div>
                         <h4 class="text-sm font-medium tracking-wide text-cyan-600">AI Portfolio Insight Engine</h4>
@@ -540,7 +560,7 @@
                 </div>
             </section>
 
-            <section id="ask-question-card" class="bg-white border border-slate-200 rounded-xl p-6">
+            <section id="ask-question-card" data-panel="ask" class="bg-white border border-slate-200 rounded-xl p-6">
                 <h4 class="text-sm font-medium tracking-wide text-slate-700 mb-1">Ask a Question</h4>
                 <p class="text-xs text-slate-500 mb-4">
                     Answered directly from this dashboard's own numbers — no external service, so it recognizes
@@ -564,7 +584,7 @@
                 </div>
             </section>
 
-            <section id="entity-split-card" class="bg-white border border-slate-200 rounded-xl p-6 transition-opacity">
+            <section id="entity-split-card" data-panel="entity-split" class="bg-white border border-slate-200 rounded-xl p-6 transition-opacity">
                 <div class="flex items-center justify-between mb-4">
                     <h4 class="text-sm font-medium tracking-wide text-slate-700">New vs Repeat Entity Split</h4>
                     <span id="classification-method-badge" class="text-xs font-medium px-3 py-1 rounded-full bg-slate-100 text-slate-600">
@@ -595,7 +615,7 @@
                 </div>
             </section>
 
-            <section id="goal-vs-actual-card" class="bg-white border border-slate-200 rounded-xl p-6">
+            <section id="goal-vs-actual-card" data-panel="goals" class="bg-white border border-slate-200 rounded-xl p-6">
                 <div class="flex items-center justify-between mb-4">
                     <div>
                         <h4 class="text-sm font-medium tracking-wide text-slate-700">Goal vs Actual Pacing</h4>
@@ -613,7 +633,7 @@
             </section>
 
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div class="bg-white border border-slate-200 p-6 rounded-xl">
+                <div data-panel="trend" class="bg-white border border-slate-200 p-6 rounded-xl">
                     <h4 class="text-sm font-medium tracking-wide text-slate-700 mb-4" id="title-trend">
                         Historical Core Metric Timeline
                     </h4>
@@ -623,7 +643,7 @@
                     </div>
                 </div>
 
-                <div class="bg-white border border-slate-200 p-6 rounded-xl">
+                <div data-panel="segment" class="bg-white border border-slate-200 p-6 rounded-xl">
                     <div class="flex items-center justify-between mb-1">
                         <h4 class="text-sm font-medium tracking-wide text-slate-700" id="title-segment">
                             Segment Performance Share
@@ -639,7 +659,7 @@
                     </div>
                 </div>
 
-                <div class="bg-white border border-slate-200 p-6 rounded-xl">
+                <div data-panel="drivers" class="bg-white border border-slate-200 p-6 rounded-xl">
                     <h4 class="text-sm font-medium tracking-wide text-slate-700 mb-4">
                         Dimension Drivers of Change
                     </h4>
@@ -649,7 +669,7 @@
                     <div id="dimension-drivers-list" class="space-y-2 max-h-72 overflow-y-auto pr-1"></div>
                 </div>
 
-                <div class="bg-white border border-slate-200 p-6 rounded-xl">
+                <div data-panel="projection" class="bg-white border border-slate-200 p-6 rounded-xl">
                     <h4 class="text-sm font-medium tracking-wide text-slate-700 mb-4" id="title-projection">
                         Trend Projection Matrix, Next 12 Months
                     </h4>
@@ -659,7 +679,7 @@
                     </div>
                 </div>
 
-                <div class="bg-white border border-slate-200 p-6 rounded-xl">
+                <div data-panel="seasonality" class="bg-white border border-slate-200 p-6 rounded-xl">
                     <h4 class="text-sm font-medium tracking-wide text-slate-700 mb-4" id="title-season">
                         Seasonality Profile Variance
                     </h4>
@@ -669,7 +689,7 @@
                     </div>
                 </div>
 
-                <div class="bg-white border border-slate-200 p-6 rounded-xl lg:col-span-2">
+                <div data-panel="long-range" class="bg-white border border-slate-200 p-6 rounded-xl lg:col-span-2">
                     <div class="flex items-center justify-between mb-1">
                         <h4 class="text-sm font-medium tracking-wide text-slate-700">
                             Long-Range Forecast
@@ -718,7 +738,7 @@
             </div>
 
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <section class="bg-white border border-slate-200 rounded-xl p-6">
+                <section data-panel="concentration" class="bg-white border border-slate-200 rounded-xl p-6">
                     <h4 class="text-sm font-medium tracking-wide text-red-600 mb-4">
                         Key Risk Exposures and Concentration Outliers
                     </h4>
@@ -738,7 +758,7 @@
                     </div>
                 </section>
 
-                <section class="bg-white border border-slate-200 rounded-xl p-6">
+                <section data-panel="anomalies" class="bg-white border border-slate-200 rounded-xl p-6">
                     <h4 class="text-sm font-medium tracking-wide text-amber-600 mb-1">
                         Month-over-Month Spikes &amp; Drops
                     </h4>
@@ -811,6 +831,7 @@
                 runSqlFromEditor();
             }
         });
+
 
         async function uploadOneFile(file) {
             let data;
@@ -1062,6 +1083,7 @@
             document.getElementById('saved-views-panel').classList.add('hidden');
             document.getElementById('data-files-panel').classList.add('hidden');
             document.getElementById('sql-panel').classList.add('hidden');
+            document.getElementById('customize-panel').classList.add('hidden');
         }
 
         function toggleDataFilesPanel() {
@@ -1070,6 +1092,7 @@
             document.getElementById('goals-panel').classList.add('hidden');
             document.getElementById('saved-views-panel').classList.add('hidden');
             document.getElementById('sql-panel').classList.add('hidden');
+            document.getElementById('customize-panel').classList.add('hidden');
         }
 
         function renderDataFilesList() {
@@ -1388,6 +1411,7 @@
             document.getElementById('saved-views-panel').classList.add('hidden');
             document.getElementById('data-files-panel').classList.add('hidden');
             document.getElementById('sql-panel').classList.add('hidden');
+            document.getElementById('customize-panel').classList.add('hidden');
         }
 
         function toggleSavedViewsPanel() {
@@ -1396,6 +1420,116 @@
             document.getElementById('data-files-panel').classList.add('hidden');
             document.getElementById('sql-panel').classList.add('hidden');
             renderSavedViewsList();
+            document.getElementById('customize-panel').classList.add('hidden');
+        }
+
+        const PANEL_LAYOUT_KEY = 'bob_panel_layout';
+
+        const PANEL_DEFS = [
+            { id: 'kpis', label: 'Headline numbers' },
+            { id: 'forecast', label: 'Forecast outlook' },
+            { id: 'insights', label: 'Insight engine' },
+            { id: 'ask', label: 'Ask a question' },
+            { id: 'entity-split', label: 'New vs repeat split' },
+            { id: 'goals', label: 'Goal pacing' },
+            { id: 'trend', label: 'Historical trend' },
+            { id: 'segment', label: 'Segment share' },
+            { id: 'drivers', label: 'Drivers of change' },
+            { id: 'projection', label: 'Projection matrix' },
+            { id: 'seasonality', label: 'Seasonality profile' },
+            { id: 'long-range', label: 'Long-range forecast' },
+            { id: 'concentration', label: 'Concentration outliers' },
+            { id: 'anomalies', label: 'Spikes and drops' }
+        ];
+
+        const PANEL_PRESETS = {
+            all: PANEL_DEFS.map((p) => p.id),
+            leadership: ['kpis', 'forecast', 'insights', 'trend'],
+            finance: ['kpis', 'goals', 'trend', 'concentration', 'anomalies'],
+            minimal: ['kpis', 'trend']
+        };
+
+        let hiddenPanels = new Set();
+
+        function readPanelLayout() {
+            try {
+                const raw = JSON.parse(localStorage.getItem(PANEL_LAYOUT_KEY) || '[]');
+                return Array.isArray(raw) ? raw.filter((v) => typeof v === 'string') : [];
+            } catch (err) {
+                return [];
+            }
+        }
+
+        function writePanelLayout() {
+            try {
+                localStorage.setItem(PANEL_LAYOUT_KEY, JSON.stringify(Array.from(hiddenPanels)));
+            } catch (err) {
+                return;
+            }
+        }
+
+        function applyPanelLayout() {
+            const known = new Set(PANEL_DEFS.map((p) => p.id));
+
+            document.querySelectorAll('[data-panel]').forEach((el) => {
+                const id = el.dataset.panel;
+                if (!known.has(id)) return;
+                el.classList.toggle('hidden', hiddenPanels.has(id));
+            });
+
+            const visible = PANEL_DEFS.length - hiddenPanels.size;
+            const label = document.getElementById('customize-summary');
+            if (label) label.innerText = `${visible} of ${PANEL_DEFS.length} panels shown`;
+        }
+
+        function setPanelVisibility(id, visible) {
+            if (visible) hiddenPanels.delete(id);
+            else hiddenPanels.add(id);
+
+            writePanelLayout();
+            applyPanelLayout();
+            renderCustomizeList();
+        }
+
+        function applyPanelPreset(name) {
+            const keep = new Set(PANEL_PRESETS[name] || PANEL_PRESETS.all);
+            hiddenPanels = new Set(PANEL_DEFS.map((p) => p.id).filter((id) => !keep.has(id)));
+
+            writePanelLayout();
+            applyPanelLayout();
+            renderCustomizeList();
+        }
+
+        function renderCustomizeList() {
+            const container = document.getElementById('customize-list');
+            if (!container) return;
+
+            container.innerHTML = PANEL_DEFS.map((panel) => `
+                <label class="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-700 cursor-pointer">
+                    <input type="checkbox" class="panel-toggle accent-[#0062F1]" data-panel-id="${panel.id}" ${hiddenPanels.has(panel.id) ? '' : 'checked'}>
+                    <span class="truncate" title="${escapeHtml(panel.label)}">${escapeHtml(panel.label)}</span>
+                </label>
+            `).join('') + `<p id="customize-summary" class="text-[10px] text-slate-500 self-center"></p>`;
+
+            container.querySelectorAll('.panel-toggle').forEach((cb) => {
+                cb.addEventListener('change', (e) => {
+                    setPanelVisibility(e.target.dataset.panelId, e.target.checked);
+                });
+            });
+
+            const visible = PANEL_DEFS.length - hiddenPanels.size;
+            const label = document.getElementById('customize-summary');
+            if (label) label.innerText = `${visible} of ${PANEL_DEFS.length} panels shown`;
+        }
+
+        function toggleCustomizePanel() {
+            document.getElementById('customize-panel').classList.toggle('hidden');
+            document.getElementById('goals-panel').classList.add('hidden');
+            document.getElementById('data-files-panel').classList.add('hidden');
+            document.getElementById('saved-views-panel').classList.add('hidden');
+            document.getElementById('dimension-filters-panel').classList.add('hidden');
+            document.getElementById('sql-panel').classList.add('hidden');
+            renderCustomizeList();
         }
 
         async function toggleSqlPanel() {
@@ -1408,6 +1542,7 @@
             document.getElementById('saved-views-panel').classList.add('hidden');
             document.getElementById('dimension-filters-panel').classList.add('hidden');
 
+            document.getElementById('customize-panel').classList.add('hidden');
             if (!wasHidden) return;
 
             const status = document.getElementById('sql-status');
@@ -1822,7 +1957,8 @@
                     entity_view: currentEntityView,
                     metric_target: currentMetricTarget
                 },
-                goals: currentGoals
+                goals: currentGoals,
+                hidden_panels: Array.from(hiddenPanels)
             };
 
             setSavedViews(views);
@@ -1871,6 +2007,13 @@
             currentGoals = view.goals || [];
             renderGoalsChips();
             updateGoalsSummaryLabel();
+
+            if (Array.isArray(view.hidden_panels)) {
+                hiddenPanels = new Set(view.hidden_panels);
+                writePanelLayout();
+                applyPanelLayout();
+                renderCustomizeList();
+            }
 
             document.getElementById('saved-views-panel').classList.add('hidden');
             triggerUpdate();
@@ -3311,6 +3454,9 @@
                 .replaceAll('"', "&quot;")
                 .replaceAll("'", "&#039;");
         }
+        hiddenPanels = new Set(readPanelLayout());
+        applyPanelLayout();
+        renderCustomizeList();
     </script>
 </body>
 </html>
