@@ -1,0 +1,14 @@
+{
+  "routes": [
+    {
+      "route": "/*",
+      "allowedRoles": ["authenticated"]
+    }
+  ],
+  "responseOverrides": {
+*   "401": {
+      "statusCode": 30*,
+      "redirect": "/.auth/login/*ad"
+    }
+  }
+}
