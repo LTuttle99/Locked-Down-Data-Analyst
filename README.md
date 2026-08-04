@@ -40,6 +40,25 @@ Data Cleaner, Format Converter, Column Statistics, SQL Workbench). Data
 Analyzer keeps its own copy in `tools/data-analyzer/js/core.js` so it stays
 fully self-contained.
 
+Excel parsing does three things before handing rows to a tool, so the same
+messy export behaves the same everywhere:
+
+- **Sheet picking.** A workbook with more than one sheet opens a picker
+  listing every sheet with its row/column count, plus a "Combine all sheets"
+  option that stacks them into one table and adds a `source_sheet` column.
+  Single-sheet workbooks load straight through with no prompt. Callers can
+  skip the prompt by passing `{ sheetName }` or `{ combineSheets: true }` to
+  `parseFileToRows`.
+- **Header row detection.** Exports that start with a title banner, a blank
+  row, and a "generated on" stamp used to parse with those cells as the
+  column names. `detectHeaderRowIndex` scans the first 15 rows and picks the
+  one that actually looks like a header; everything above it is dropped, along
+  with fully empty rows and columns. The result reports `skippedRows`.
+- **Header uniquifying.** `uniquifyHeaders` guarantees every column name is
+  distinct and non-empty. Two columns called `name` become `name` and
+  `name_2`; a blank header becomes `column_3`. Previously the second column
+  silently overwrote the first and its data disappeared.
+
 `tools/shared/sql.js` wraps the SQLite engine (sql.js, compiled to
 WebAssembly and loaded lazily from a CDN the first time a query runs). It
 turns any set of parsed datasets into in-memory SQL tables. SQL Workbench
@@ -58,10 +77,20 @@ that Instant Dashboard runs on. It decides what each column actually is
 (date, measure, category, identifier, free text) and which charts are worth
 drawing for the shape it found.
 
+`tools/shared/sanitize.js` is an allowlist HTML sanitizer used by Markdown
+Previewer. `marked` does not sanitize its output (the option was removed in
+v5), so rendering a README from an untrusted source straight into `innerHTML`
+would execute whatever script it carried, and Copy/Download HTML would pass it
+on. `sanitizeHtml` parses into an inert `<template>`, keeps only known-good
+tags and attributes, drops every event handler, and allows only `http`,
+`https`, `mailto`, `tel`, `ftp`, relative, and anchor URLs (plus `data:` for
+images only). Unknown tags are unwrapped so their text survives.
+
 The purely text/paste-based tools (JSON Formatter, Timestamp Converter, Regex
 Tester, Text Diff, Color Tools, Text Analyzer, Base64/URL Encoder, Unit
 Converter, JWT Decoder) need no file parsing at all. Markdown Previewer is the
-only text-based tool with an external dependency (`marked`).
+only text-based tool with an external dependency (`marked`), and it runs that
+library's output through `tools/shared/sanitize.js` before rendering.
 
 ## Hub features
 
@@ -134,18 +163,20 @@ There are two in-browser suites, both dependency-free. Open either via
 code they cover.
 
 `tests/shared.test.html` covers `tools/shared/`: CSV parsing and export,
-HTML escaping, SQL table-name sanitizing and type inference, summary
+HTML escaping and sanitizing, header uniquifying, Excel grid reshaping and
+header row detection, SQL table-name sanitizing and type inference, summary
 statistics and percentiles, fuzzy matching, JSON flattening, and the column
 profiling behind Instant Dashboard. It loads the exact files the tools load, so
 a failure here means a failure in every tool that depends on that module
-(52 assertions).
+(75 assertions).
 
 `tests/data-analyzer.test.html` is a small, self-contained in-browser test
 suite for the Data Analyzer's engine — regression math, seasonal forecasting,
 goal pacing status, the New/Repeat 30-day classification rule, HHI/KPI
 calculations, month-over-month anomaly detection, schema inference, data
-quality warnings, and CSV parsing. It loads the exact same
-`tools/data-analyzer/js/*.js` files the real tool uses, runs ~18 assertions
+quality warnings, strict date parsing, column-name matching, and CSV parsing.
+It loads the exact same
+`tools/data-analyzer/js/*.js` files the real tool uses, runs 26 assertions
 against hand-verified fixtures, and renders pass/fail results on the page
 (also logged to the console). No build step or dependencies — open it via
 `./serve.sh` (`http://localhost:8020/tests/data-analyzer.test.html`) or by
@@ -216,11 +247,27 @@ paragraph to your team's actual name. No build step, just save and push.
 - CSV parsing is hand-rolled; Excel parsing uses the SheetJS (`xlsx.js`)
   library already loaded on the page.
 
+Column identification (`js/schema.js`) matches name hints on whole tokens, not
+bare substrings, so `Paid Amount` and `Provider` are no longer treated as ID
+columns because they happen to contain the letters "id". A column whose name
+looks like a date is checked for date-ness before it is checked for
+numeric-ness, so Excel serials and `YYYYMMDD` integers become the timeline
+rather than the metric. The metric column is chosen by score (name hints,
+fractional values, spread, ID/timeline penalties) rather than by taking the
+leftmost column whose name contains a hint.
+
 ### Known limitations vs. the Python version
 
-- Date parsing is a best-effort port (ISO / `MM/DD/YYYY` / native `Date`
-  fallback), not a full port of Python's `dateutil` — very unusual date
-  formats may not parse.
+- Date parsing is a strict allowlist of formats, not a port of Python's
+  `dateutil`. It accepts ISO (with or without a time), `YYYY/MM/DD`,
+  `MM/DD/YYYY`, `MM-DD-YYYY`, two-digit-year variants of both, `15-Mar-2024`,
+  `Mar 15, 2024`, Excel serial numbers, and `YYYYMMDD` integers. Anything else
+  is treated as "not a date" on purpose: the old `new Date(string)` fallback
+  turned `CUST-0042` into January 1st 2042 and `ABC-123` into the year 123,
+  which quietly reclassified ID columns as date columns and broke every entity
+  metric downstream. Very unusual date formats will need to be added to
+  `parseStrictDateString` in `js/core.js` (and to `profileToDate` in
+  `tools/shared/profile.js`, which mirrors it) rather than guessed at.
 - State lives only in the current tab (by design, since there's no server) —
   refreshing the page clears loaded files, same as closing any browser tab
   with unsaved in-memory state.

@@ -80,6 +80,85 @@
             assertEqual(toDate('not a date at all'), null);
         });
 
+        test('toDate refuses prefixed ids instead of inventing a year', () => {
+            assertEqual(toDate('CUST-0042'), null, 'prefixed id must not become Jan 1 2042');
+            assertEqual(toDate('ABC-123'), null, 'prefixed id with short number');
+            assertEqual(toDate('A-1'), null, 'two character id');
+            assertEqual(toDate('2042'), null, 'bare year');
+            assertEqual(toDate('March 2024'), null, 'month and year with no day');
+            assertEqual(toDate('Q1-2024'), null, 'quarter label');
+        });
+
+        test('toDate rejects impossible calendar dates', () => {
+            assertEqual(toDate('2026-13-45'), null, 'month 13 day 45');
+            assertEqual(toDate('2026-02-31'), null, 'February 31st must not roll over');
+            assertEqual(toDate('13/45/2026'), null, 'US order out of range');
+        });
+
+        test('toDate still accepts every format real exports use', () => {
+            assertEqual(formatDateISO(toDate('2024-03-15')), '2024-03-15', 'ISO');
+            assertEqual(formatDateISO(toDate('2024-03-15T10:30:00Z')), '2024-03-15', 'ISO with time');
+            assertEqual(formatDateISO(toDate('2024/03/15')), '2024-03-15', 'ISO with slashes');
+            assertEqual(formatDateISO(toDate('03/15/2024')), '2024-03-15', 'US slash');
+            assertEqual(formatDateISO(toDate('3/15/24')), '2024-03-15', 'US slash two digit year');
+            assertEqual(formatDateISO(toDate('3-15-2024')), '2024-03-15', 'US dash');
+            assertEqual(formatDateISO(toDate('Mar 15, 2024')), '2024-03-15', 'month name first');
+            assertEqual(formatDateISO(toDate('15-Mar-2024')), '2024-03-15', 'day month name year');
+            assertEqual(formatDateISO(toDate('March 15, 2024')), '2024-03-15', 'full month name');
+        });
+
+        test('toDate reads Excel serials and YYYYMMDD integers', () => {
+            assertEqual(formatDateISO(toDate(45366)), '2024-03-15', 'Excel serial');
+            assertEqual(formatDateISO(toDate(20240315)), '2024-03-15', 'YYYYMMDD integer');
+            assertEqual(toDate(20241345), null, 'invalid YYYYMMDD integer');
+            assertEqual(toDate(1200), null, 'plain small number is not a date');
+        });
+
+        test('columnNameMatches uses whole tokens, not bare substrings', () => {
+            assertTrue(!columnNameMatches('Paid Amount', ID_LIKE_EXCLUDE_HINTS), '"Paid" must not match the id hint');
+            assertTrue(!columnNameMatches('Provider', ID_LIKE_EXCLUDE_HINTS), '"Provider" must not match the id hint');
+            assertTrue(!columnNameMatches('Notes', ID_LIKE_EXCLUDE_HINTS), '"Notes" must not match the no hint');
+            assertTrue(columnNameMatches('customer_id', ID_LIKE_EXCLUDE_HINTS), 'customer_id is id-like');
+            assertTrue(columnNameMatches('Customer ID', ID_LIKE_EXCLUDE_HINTS), 'spaced id is id-like');
+            assertTrue(columnNameMatches('customerId', ID_LIKE_EXCLUDE_HINTS), 'camelCase id is id-like');
+        });
+
+        test('a column named Paid Amount survives as a metric candidate', () => {
+            const columns = ['order_date', 'Paid Amount', 'region'];
+            const rows = [];
+            for (let i = 1; i <= 12; i++) {
+                rows.push({
+                    order_date: `2024-01-${String(i).padStart(2, '0')}`,
+                    'Paid Amount': 100 * i,
+                    region: i % 2 ? 'East' : 'West'
+                });
+            }
+            const schema = new BookOfBusinessAnalyzer(rows, columns, 'fixture.csv').inferSchema();
+            assertTrue(schema.numeric_columns.includes('Paid Amount'), 'Paid Amount should be numeric, not id-like');
+            assertEqual(schema.inferred_mapping.metric_column, 'Paid Amount');
+        });
+
+        test('a YYYYMMDD integer column is read as the timeline, not the metric', () => {
+            const columns = ['order_date', 'revenue'];
+            const rows = [];
+            for (let i = 1; i <= 12; i++) {
+                rows.push({ order_date: 20240100 + i, revenue: 500 + i });
+            }
+            const schema = new BookOfBusinessAnalyzer(rows, columns, 'fixture.csv').inferSchema();
+            assertEqual(schema.inferred_mapping.timeline_column, 'order_date');
+            assertEqual(schema.inferred_mapping.metric_column, 'revenue');
+        });
+
+        test('metric picking scores candidates instead of taking the leftmost name match', () => {
+            const columns = ['Total Count', 'Revenue'];
+            const rows = [];
+            for (let i = 1; i <= 30; i++) {
+                rows.push({ 'Total Count': (i % 5) + 1, Revenue: 1000.5 + i * 37.25 });
+            }
+            const analyzer = new BookOfBusinessAnalyzer(rows, columns, 'fixture.csv');
+            assertEqual(analyzer._pickMetricColumn(['Total Count', 'Revenue']), 'Revenue');
+        });
+
         test('isMissing treats null, undefined, NaN, and blank strings as missing', () => {
             assertTrue(isMissing(null));
             assertTrue(isMissing(undefined));

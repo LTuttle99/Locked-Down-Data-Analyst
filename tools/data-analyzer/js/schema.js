@@ -1,4 +1,6 @@
-function classifyNumericIdLike(numericVals, uniqueRatio, looksIdLikeName) {
+function classifyNumericIdLike(numericVals, uniqueRatio, looksIdLikeName, looksMetricName) {
+  if (looksMetricName && !looksIdLikeName) return false;
+
   const isIntLike = numericVals.filter((v) => Number.isInteger(v)).length / numericVals.length > 0.99;
 
   let isSequentialRamp = false;
@@ -34,15 +36,20 @@ BookOfBusinessAnalyzer.prototype._detectColumnRoles = function () {
     const nonNullVals = this.rows.map((r) => r[col]).filter((v) => !isMissing(v));
     if (nonNullVals.length === 0) continue;
 
-    const colLower = String(col).toLowerCase();
-    const looksIdLikeName = ID_LIKE_EXCLUDE_HINTS.some((kw) => colLower.includes(kw));
+    const looksIdLikeName = columnNameMatches(col, ID_LIKE_EXCLUDE_HINTS);
+    const looksTimelineName = columnNameMatches(col, TIMELINE_NAME_HINTS);
+    const looksMetricName = columnNameMatches(col, METRIC_NAME_HINTS);
     const uniqueRatio = countUnique(nonNullVals) / nonNullVals.length;
 
     const numericVals = nonNullVals.map(toNumber);
     const isFullyNumeric = numericVals.every((v) => v !== null);
 
     if (isFullyNumeric) {
-      if (classifyNumericIdLike(numericVals, uniqueRatio, looksIdLikeName)) idLikeCols.push(col);
+      if (looksTimelineName && this._columnDateFraction(numericVals) >= 0.9) {
+        dateCols.push(col);
+        continue;
+      }
+      if (classifyNumericIdLike(numericVals, uniqueRatio, looksIdLikeName, looksMetricName)) idLikeCols.push(col);
       else numericCols.push(col);
       continue;
     }
@@ -56,7 +63,7 @@ BookOfBusinessAnalyzer.prototype._detectColumnRoles = function () {
     const numericFrac = this._columnNumericFraction(nonNullVals);
     if (numericFrac >= 0.9) {
       const coerced = nonNullVals.map(toNumber).filter((v) => v !== null);
-      if (classifyNumericIdLike(coerced, uniqueRatio, looksIdLikeName)) idLikeCols.push(col);
+      if (classifyNumericIdLike(coerced, uniqueRatio, looksIdLikeName, looksMetricName)) idLikeCols.push(col);
       else numericCols.push(col);
       continue;
     }
@@ -79,31 +86,34 @@ BookOfBusinessAnalyzer.prototype._detectColumnRoles = function () {
   return { numericCols, dateCols, idLikeCols, categoricalCandidates };
 };
 
+BookOfBusinessAnalyzer.prototype._scoreMetricColumn = function (col) {
+  const values = this.rows.map((r) => toNumber(r[col])).filter((v) => v !== null);
+  const magnitude = values.reduce((acc, v) => acc + Math.abs(v), 0);
+  const distinctRatio = values.length === 0 ? 0 : new Set(values).size / values.length;
+
+  let score = 0;
+  if (columnNameMatches(col, METRIC_NAME_HINTS)) score += 4;
+  if (columnNameMatches(col, ID_LIKE_EXCLUDE_HINTS)) score -= 3;
+  if (columnNameMatches(col, TIMELINE_NAME_HINTS)) score -= 2;
+  if (values.length > 0 && !values.every((v) => Number.isInteger(v))) score += 1.5;
+  if (distinctRatio > 0.2) score += 1;
+  if (values.some((v) => v < 0)) score -= 0.5;
+
+  return { col, score, magnitude };
+};
+
 BookOfBusinessAnalyzer.prototype._pickMetricColumn = function (numericCols) {
   if (numericCols.length === 0) return null;
 
-  for (const col of numericCols) {
-    const colLower = col.toLowerCase();
-    if (METRIC_NAME_HINTS.some((kw) => colLower.includes(kw))) return col;
-  }
-
-  let bestCol = null;
-  let bestMagnitude = -1;
-  for (const col of numericCols) {
-    const magnitude = this.rows.reduce((acc, r) => acc + Math.abs(toNumber(r[col]) || 0), 0);
-    if (magnitude > bestMagnitude) {
-      bestMagnitude = magnitude;
-      bestCol = col;
-    }
-  }
-  return bestCol || numericCols[0];
+  const scored = numericCols.map((col) => this._scoreMetricColumn(col));
+  scored.sort((a, b) => b.score - a.score || b.magnitude - a.magnitude);
+  return scored[0].col;
 };
 
 BookOfBusinessAnalyzer.prototype._pickTimelineColumn = function (dateCols) {
   if (dateCols.length === 0) return null;
   for (const col of dateCols) {
-    const colLower = col.toLowerCase();
-    if (TIMELINE_NAME_HINTS.some((kw) => colLower.includes(kw))) return col;
+    if (columnNameMatches(col, TIMELINE_NAME_HINTS)) return col;
   }
   return dateCols[0];
 };
@@ -119,7 +129,7 @@ BookOfBusinessAnalyzer.prototype._pickEntityColumn = function (idLikeCols, categ
     return [card, card / nonNull.length];
   };
 
-  const nameBonus = (col) => (ENTITY_NAME_HINTS.some((kw) => String(col).toLowerCase().includes(kw)) ? 1 : 0);
+  const nameBonus = (col) => (columnNameMatches(col, ENTITY_NAME_HINTS) ? 1 : 0);
 
   const repeating = [];
   const uniqueOnly = [];

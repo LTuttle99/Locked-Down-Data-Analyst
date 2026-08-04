@@ -31,26 +31,56 @@ function profileToDate(value) {
   if (typeof value !== "string") return null;
 
   const s = value.trim();
+  if (s === "") return null;
 
   let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[T ]|$)/);
+  if (m) return safeDate(+m[1], +m[2], +m[3]);
+
+  m = s.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})(?:[T ]|$)/);
   if (m) return safeDate(+m[1], +m[2], +m[3]);
 
   m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   if (m) return safeDate(+m[3], +m[1], +m[2]);
 
   m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2})$/);
-  if (m) return safeDate(2000 + +m[3], +m[1], +m[2]);
+  if (m) return safeDate(twoDigitYear(+m[3]), +m[1], +m[2]);
 
   m = s.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
   if (m) return safeDate(+m[3], +m[1], +m[2]);
 
+  m = s.match(/^(\d{1,2})-(\d{1,2})-(\d{2})$/);
+  if (m) return safeDate(twoDigitYear(+m[3]), +m[1], +m[2]);
+
+  m = s.match(/^(\d{1,2})[ -]([A-Za-z]{3,9}\.?)[ -](\d{4})$/);
+  if (m) return safeDate(+m[3], monthFromName(m[2]), +m[1]);
+
+  m = s.match(/^([A-Za-z]{3,9}\.?)[ -](\d{1,2}),?[ -](\d{4})$/);
+  if (m) return safeDate(+m[3], monthFromName(m[1]), +m[2]);
+
   return null;
 }
 
+const PROFILE_MONTH_NAMES = [
+  "january", "february", "march", "april", "may", "june",
+  "july", "august", "september", "october", "november", "december"
+];
+
+function monthFromName(name) {
+  const lower = String(name).toLowerCase().replace(/\.$/, "");
+  const index = PROFILE_MONTH_NAMES.findIndex((m) => m === lower || (lower.length >= 3 && m.startsWith(lower)));
+  return index === -1 ? 0 : index + 1;
+}
+
+function twoDigitYear(year) {
+  return year + (year < 70 ? 2000 : 1900);
+}
+
 function safeDate(year, month, day) {
-  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  if (!Number.isFinite(year) || month < 1 || month > 12 || day < 1 || day > 31) return null;
   const d = new Date(Date.UTC(year, month - 1, day));
-  return Number.isNaN(d.getTime()) ? null : d;
+  if (Number.isNaN(d.getTime())) return null;
+  if (d.getUTCFullYear() !== year || d.getUTCMonth() !== month - 1 || d.getUTCDate() !== day) return null;
+  return d;
 }
 
 function monthKey(date) {
@@ -58,8 +88,12 @@ function monthKey(date) {
 }
 
 function nameMatches(column, hints) {
-  const lower = String(column).toLowerCase();
-  return hints.some((h) => new RegExp(`(^|[^a-z])${h}([^a-z]|$)`).test(lower) || lower.includes(h));
+  const tokens = String(column)
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
+  return hints.some((h) => tokens.includes(h));
 }
 
 function profileColumn(rows, column) {

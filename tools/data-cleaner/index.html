@@ -79,6 +79,15 @@
             </div>
         </div>
 
+        <div id="header-notice" class="hidden bg-white border border-red-300 rounded-xl p-5">
+            <h3 class="text-sm font-medium text-red-600 mb-2">Header collisions were renamed</h3>
+            <p class="text-xs text-slate-600 mb-3">
+                These headers normalized to the same name, or to nothing at all. Without renaming they
+                would have overwritten each other and a column of data would have disappeared.
+            </p>
+            <ul id="header-notice-list" class="space-y-1 text-sm text-slate-700"></ul>
+        </div>
+
         <div id="results" class="hidden space-y-4">
             <div class="grid grid-cols-2 gap-4">
                 <div class="bg-white border border-slate-200 p-4 rounded-xl">
@@ -128,10 +137,17 @@
 
             try {
                 fileData = await parseFileToRows(file);
-                document.getElementById('file-status').innerText = `${file.name} — ${fileData.rows.length.toLocaleString()} rows, ${fileData.columns.length} columns`;
+
+                const parts = [`${file.name} — ${fileData.rows.length.toLocaleString()} rows, ${fileData.columns.length} columns`];
+                if (fileData.combined) parts.push(`combined ${fileData.sheetNames.length} sheets`);
+                else if (fileData.sheetNames && fileData.sheetNames.length > 1) parts.push(`sheet "${fileData.sheetName}" of ${fileData.sheetNames.length}`);
+                if (fileData.skippedRows) parts.push(`skipped ${fileData.skippedRows} row(s) above the header`);
+                document.getElementById('file-status').innerText = parts.join(' · ');
+
                 buildReport();
                 document.getElementById('controls').classList.remove('hidden');
                 document.getElementById('results').classList.add('hidden');
+                document.getElementById('header-notice').classList.add('hidden');
             } catch (err) {
                 showToast('Could not parse file: ' + err.message);
             }
@@ -183,6 +199,30 @@
             }
         }
 
+        function renderHeaderNotice(sourceColumns, renames) {
+            const notice = document.getElementById('header-notice');
+            const list = document.getElementById('header-notice-list');
+
+            if (!renames.length) {
+                notice.classList.add('hidden');
+                list.innerHTML = '';
+                return;
+            }
+
+            list.innerHTML = renames.map(r => {
+                const source = sourceColumns[r.index];
+                const origin = source === r.from
+                    ? `"${escapeHtml(source)}"`
+                    : `"${escapeHtml(source)}" normalized to "${escapeHtml(r.from)}", which`;
+                const label = r.reason === 'blank'
+                    ? `Column ${r.index + 1} ("${escapeHtml(source)}") normalized to an empty name, so it became <strong>${escapeHtml(r.to)}</strong>.`
+                    : `${origin} collided with an earlier column, so it became <strong>${escapeHtml(r.to)}</strong>.`;
+                return `<li>&bull; ${label}</li>`;
+            }).join('');
+
+            notice.classList.remove('hidden');
+        }
+
         function toTitleCase(s) {
             return s.replace(/[_\-]+/g, ' ').replace(/\s+/g, ' ').trim().replace(/\w\S*/g, w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
         }
@@ -205,6 +245,10 @@
             if (doHeaders) columns = columns.map(c => c.trim().replace(/\s+/g, ' '));
             if (headerCase === 'title') columns = columns.map(toTitleCase);
             if (headerCase === 'snake') columns = columns.map(toSnakeCase);
+
+            const resolved = uniquifyHeaders(columns);
+            columns = resolved.columns;
+            renderHeaderNotice(fileData.columns, resolved.renames);
 
             const originalColumns = fileData.columns;
 

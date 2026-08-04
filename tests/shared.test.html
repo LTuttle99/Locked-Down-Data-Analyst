@@ -34,6 +34,7 @@
     <script src="../tools/shared/match.js"></script>
     <script src="../tools/shared/flatten.js"></script>
     <script src="../tools/shared/profile.js"></script>
+    <script src="../tools/shared/sanitize.js"></script>
 
     <script>
         const results = [];
@@ -129,6 +130,164 @@
             assertEqual(escapeHtml('<script>'), '&lt;script&gt;');
             assertEqual(escapeHtml('a"b\'c&d'), 'a&quot;b&#039;c&amp;d');
             assertEqual(escapeHtml(null), '');
+        });
+
+        test('uniquifyHeaders suffixes headers that collide after normalization', () => {
+            const out = uniquifyHeaders(['first_name', 'first_name', 'email']);
+            assertDeep(out.columns, ['first_name', 'first_name_2', 'email']);
+            assertEqual(out.renames.length, 1);
+            assertEqual(out.renames[0].to, 'first_name_2');
+            assertEqual(out.renames[0].reason, 'duplicate');
+        });
+
+        test('uniquifyHeaders names blank headers instead of collapsing them', () => {
+            const out = uniquifyHeaders(['id', '', '   ', 'name']);
+            assertDeep(out.columns, ['id', 'column_2', 'column_3', 'name']);
+            assertEqual(out.renames.length, 2);
+            assertEqual(out.renames[0].reason, 'blank');
+        });
+
+        test('uniquifyHeaders keeps every column distinct even in a three-way collision', () => {
+            const out = uniquifyHeaders(['a', 'a', 'a', 'a_2']);
+            assertEqual(new Set(out.columns).size, 4);
+            assertEqual(out.columns.length, 4);
+        });
+
+        test('uniquifyHeaders leaves a clean header row completely alone', () => {
+            const out = uniquifyHeaders(['Order Date', 'Revenue', 'Region']);
+            assertDeep(out.columns, ['Order Date', 'Revenue', 'Region']);
+            assertEqual(out.renames.length, 0);
+        });
+
+        test('parseCSVText no longer drops a column when two headers are identical', () => {
+            const r = parseCSVText('name,name,city\nAda,Lovelace,London');
+            assertDeep(r.columns, ['name', 'name_2', 'city']);
+            assertEqual(r.rows[0].name, 'Ada');
+            assertEqual(r.rows[0].name_2, 'Lovelace');
+            assertEqual(r.rows[0].city, 'London');
+        });
+
+        test('trimExcelGrid drops fully empty rows and columns', () => {
+            const grid = [
+                [null, 'a', null, 'b'],
+                [null, null, null, null],
+                [null, 1, null, 2]
+            ];
+            assertDeep(trimExcelGrid(grid), [['a', 'b'], [1, 2]]);
+        });
+
+        test('detectHeaderRowIndex skips a title banner and blank preamble rows', () => {
+            const grid = [
+                ['Q3 Sales Report', null, null],
+                [null, null, null],
+                ['Generated 2026-07-01', null, null],
+                ['Order Date', 'Revenue', 'Region'],
+                ['2026-07-02', 1200, 'North'],
+                ['2026-07-03', 900, 'South'],
+                ['2026-07-04', 1500, 'East']
+            ];
+            const trimmed = trimExcelGrid(grid);
+            assertEqual(detectHeaderRowIndex(trimmed), 2);
+            assertDeep(trimmed[detectHeaderRowIndex(trimmed)], ['Order Date', 'Revenue', 'Region']);
+        });
+
+        test('detectHeaderRowIndex leaves a normal sheet on row zero', () => {
+            const grid = [
+                ['Order Date', 'Revenue', 'Region'],
+                ['2026-07-02', 1200, 'North'],
+                ['2026-07-03', 900, 'South']
+            ];
+            assertEqual(detectHeaderRowIndex(grid), 0);
+        });
+
+        test('reshapeExcelGrid turns a banner sheet into a clean table', () => {
+            const grid = [
+                ['Q3 Sales Report', null, null, null],
+                [null, null, null, null],
+                ['Order Date', 'Revenue', 'Region', null],
+                ['2026-07-02', 1200, 'North', null],
+                ['2026-07-03', 900, 'South', null]
+            ];
+            const table = excelGridToTable(reshapeExcelGrid(grid).grid);
+            assertDeep(table.columns, ['Order Date', 'Revenue', 'Region']);
+            assertEqual(table.rows.length, 2);
+            assertEqual(table.rows[0].Revenue, 1200);
+            assertEqual(table.rows[1].Region, 'South');
+        });
+
+        test('excelGridToTable applies header uniquifying and blanks out empty strings', () => {
+            const table = excelGridToTable([
+                ['name', 'name', ''],
+                ['Ada', 'Lovelace', '  ']
+            ]);
+            assertDeep(table.columns, ['name', 'name_2', 'column_3']);
+            assertEqual(table.rows[0].name_2, 'Lovelace');
+            assertEqual(table.rows[0].column_3, null);
+        });
+
+        test('sanitizeHtml strips script tags and their contents', () => {
+            const out = sanitizeHtml('<p>safe</p><script>window.pwned = true;<\/script>');
+            assertEqual(out, '<p>safe</p>');
+            assertTrue(!window.pwned, 'script did not execute');
+        });
+
+        test('sanitizeHtml removes inline event handlers but keeps the element', () => {
+            const out = sanitizeHtml('<img src="x" onerror="window.pwned = true">');
+            assertTrue(out.includes('<img'), 'image survives');
+            assertTrue(!out.includes('onerror'), 'handler removed');
+        });
+
+        test('sanitizeHtml drops javascript and data-html urls', () => {
+            assertTrue(!sanitizeHtml('<a href="javascript:alert(1)">x</a>').includes('href'), 'javascript scheme');
+            assertTrue(!sanitizeHtml('<a href="JaVaScRiPt:alert(1)">x</a>').includes('href'), 'mixed case scheme');
+            assertTrue(!sanitizeHtml('<a href="java\tscript:alert(1)">x</a>').includes('href'), 'scheme split by control character');
+            assertTrue(!sanitizeHtml('<a href="data:text/html,<b>x</b>">x</a>').includes('href'), 'data html');
+        });
+
+        test('sanitizeHtml keeps the links and images real Markdown produces', () => {
+            const link = sanitizeHtml('<a href="https://example.com" title="t">x</a>');
+            assertTrue(link.includes('href="https://example.com"'), 'https link kept');
+            assertTrue(link.includes('rel="noopener noreferrer nofollow"'), 'rel hardening added');
+
+            assertTrue(sanitizeHtml('<a href="../../index.html">hub</a>').includes('href="../../index.html"'), 'relative link kept');
+            assertTrue(sanitizeHtml('<a href="#section">x</a>').includes('href="#section"'), 'anchor kept');
+            assertTrue(sanitizeHtml('<a href="mailto:a@b.com">x</a>').includes('mailto:'), 'mailto kept');
+            assertTrue(sanitizeHtml('<img src="pic.png" alt="a">').includes('src="pic.png"'), 'relative image kept');
+        });
+
+        test('sanitizeHtml leaves ordinary Markdown output untouched', () => {
+            const html = '<h1>Title</h1><p>Some <strong>bold</strong> and <em>italic</em>.</p>'
+                + '<ul><li>one</li><li>two</li></ul>'
+                + '<pre><code class="language-js">console.log(1);</code></pre>'
+                + '<blockquote><p>quote</p></blockquote>'
+                + '<table><thead><tr><th>a</th></tr></thead><tbody><tr><td>1</td></tr></tbody></table><hr>';
+            assertEqual(sanitizeHtml(html), html);
+        });
+
+        test('sanitizeHtml unwraps unknown tags but keeps their text', () => {
+            assertEqual(sanitizeHtml('<marquee>hello</marquee>'), 'hello');
+            assertEqual(sanitizeHtml('<custom-tag><b>x</b></custom-tag>'), '<b>x</b>');
+        });
+
+        test('sanitizeHtml removes iframes, forms, styles and comments outright', () => {
+            assertEqual(sanitizeHtml('<iframe src="https://evil.test"></iframe>'), '');
+            assertEqual(sanitizeHtml('<form><input type="text" name="pw"></form>'), '');
+            assertEqual(sanitizeHtml('<style>body{display:none}</style>'), '');
+            assertEqual(sanitizeHtml('<!-- comment -->text'), 'text');
+        });
+
+        test('sanitizeHtml survives nested and malformed injection attempts', () => {
+            assertTrue(!sanitizeHtml('<div><span><script>x<\/script></span></div>').includes('script'), 'nested script');
+            assertTrue(!sanitizeHtml('<scr<script>ipt>alert(1)<\/script>').includes('<script'), 'split tag name');
+            assertTrue(!sanitizeHtml('<svg><animate onbegin="alert(1)"></svg>').includes('onbegin'), 'svg vector');
+            assertTrue(!sanitizeHtml('<a href="x" style="background:url(javascript:1)">y</a>').includes('style'), 'style attribute');
+        });
+
+        test('sanitizeHtml keeps task list checkboxes but disables them', () => {
+            const out = sanitizeHtml('<li><input type="checkbox" checked> done</li>');
+            assertTrue(out.includes('type="checkbox"'), 'checkbox kept');
+            assertTrue(out.includes('disabled'), 'checkbox disabled');
+            assertEqual(sanitizeHtml('<input type="password">'), '');
         });
 
         test('sqlTableNameFor sanitizes filenames into identifiers', () => {
@@ -292,6 +451,33 @@
             assertEqual(profileToDate('2042'), null, 'bare year');
             assertEqual(profileToDate('not a date'), null, 'junk');
             assertEqual(profileToDate('2026-13-45'), null, 'impossible date');
+        });
+
+        test('profileToDate reads month names and slash-ISO dates', () => {
+            const iso = (d) => d.toISOString().slice(0, 10);
+            assertEqual(iso(profileToDate('Mar 15, 2026')), '2026-03-15');
+            assertEqual(iso(profileToDate('15-Mar-2026')), '2026-03-15');
+            assertEqual(iso(profileToDate('March 15, 2026')), '2026-03-15');
+            assertEqual(iso(profileToDate('2026/03/15')), '2026-03-15');
+            assertEqual(iso(profileToDate('3-15-26')), '2026-03-15');
+        });
+
+        test('profileToDate rejects impossible calendar dates rather than rolling over', () => {
+            assertEqual(profileToDate('2026-02-31'), null, 'February 31st');
+            assertEqual(profileToDate('2026-04-31'), null, 'April 31st');
+            assertEqual(profileToDate('Smurf 15, 2026'), null, 'not a month name');
+        });
+
+        test('nameMatches uses whole tokens so Paid and Provider are not identifiers', () => {
+            assertTrue(!nameMatches('Paid Amount', IDENTIFIER_NAME_HINTS), 'Paid Amount');
+            assertTrue(!nameMatches('Provider', IDENTIFIER_NAME_HINTS), 'Provider');
+            assertTrue(nameMatches('customer_id', IDENTIFIER_NAME_HINTS), 'customer_id');
+            assertTrue(nameMatches('Order Date', DATE_NAME_HINTS), 'Order Date');
+        });
+
+        test('profileColumn keeps a Paid Amount column as a measure', () => {
+            const rows = makeRows(60, i => ({ 'Paid Amount': 100.5 + i * 7.25 }));
+            assertEqual(profileColumn(rows, 'Paid Amount').type, 'number');
         });
 
         test('profileToNumber handles currency, commas and percent', () => {
