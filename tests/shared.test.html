@@ -36,6 +36,7 @@
     <script src="../tools/shared/profile.js"></script>
     <script src="../tools/shared/sanitize.js"></script>
     <script src="../tools/shared/dashboard-spec.js"></script>
+    <script src="../tools/shared/dashboard-data.js"></script>
 
     <script>
         const results = [];
@@ -731,6 +732,210 @@
             assertEqual(summary('kpi', { measure: 'Revenue', aggregation: 'sum' }), 'sum of Revenue');
             assertEqual(summary('column', { measure: 'Revenue', aggregation: 'sum', dimension: 'Region' }), 'sum of Revenue by Region');
             assertEqual(summary('trend', { measure: 'Revenue', aggregation: 'average', grain: 'quarter' }), 'average of Revenue per quarter');
+        });
+
+        function salesFixture() {
+            const regions = ['North', 'South', 'East', 'West'];
+            const segments = ['Enterprise', 'SMB', 'Mid Market'];
+            const rows = makeRows(120, i => ({
+                'Order ID': `ORD-${String(i + 1).padStart(4, '0')}`,
+                'Order Date': `2025-${String((i % 12) + 1).padStart(2, '0')}-15`,
+                Region: regions[i % 4],
+                Segment: segments[i % 3],
+                Revenue: 100 + i,
+                Units: (i % 9) + 1
+            }));
+            return { source: 'fixture.csv', columns: ['Order ID', 'Order Date', 'Region', 'Segment', 'Revenue', 'Units'], rows, rowCount: rows.length, dateColumn: 'Order Date' };
+        }
+
+        function visual(kind, binding, id) {
+            return dashboardNormalizeVisual({ id: id || 'v1', kind, binding }, 0);
+        }
+
+        test('dashboardAggregate implements every aggregation', () => {
+            const rows = [{ n: 10, k: 'a' }, { n: 20, k: 'a' }, { n: 30, k: 'b' }, { n: null, k: 'b' }];
+            assertEqual(dashboardAggregate(rows, 'n', 'sum'), 60);
+            assertEqual(dashboardAggregate(rows, 'n', 'average'), 20);
+            assertEqual(dashboardAggregate(rows, 'n', 'min'), 10);
+            assertEqual(dashboardAggregate(rows, 'n', 'max'), 30);
+            assertEqual(dashboardAggregate(rows, 'n', 'count'), 4);
+            assertEqual(dashboardAggregate(rows, 'k', 'distinct count'), 2);
+            assertEqual(dashboardAggregate([], 'n', 'sum'), 0);
+        });
+
+        test('dashboardAggregate reads currency and comma formatted numbers', () => {
+            const rows = [{ v: '$1,200.50' }, { v: '2,000' }, { v: 'n/a' }];
+            assertClose(dashboardAggregate(rows, 'v', 'sum'), 3200.5, 0.001);
+        });
+
+        test('a KPI resolved from rows matches the hand-summed total', () => {
+            const data = salesFixture();
+            const expected = data.rows.reduce((s, r) => s + r.Revenue, 0);
+            assertEqual(dashboardResolveFromRows(visual('kpi', { measure: 'Revenue', aggregation: 'sum' }), data).value, expected);
+        });
+
+        test('a breakdown groups by dimension and sums back to the whole', () => {
+            const data = salesFixture();
+            const out = dashboardResolveFromRows(visual('column', { measure: 'Revenue', aggregation: 'sum', dimension: 'Region', limit: 10 }), data);
+            assertEqual(out.points.length, 4);
+            assertEqual(out.points.reduce((s, p) => s + p.value, 0), data.rows.reduce((s, r) => s + r.Revenue, 0));
+            assertTrue(out.points[0].value >= out.points[1].value, 'sorted descending');
+        });
+
+        test('a breakdown past the limit collapses the tail into Other', () => {
+            const rows = makeRows(60, i => ({ cat: `C${i}`, amt: 1 }));
+            const out = dashboardResolveFromRows(visual('column', { measure: 'amt', aggregation: 'sum', dimension: 'cat', limit: 5 }), { columns: ['cat', 'amt'], rows });
+            assertEqual(out.points.length, 5);
+            assertTrue(out.points[4].label.startsWith('Other'), 'has an Other bucket');
+            assertEqual(out.points.reduce((s, p) => s + p.value, 0), 60);
+        });
+
+        test('a trend groups by the requested time grain', () => {
+            const data = salesFixture();
+            assertEqual(dashboardResolveFromRows(visual('trend', { measure: 'Revenue', aggregation: 'sum', grain: 'month' }), data).points.length, 12);
+            assertEqual(dashboardResolveFromRows(visual('trend', { measure: 'Revenue', aggregation: 'sum', grain: 'quarter' }), data).points.length, 4);
+            assertEqual(dashboardResolveFromRows(visual('trend', { measure: 'Revenue', aggregation: 'sum', grain: 'year' }), data).points.length, 1);
+        });
+
+        test('a trend explains itself when the file has no date column', () => {
+            const out = dashboardResolveFromRows(visual('trend', { measure: 'amt', aggregation: 'sum', grain: 'month' }), { columns: ['cat', 'amt'], rows: [{ cat: 'a', amt: 1 }] });
+            assertEqual(out.points.length, 0);
+            assertTrue(out.empty.includes('date'), 'says why it is empty');
+        });
+
+        test('a breakdown on a column the file lacks explains itself', () => {
+            const out = dashboardResolveFromRows(visual('column', { measure: 'amt', aggregation: 'sum', dimension: 'Nope', limit: 5 }), { columns: ['cat', 'amt'], rows: [{ cat: 'a', amt: 1 }] });
+            assertTrue(out.empty.includes('Nope'), 'names the missing column');
+        });
+
+        test('visual filters narrow the rows before aggregating', () => {
+            const data = salesFixture();
+            const north = data.rows.filter(r => r.Region === 'North').reduce((s, r) => s + r.Revenue, 0);
+            const out = dashboardResolveFromRows(visual('kpi', {
+                measure: 'Revenue', aggregation: 'sum',
+                filters: [{ field: 'Region', op: 'equals', value: 'North' }]
+            }), data);
+            assertEqual(out.value, north);
+        });
+
+        test('every filter operator behaves', () => {
+            const rows = [{ r: 'North', n: 10 }, { r: 'South', n: 20 }, { r: 'East', n: 30 }];
+            const run = (op, value) => dashboardApplyFilters(rows, [{ field: op === 'greater than' || op === 'less than' ? 'n' : 'r', op, value }]).length;
+            assertEqual(run('equals', 'North'), 1);
+            assertEqual(run('not equals', 'North'), 2);
+            assertEqual(run('contains', 'th'), 2);
+            assertEqual(run('in list', 'North, East'), 2);
+            assertEqual(run('greater than', '15'), 2);
+            assertEqual(run('less than', '15'), 1);
+        });
+
+        test('slicer selections stack across slicers', () => {
+            const data = salesFixture();
+            data.slicers = [
+                { id: 's1', field: 'Region', type: 'dropdown' },
+                { id: 's2', field: 'Segment', type: 'list' }
+            ];
+
+            data.selections = { s1: 'North' };
+            const north = dashboardResolveFromRows(visual('kpi', { measure: 'Revenue', aggregation: 'sum' }), data).value;
+
+            data.selections = { s1: 'North', s2: ['Enterprise'] };
+            const both = dashboardResolveFromRows(visual('kpi', { measure: 'Revenue', aggregation: 'sum' }), data).value;
+
+            const expected = data.rows.filter(r => r.Region === 'North' && r.Segment === 'Enterprise').reduce((s, r) => s + r.Revenue, 0);
+            assertEqual(both, expected);
+            assertTrue(both < north, 'the second slicer narrows further');
+        });
+
+        test('an empty or cleared slicer selection means no filtering', () => {
+            const data = salesFixture();
+            data.slicers = [{ id: 's1', field: 'Region', type: 'dropdown' }];
+            const all = data.rows.reduce((s, r) => s + r.Revenue, 0);
+            const kpi = visual('kpi', { measure: 'Revenue', aggregation: 'sum' });
+
+            data.selections = {};
+            assertEqual(dashboardResolveFromRows(kpi, data).value, all, 'no selections');
+            data.selections = { s1: '' };
+            assertEqual(dashboardResolveFromRows(kpi, data).value, all, 'cleared dropdown');
+            data.selections = { s1: [] };
+            assertEqual(dashboardResolveFromRows(kpi, data).value, all, 'empty chip list');
+        });
+
+        test('a range slicer filters on a numeric window', () => {
+            const data = salesFixture();
+            data.slicers = [{ id: 's1', field: 'Revenue', type: 'range' }];
+            data.selections = { s1: { min: 100, max: 150 } };
+            const expected = data.rows.filter(r => r.Revenue >= 100 && r.Revenue <= 150).length;
+            assertEqual(dashboardResolveFromRows(visual('kpi', { measure: 'Revenue', aggregation: 'count' }), data).value, expected);
+        });
+
+        test('dashboardSlicerOptions reports values for lists and bounds for ranges', () => {
+            const data = salesFixture();
+            assertDeep(dashboardSlicerOptions(data.rows, { field: 'Region', type: 'dropdown' }).values, ['East', 'North', 'South', 'West']);
+            const range = dashboardSlicerOptions(data.rows, { field: 'Revenue', type: 'range' });
+            assertEqual(range.min, 100);
+            assertEqual(range.max, 219);
+        });
+
+        test('a spec without slicers bakes aggregates and carries no raw rows', () => {
+            const data = salesFixture();
+            const spec = dashboardNormalizeSpec({
+                visuals: [{ id: 'v1', kind: 'kpi', binding: { measure: 'Revenue', aggregation: 'sum' } }]
+            });
+            const baked = dashboardBakeDataset(spec, data);
+            assertEqual(baked.interactive, false);
+            assertTrue(!baked.rows, 'no rows embedded');
+            assertEqual(baked.baked.v1.value, data.rows.reduce((s, r) => s + r.Revenue, 0));
+            assertTrue(!JSON.stringify(baked).includes('ORD-0001'), 'no raw records ride along');
+        });
+
+        test('a spec with slicers bakes rows projected to referenced columns only', () => {
+            const data = salesFixture();
+            const spec = dashboardNormalizeSpec({
+                slicers: [{ id: 's1', field: 'Region', type: 'dropdown' }],
+                visuals: [{ id: 'v1', kind: 'kpi', binding: { measure: 'Revenue', aggregation: 'sum' } }]
+            });
+            const baked = dashboardBakeDataset(spec, data);
+            assertEqual(baked.interactive, true);
+            assertEqual(baked.rows.length, 120);
+            assertTrue(baked.columns.includes('Region'), 'keeps the slicer column');
+            assertTrue(baked.columns.includes('Revenue'), 'keeps the measure');
+            assertTrue(!baked.columns.includes('Units'), 'drops the unreferenced column');
+            assertTrue(!baked.columns.includes('Segment'), 'drops the unreferenced dimension');
+        });
+
+        test('baking caps the row count it will embed', () => {
+            const data = salesFixture();
+            const spec = dashboardNormalizeSpec({
+                slicers: [{ id: 's1', field: 'Region', type: 'dropdown' }],
+                visuals: [{ id: 'v1', kind: 'kpi', binding: { measure: 'Revenue', aggregation: 'sum' } }]
+            });
+            const baked = dashboardBakeDataset(spec, data, 25);
+            assertEqual(baked.rows.length, 25);
+            assertEqual(baked.truncated, true);
+        });
+
+        test('slicer normalization clamps types and drops fieldless slicers', () => {
+            const spec = dashboardNormalizeSpec({
+                slicers: [
+                    { field: 'Region', type: 'telepathy' },
+                    { type: 'dropdown' },
+                    null
+                ]
+            });
+            assertEqual(spec.slicers.length, 1);
+            assertEqual(spec.slicers[0].type, 'dropdown');
+            assertEqual(spec.slicers[0].label, 'Region', 'label defaults to the field');
+        });
+
+        test('dashboardResolveVisual prefers real rows, then baked, then samples', () => {
+            const data = salesFixture();
+            const v = visual('kpi', { measure: 'Revenue', aggregation: 'sum' });
+            const expected = data.rows.reduce((s, r) => s + r.Revenue, 0);
+
+            assertEqual(dashboardResolveVisual(v, data).value, expected, 'real rows win');
+            assertEqual(dashboardResolveVisual(v, { baked: { v1: { kind: 'kpi', value: 42, delta: 0 } } }).value, 42, 'baked used when no rows');
+            assertTrue(dashboardResolveVisual(v, null).value !== expected, 'falls back to sample data');
         });
 
         const passed = results.filter(r => r.pass).length;

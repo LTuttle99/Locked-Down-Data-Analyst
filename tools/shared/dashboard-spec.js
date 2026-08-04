@@ -18,6 +18,8 @@ const DASHBOARD_WIDTHS = ["quarter", "half", "full"];
 
 const DASHBOARD_FILTER_OPERATORS = ["equals", "not equals", "greater than", "less than", "contains", "in list"];
 
+const DASHBOARD_SLICER_TYPES = ["list", "dropdown", "range", "date range"];
+
 const DASHBOARD_TEXT_LIMIT = 160;
 
 function dashboardCleanText(value, limit = DASHBOARD_TEXT_LIMIT) {
@@ -81,9 +83,24 @@ function dashboardNormalizeVisual(raw, index) {
   };
 }
 
+function dashboardNormalizeSlicer(raw, index) {
+  const source = raw && typeof raw === "object" ? raw : {};
+  const field = dashboardCleanText(source.field, 60);
+  if (field === "") return null;
+
+  return {
+    id: dashboardCleanText(source.id, 24) || `s${index + 1}`,
+    field,
+    type: dashboardPickOption(source.type, DASHBOARD_SLICER_TYPES, "dropdown"),
+    label: dashboardCleanText(source.label, 60) || field,
+    width: dashboardPickOption(source.width, DASHBOARD_WIDTHS, "quarter")
+  };
+}
+
 function dashboardNormalizeSpec(raw) {
   const source = raw && typeof raw === "object" ? raw : {};
   const visuals = Array.isArray(source.visuals) ? source.visuals.slice(0, 24) : [];
+  const slicers = Array.isArray(source.slicers) ? source.slicers.slice(0, 8) : [];
 
   return {
     v: DASHBOARD_SPEC_VERSION,
@@ -93,6 +110,7 @@ function dashboardNormalizeSpec(raw) {
     audience: dashboardCleanText(source.audience, 80),
     refresh: dashboardPickOption(source.refresh, ["real time", "hourly", "daily", "weekly", "monthly"], "daily"),
     created: /^\d{4}-\d{2}-\d{2}$/.test(source.created) ? source.created : new Date().toISOString().slice(0, 10),
+    slicers: slicers.map(dashboardNormalizeSlicer).filter(Boolean),
     visuals: visuals.map(dashboardNormalizeVisual)
   };
 }

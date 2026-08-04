@@ -18,7 +18,7 @@ and a card on the landing page, and it's a new tool.
 | Timestamp Converter | `tools/timestamp-converter/` | Unix/date conversion across timezones, ISO 8601, relative time |
 | Column Statistics | `tools/column-stats/` | Per-column min/max/mean/median/stddev/nulls — instant data profiling, no mapping step |
 | Instant Dashboard | `tools/instant-dashboard/` | Profiles any file and builds a dashboard shaped around what it finds, with no column mapping or setup |
-| Dashboard Builder | `tools/dashboard-builder/` | Capture a dashboard request (visuals, measures, breakdowns) and share it as a link that renders the requested layout |
+| Dashboard Builder | `tools/dashboard-builder/` | Build a dashboard from your own file (visuals, measures, breakdowns, slicers) and download it as a single self-contained HTML page |
 | SQL Workbench | `tools/sql-workbench/` | Load CSV/Excel/JSON files as tables and query them with standard SQLite, including joins across files |
 | Lookup & Merge | `tools/lookup-merge/` | Match two files on a shared key and pull columns across, reporting unmatched rows |
 | Fuzzy Duplicate Finder | `tools/fuzzy-dupes/` | Finds near-duplicate values that exact deduplication misses, with an adjustable similarity threshold |
@@ -78,11 +78,13 @@ that Instant Dashboard runs on. It decides what each column actually is
 (date, measure, category, identifier, free text) and which charts are worth
 drawing for the shape it found.
 
-`tools/shared/dashboard-spec.js` and `tools/shared/dashboard-render.js` are the
-two halves of Dashboard Builder. The spec module owns the request format
-(version 1), normalizes it, and encodes it to a URL-safe string; the render
-module turns a spec into KPI tiles and Chart.js visuals. See "Dashboard
-Builder" below for how the two fit together.
+Three modules make up Dashboard Builder. `tools/shared/dashboard-spec.js` owns
+the dashboard format (version 1), normalizes it, encodes it to a URL-safe
+string, and generates placeholder figures.
+`tools/shared/dashboard-data.js` aggregates real rows against a binding and
+applies filters and slicer selections. `tools/shared/dashboard-render.js` turns
+a spec plus resolved data into slicer controls, KPI tiles and Chart.js visuals.
+See "Dashboard Builder" below for how they fit together.
 
 `tools/shared/sanitize.js` is an allowlist HTML sanitizer used by Markdown
 Previewer. `marked` does not sanitize its output (the option was removed in
@@ -162,24 +164,48 @@ Somebody wants a dashboard. Rather than describing it over email, they pick the
 visuals here, say what each one measures and how it breaks down, and send a
 link. Whoever builds the real thing sees the exact layout that was asked for.
 
-`index.html` is the request form with a live preview. `view.html` is the
-read-only viewer. There is no server and nothing is saved anywhere: the entire
-request is encoded into the URL fragment, so the link *is* the dashboard. A
-five-visual request comes to roughly 1.8 KB of URL. Fragments are never sent to
-the server, so nothing about the request reaches Azure.
+`index.html` is the builder with a live preview. `view.html` is the viewer.
+The built dashboard is the deliverable: this is not a request form that
+something else gets built from.
 
 Seven visual kinds are available (KPI tile, trend line, column, bar, donut,
 table, scatter), each laid out at quarter, half, or full width on a twelve
-column grid.
+column grid, plus **slicers**: dropdown, chip list, numeric range, and date
+range controls that filter every visual at once for whoever is looking at it.
 
-**The numbers are placeholders.** Every visual carries a `binding`
-(`source`, `measure`, `aggregation`, `dimension`, `measure2`, `grain`, `limit`,
-`filters`) describing the data it wants, and `dashboardResolveSample` invents
-plausible figures for that shape. The figures are seeded from the visual's id
-and title, so a given link always shows the same numbers and the layout can be
-reviewed and signed off without anyone thinking the values are real. When a
-data feed exists, `dashboardResolveSample` is the single function that gets
-replaced; nothing else in the renderer changes.
+### Where the data comes from
+
+Every visual carries a `binding` (`source`, `measure`, `aggregation`,
+`dimension`, `measure2`, `grain`, `limit`, `filters`) describing the data it
+wants. Three resolvers can satisfy it, and `dashboardResolveVisual` picks in
+this order:
+
+1. **Real rows.** Load a CSV or Excel file and `dashboardResolveFromRows`
+   aggregates it for real: sum, average, count, min, max and distinct count,
+   grouped by a dimension or by day, week, month, quarter or year.
+   `profileDataset` decides which columns are offered as measures and which as
+   dimensions, so identifier columns stay out of the measure list.
+2. **Baked results.** A downloaded dashboard carries its own precomputed data.
+3. **Placeholders.** With no data at all, `dashboardResolveSample` invents
+   plausible figures seeded from the visual's id, so a given dashboard always
+   shows the same numbers and the layout can be reviewed before real data is
+   attached. The footer says plainly that the numbers are not real.
+
+### Two ways to hand it over
+
+**Download HTML** produces a single self-contained file, and what gets embedded
+depends on whether the dashboard is interactive:
+
+- *No slicers:* only the computed series per visual. A 50 MB export collapses to
+  a few KB, and no raw records ride along.
+- *With slicers:* the rows themselves, since the viewer needs to re-filter them.
+  They are projected down to just the columns the spec actually references and
+  capped at 50,000 rows, and the file reports when it truncated.
+
+**Share link** encodes the spec (not the data) into the URL fragment, so the
+recipient attaches their own copy of the file. The viewer tells them which
+columns it expects. Fragments are never sent to the server, so nothing reaches
+Azure either way.
 
 Because a spec arrives from a URL that anyone can edit, `dashboardNormalizeSpec`
 treats it as untrusted: every enum is clamped to a known value, text is length
@@ -189,9 +215,8 @@ renderer builds every node with `textContent`, so a spec carrying markup renders
 as literal text rather than HTML. `dashboardDecodeSpec` returns `null` on junk
 instead of throwing.
 
-"Download HTML" produces a standalone file with both shared modules and the
-spec inlined, for anyone who wants a copy that does not depend on the hub
-staying up. It still loads Tailwind and Chart.js from their CDNs.
+Downloaded dashboards inline the shared modules, so they do not depend on the
+hub staying up. They still load Tailwind and Chart.js from their CDNs.
 
 ## Data Analyzer (`tools/data-analyzer/`)
 
@@ -213,10 +238,11 @@ code they cover.
 HTML escaping and sanitizing, header uniquifying, Excel grid reshaping and
 header row detection, SQL table-name sanitizing and type inference, summary
 statistics and percentiles, fuzzy matching, JSON flattening, the column
-profiling behind Instant Dashboard, and the Dashboard Builder spec format
-(round trips, clamping of untrusted specs, sample data shape). It loads the
+profiling behind Instant Dashboard, and Dashboard Builder (spec round trips,
+clamping of untrusted specs, every aggregation and filter operator, slicer
+stacking, time grain grouping, and what each bake mode embeds). It loads the
 exact files the tools load, so a failure here means a failure in every tool
-that depends on that module (89 assertions).
+that depends on that module (108 assertions).
 
 `tests/data-analyzer.test.html` is a small, self-contained in-browser test
 suite for the Data Analyzer's engine — regression math, seasonal forecasting,
