@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Builder — Data and Analytics Hub</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600&display=swap" rel="stylesheet">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2300133C'/%3E%3Ctext x='16' y='23' font-family='Georgia,serif' font-size='19' fill='%230062F1' text-anchor='middle'%3EH%3C/text%3E%3C/svg%3E">
+    <style>
+        h1, h2 { font-family: 'Lora', Georgia, serif; }
+        .field { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 0.5rem; font-size: 0.8125rem; padding: 0.4rem 0.55rem; color: #0f172a; width: 100%; }
+        .field:focus { outline: none; border-color: #0062F1; box-shadow: 0 0 0 2px rgba(0,98,241,0.15); }
+        .field-label { display: block; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; margin-bottom: 0.2rem; }
+    </style>
+</head>
+
+<body class="bg-slate-50 text-slate-900 min-h-screen font-sans">
+    <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2"></div>
+
+    <header class="border-b border-slate-200 bg-white px-8 py-4 flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+            <a href="../../index.html" class="text-xs text-slate-500 hover:text-[#0062F1]">&larr; Hub</a>
+            <div class="h-6 w-px bg-slate-100"></div>
+            <h2 class="text-lg font-semibold text-[#00133C]">Dashboard Builder</h2>
+        </div>
+        <div class="text-xs text-slate-600 bg-slate-50 px-3 py-1 rounded-full border border-slate-200">Request a dashboard</div>
+    </header>
+
+    <main class="max-w-[1500px] mx-auto p-6">
+        <p class="text-sm text-slate-600 max-w-3xl mb-5">
+            Describe the dashboard you want: which visuals, what each one measures, and how it should be
+            broken down. You get a link you can send to whoever is building it, and they see exactly the
+            layout you asked for. The numbers are placeholders until the data feed is connected.
+        </p>
+
+        <div class="grid grid-cols-1 xl:grid-cols-2 gap-5">
+            <div class="space-y-4">
+                <div class="bg-white border border-slate-200 rounded-xl p-5 space-y-3">
+                    <h3 class="text-sm font-medium text-slate-700">The request</h3>
+
+                    <div>
+                        <label class="field-label" for="meta-title">Dashboard name</label>
+                        <input id="meta-title" class="field" placeholder="Sales Performance">
+                    </div>
+
+                    <div>
+                        <label class="field-label" for="meta-subtitle">What is it for</label>
+                        <textarea id="meta-subtitle" rows="2" class="field resize-y" placeholder="What question should this answer, and when will people look at it?"></textarea>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div>
+                            <label class="field-label" for="meta-requester">Requested by</label>
+                            <input id="meta-requester" class="field" placeholder="Your name">
+                        </div>
+                        <div>
+                            <label class="field-label" for="meta-audience">Audience</label>
+                            <input id="meta-audience" class="field" placeholder="Leadership">
+                        </div>
+                        <div>
+                            <label class="field-label" for="meta-refresh">Refresh</label>
+                            <select id="meta-refresh" class="field"></select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white border border-slate-200 rounded-xl p-5">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-sm font-medium text-slate-700">Visuals</h3>
+                        <span id="visual-count" class="text-xs text-slate-500"></span>
+                    </div>
+                    <div id="add-buttons" class="flex flex-wrap gap-2 mb-4"></div>
+                    <div id="visual-list" class="space-y-3"></div>
+                </div>
+
+                <div class="bg-white border border-slate-200 rounded-xl p-5 space-y-3">
+                    <h3 class="text-sm font-medium text-slate-700">Share it</h3>
+                    <p class="text-xs text-slate-600">
+                        The whole request travels inside the link, so there is nothing to save and nothing
+                        stored on a server. Anyone you send it to sees the same dashboard.
+                    </p>
+                    <div class="flex gap-2">
+                        <input id="share-link" readonly class="field font-mono text-[11px]" value="">
+                        <button onclick="copyShareLink()" class="whitespace-nowrap bg-[#0062F1] hover:bg-[#0050C7] text-white text-xs font-semibold px-4 py-2 rounded-lg transition-colors">Copy link</button>
+                    </div>
+                    <div class="flex flex-wrap gap-3 pt-1">
+                        <button onclick="openPreview()" class="text-xs text-[#0062F1] hover:text-[#00133C] font-medium">Open full preview</button>
+                        <button onclick="downloadStandalone()" class="text-xs text-[#0062F1] hover:text-[#00133C] font-medium">Download HTML</button>
+                        <button onclick="downloadSpecJson()" class="text-xs text-[#0062F1] hover:text-[#00133C] font-medium">Download spec JSON</button>
+                        <button onclick="resetSpec()" class="text-xs text-slate-500 hover:text-red-600 font-medium">Start over</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="xl:sticky xl:top-6 xl:self-start">
+                <div class="bg-slate-100 border border-slate-200 rounded-xl p-4">
+                    <p class="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-3">Live preview</p>
+                    <div id="preview" class="bg-slate-50 rounded-lg p-4 max-h-[75vh] overflow-y-auto"></div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="../shared/dashboard-spec.js"></script>
+    <script src="../shared/dashboard-render.js"></script>
+    <script>
+        let spec = null;
+        let charts = [];
+        let nextId = 1;
+
+        function showToast(message, tone = 'success') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            const palette = tone === 'error'
+                ? 'bg-red-50 border-red-300 text-red-600'
+                : 'bg-emerald-50 border-emerald-300 text-emerald-700';
+            toast.className = `text-sm rounded-lg px-4 py-3 shadow-2xl max-w-md border ${palette}`;
+            toast.innerText = message;
+            container.appendChild(toast);
+            setTimeout(() => toast.remove(), tone === 'error' ? 6000 : 2500);
+        }
+
+        function makeId() {
+            let id = `v${nextId}`;
+            const taken = new Set(spec.visuals.map((v) => v.id));
+            while (taken.has(id)) {
+                nextId++;
+                id = `v${nextId}`;
+            }
+            nextId++;
+            return id;
+        }
+
+        function option(value, label, selected) {
+            const el = document.createElement('option');
+            el.value = value;
+            el.textContent = label || value;
+            if (selected) el.selected = true;
+            return el;
+        }
+
+        function fillSelect(select, values, current, labelFor) {
+            select.textContent = '';
+            for (const value of values) select.appendChild(option(value, labelFor ? labelFor(value) : value, value === current));
+        }
+
+        function labelledField(labelText, control) {
+            const wrap = document.createElement('div');
+            const label = document.createElement('label');
+            label.className = 'field-label';
+            label.textContent = labelText;
+            wrap.appendChild(label);
+            wrap.appendChild(control);
+            return wrap;
+        }
+
+        function textField(value, placeholder, onChange) {
+            const input = document.createElement('input');
+            input.className = 'field';
+            input.value = value || '';
+            input.placeholder = placeholder || '';
+            input.addEventListener('input', () => onChange(input.value));
+            return input;
+        }
+
+        function selectField(values, current, onChange, labelFor) {
+            const select = document.createElement('select');
+            select.className = 'field';
+            fillSelect(select, values, current, labelFor);
+            select.addEventListener('change', () => onChange(select.value));
+            return select;
+        }
+
+        function iconButton(label, title, onClick, tone) {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.title = title;
+            button.textContent = label;
+            button.className = `text-xs px-2 py-1 rounded border transition-colors ${tone === 'danger'
+                ? 'border-slate-200 text-slate-400 hover:border-red-300 hover:text-red-600'
+                : 'border-slate-200 text-slate-500 hover:border-[#0062F1] hover:text-[#0062F1]'}`;
+            button.addEventListener('click', onClick);
+            return button;
+        }
+
+        function buildVisualEditor(visual, index) {
+            const shape = DASHBOARD_VISUAL_KINDS[visual.kind];
+            const card = document.createElement('div');
+            card.className = 'border border-slate-200 rounded-lg p-3 bg-slate-50';
+
+            const head = document.createElement('div');
+            head.className = 'flex items-center gap-2 mb-3';
+
+            const badge = document.createElement('span');
+            badge.className = 'text-[10px] font-semibold uppercase tracking-wider text-[#0062F1] bg-blue-50 border border-blue-200 rounded px-1.5 py-0.5 whitespace-nowrap';
+            badge.textContent = shape.label;
+            head.appendChild(badge);
+
+            const titleInput = textField(visual.title, 'Visual title', (v) => { visual.title = v; refresh(false); });
+            titleInput.className = 'field font-medium';
+            head.appendChild(titleInput);
+
+            const controls = document.createElement('div');
+            controls.className = 'flex gap-1';
+            controls.appendChild(iconButton('↑', 'Move up', () => moveVisual(index, -1)));
+            controls.appendChild(iconButton('↓', 'Move down', () => moveVisual(index, 1)));
+            controls.appendChild(iconButton('✕', 'Remove', () => removeVisual(index), 'danger'));
+            head.appendChild(controls);
+            card.appendChild(head);
+
+            const grid = document.createElement('div');
+            grid.className = 'grid grid-cols-2 sm:grid-cols-3 gap-2';
+
+            grid.appendChild(labelledField('Source table', textField(visual.binding.source, 'Sales', (v) => { visual.binding.source = v; refresh(false); })));
+            grid.appendChild(labelledField('Measure', textField(visual.binding.measure, 'Revenue', (v) => { visual.binding.measure = v; refresh(false); })));
+            grid.appendChild(labelledField('Aggregation', selectField(DASHBOARD_AGGREGATIONS, visual.binding.aggregation, (v) => { visual.binding.aggregation = v; refresh(false); })));
+
+            if (shape.needsDimension) {
+                grid.appendChild(labelledField('Break down by', textField(visual.binding.dimension, 'Region', (v) => { visual.binding.dimension = v; refresh(false); })));
+            }
+            if (shape.needsSecondMeasure) {
+                grid.appendChild(labelledField('Against', textField(visual.binding.measure2, 'Units', (v) => { visual.binding.measure2 = v; refresh(false); })));
+            }
+            if (shape.needsGrain) {
+                grid.appendChild(labelledField('Time grain', selectField(DASHBOARD_GRAINS, visual.binding.grain, (v) => { visual.binding.grain = v; refresh(false); })));
+            }
+            if (shape.needsDimension) {
+                grid.appendChild(labelledField('Show top', selectField(['5', '6', '8', '10', '15', '20'], String(visual.binding.limit), (v) => { visual.binding.limit = Number(v); refresh(false); })));
+            }
+
+            grid.appendChild(labelledField('Width', selectField(DASHBOARD_WIDTHS, visual.width, (v) => { visual.width = v; refresh(false); }, (w) => ({ quarter: 'Quarter', half: 'Half', full: 'Full width' })[w])));
+            grid.appendChild(labelledField('Change type', selectField(Object.keys(DASHBOARD_VISUAL_KINDS), visual.kind, (v) => changeKind(index, v), (k) => DASHBOARD_VISUAL_KINDS[k].label)));
+
+            card.appendChild(grid);
+
+            const notes = document.createElement('textarea');
+            notes.className = 'field resize-y mt-2';
+            notes.rows = 1;
+            notes.placeholder = 'Anything else about this visual (filters, sort order, thresholds)';
+            notes.value = visual.notes;
+            notes.addEventListener('input', () => { visual.notes = notes.value; refresh(false); });
+            card.appendChild(notes);
+
+            return card;
+        }
+
+        function renderEditor() {
+            const list = document.getElementById('visual-list');
+            list.textContent = '';
+            spec.visuals.forEach((visual, index) => list.appendChild(buildVisualEditor(visual, index)));
+
+            const count = spec.visuals.length;
+            document.getElementById('visual-count').textContent = count === 0
+                ? 'none yet'
+                : `${count} visual${count === 1 ? '' : 's'}`;
+        }
+
+        function renderPreview() {
+            for (const chart of charts) chart.destroy();
+            charts = dashboardRenderSpec(spec, document.getElementById('preview'), { showNotes: false, showFooter: false });
+        }
+
+        function currentLink() {
+            const base = window.location.href.replace(/[?#].*$/, '').replace(/index\.html$/, '');
+            return `${base}view.html#${dashboardEncodeSpec(spec)}`;
+        }
+
+        function refresh(rebuildEditor = true) {
+            spec = dashboardNormalizeSpec(spec);
+            if (rebuildEditor) renderEditor();
+            renderPreview();
+            document.getElementById('share-link').value = currentLink();
+            window.history.replaceState(null, '', `#${dashboardEncodeSpec(spec)}`);
+        }
+
+        function addVisual(kind) {
+            const shape = DASHBOARD_VISUAL_KINDS[kind];
+            spec.visuals.push(dashboardNormalizeVisual({
+                id: makeId(),
+                kind,
+                title: shape.label,
+                width: shape.defaultWidth,
+                binding: { source: 'Sales', measure: 'Revenue', aggregation: 'sum', dimension: 'Region', measure2: 'Units', grain: 'month', limit: 8 }
+            }, spec.visuals.length));
+            refresh();
+        }
+
+        function changeKind(index, kind) {
+            const existing = spec.visuals[index];
+            spec.visuals[index] = dashboardNormalizeVisual({
+                id: existing.id,
+                kind,
+                title: existing.title,
+                width: DASHBOARD_VISUAL_KINDS[kind].defaultWidth,
+                notes: existing.notes,
+                binding: Object.assign({}, existing.binding, {
+                    dimension: existing.binding.dimension || 'Region',
+                    measure2: existing.binding.measure2 || 'Units',
+                    grain: existing.binding.grain || 'month'
+                })
+            }, index);
+            refresh();
+        }
+
+        function moveVisual(index, delta) {
+            const target = index + delta;
+            if (target < 0 || target >= spec.visuals.length) return;
+            const [item] = spec.visuals.splice(index, 1);
+            spec.visuals.splice(target, 0, item);
+            refresh();
+        }
+
+        function removeVisual(index) {
+            spec.visuals.splice(index, 1);
+            refresh();
+        }
+
+        function copyShareLink() {
+            navigator.clipboard.writeText(currentLink())
+                .then(() => showToast('Link copied. Send it to whoever needs to see this.'))
+                .catch(() => showToast('Could not copy. Select the link and copy it manually.', 'error'));
+        }
+
+        function openPreview() {
+            window.open(currentLink(), '_blank', 'noopener');
+        }
+
+        function downloadFile(filename, content, mime) {
+            const blob = new Blob([content], { type: mime });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function slugify(text) {
+            return String(text).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'dashboard';
+        }
+
+        function downloadSpecJson() {
+            downloadFile(`${slugify(spec.title)}-request.json`, JSON.stringify(spec, null, 2), 'application/json;charset=utf-8;');
+        }
+
+        async function downloadStandalone() {
+            try {
+                const [specSource, renderSource] = await Promise.all([
+                    fetch('../shared/dashboard-spec.js').then((r) => r.text()),
+                    fetch('../shared/dashboard-render.js').then((r) => r.text())
+                ]);
+
+                const payload = JSON.stringify(spec).replace(/</g, '\\u003c');
+                const html = [
+                    '<!DOCTYPE html>',
+                    '<html lang="en"><head><meta charset="UTF-8">',
+                    '<meta name="viewport" content="width=device-width, initial-scale=1.0">',
+                    `<title>${spec.title}</title>`,
+                    '<script src="https://cdn.tailwindcss.com"><\/script>',
+                    '<script src="https://cdn.jsdelivr.net/npm/chart.js"><\/script>',
+                    '<link href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600&display=swap" rel="stylesheet">',
+                    '<style>h1,h2{font-family:\'Lora\',Georgia,serif;}</style>',
+                    '</head><body class="bg-slate-50 text-slate-900 font-sans">',
+                    '<main class="max-w-6xl mx-auto p-6"><div id="dashboard"></div></main>',
+                    `<script>${specSource}<\/script>`,
+                    `<script>${renderSource}<\/script>`,
+                    `<script>dashboardRenderSpec(dashboardNormalizeSpec(${payload}), document.getElementById('dashboard'));<\/script>`,
+                    '</body></html>'
+                ].join('\n');
+
+                downloadFile(`${slugify(spec.title)}.html`, html, 'text/html;charset=utf-8;');
+                showToast('Standalone HTML downloaded.');
+            } catch (err) {
+                showToast('Could not build the standalone file. Use the share link instead.', 'error');
+            }
+        }
+
+        function resetSpec() {
+            spec = dashboardStarterSpec();
+            nextId = spec.visuals.length + 1;
+            refresh();
+        }
+
+        function init() {
+            fillSelect(document.getElementById('meta-refresh'), ['real time', 'hourly', 'daily', 'weekly', 'monthly'], 'daily');
+
+            const addButtons = document.getElementById('add-buttons');
+            for (const kind of Object.keys(DASHBOARD_VISUAL_KINDS)) {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'text-xs border border-slate-300 text-slate-700 hover:border-[#0062F1] hover:text-[#0062F1] rounded-lg px-3 py-1.5 transition-colors';
+                button.textContent = `+ ${DASHBOARD_VISUAL_KINDS[kind].label}`;
+                button.addEventListener('click', () => addVisual(kind));
+                addButtons.appendChild(button);
+            }
+
+            spec = dashboardDecodeSpec(window.location.hash) || dashboardStarterSpec();
+            nextId = spec.visuals.length + 1;
+
+            document.getElementById('meta-title').value = spec.title === 'Untitled dashboard' ? '' : spec.title;
+            document.getElementById('meta-subtitle').value = spec.subtitle;
+            document.getElementById('meta-requester').value = spec.requester;
+            document.getElementById('meta-audience').value = spec.audience;
+            document.getElementById('meta-refresh').value = spec.refresh;
+
+            const bind = (id, key) => {
+                const el = document.getElementById(id);
+                el.addEventListener('input', () => { spec[key] = el.value; refresh(false); });
+                el.addEventListener('change', () => { spec[key] = el.value; refresh(false); });
+            };
+
+            bind('meta-title', 'title');
+            bind('meta-subtitle', 'subtitle');
+            bind('meta-requester', 'requester');
+            bind('meta-audience', 'audience');
+            bind('meta-refresh', 'refresh');
+
+            refresh();
+        }
+
+        init();
+    </script>
+</body>
+</html>

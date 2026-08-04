@@ -35,6 +35,7 @@
     <script src="../tools/shared/flatten.js"></script>
     <script src="../tools/shared/profile.js"></script>
     <script src="../tools/shared/sanitize.js"></script>
+    <script src="../tools/shared/dashboard-spec.js"></script>
 
     <script>
         const results = [];
@@ -613,6 +614,123 @@
             const out = aggregateByMonth(rows, 'd', 'v');
             assertDeep(out.map(o => o.label), ['2026-01', '2026-03']);
             assertEqual(out[0].value, 5);
+        });
+
+        test('dashboard spec survives an encode and decode round trip', () => {
+            const spec = dashboardStarterSpec();
+            const back = dashboardDecodeSpec(dashboardEncodeSpec(spec));
+            assertDeep(back, spec);
+        });
+
+        test('dashboard spec encoding is URL safe and unicode safe', () => {
+            const encoded = dashboardEncodeSpec(dashboardNormalizeSpec({ title: 'Ventes Trimestrielles ✓ £€' }));
+            assertTrue(/^[A-Za-z0-9_-]+$/.test(encoded), 'no characters needing escaping');
+            assertEqual(dashboardDecodeSpec(encoded).title, 'Ventes Trimestrielles ✓ £€');
+        });
+
+        test('dashboardDecodeSpec returns null for junk rather than throwing', () => {
+            assertEqual(dashboardDecodeSpec('!!!not base64!!!'), null, 'junk');
+            assertEqual(dashboardDecodeSpec(''), null, 'empty');
+            assertEqual(dashboardDecodeSpec('#'), null, 'bare hash');
+            assertEqual(dashboardDecodeSpec(btoa('{"not":"a spec"')), null, 'truncated json');
+        });
+
+        test('dashboardDecodeSpec tolerates a leading hash from location.hash', () => {
+            const encoded = dashboardEncodeSpec(dashboardStarterSpec());
+            assertEqual(dashboardDecodeSpec(`#${encoded}`).title, 'Sales Performance');
+        });
+
+        test('normalizing clamps every enum field to a known value', () => {
+            const spec = dashboardNormalizeSpec({
+                refresh: 'whenever',
+                visuals: [{ kind: 'hologram', width: 'enormous', binding: { aggregation: 'DROP TABLE', grain: 'fortnight' } }]
+            });
+            assertEqual(spec.refresh, 'daily');
+            assertEqual(spec.visuals[0].kind, 'column');
+            assertEqual(spec.visuals[0].width, 'half');
+            assertEqual(spec.visuals[0].binding.aggregation, 'sum');
+        });
+
+        test('normalizing resists prototype keys and non-array visuals', () => {
+            assertEqual(dashboardNormalizeSpec({ visuals: [{ kind: '__proto__' }] }).visuals[0].kind, 'column');
+            assertEqual(dashboardNormalizeSpec({ visuals: [{ kind: 'constructor' }] }).visuals[0].kind, 'column');
+            assertDeep(dashboardNormalizeSpec({ visuals: 'nope' }).visuals, []);
+            assertDeep(dashboardNormalizeSpec(null).visuals, []);
+            assertDeep(dashboardNormalizeSpec('string').visuals, []);
+        });
+
+        test('normalizing drops null and non-object visuals without shifting the rest', () => {
+            const spec = dashboardNormalizeSpec({ visuals: [null, { kind: 'kpi', title: 'Keep me' }, 'junk'] });
+            assertEqual(spec.visuals.length, 3);
+            assertEqual(spec.visuals[1].title, 'Keep me');
+            assertEqual(spec.visuals[1].kind, 'kpi');
+        });
+
+        test('normalizing bounds text length, limits and filter counts', () => {
+            const spec = dashboardNormalizeSpec({
+                requester: 'x'.repeat(400),
+                visuals: [{ kind: 'column', binding: { limit: 99999, filters: new Array(30).fill({ field: 'a' }) } }]
+            });
+            assertEqual(spec.requester.length, 80);
+            assertEqual(spec.visuals[0].binding.limit, 50);
+            assertEqual(spec.visuals[0].binding.filters.length, 8);
+            assertEqual(dashboardNormalizeSpec({ visuals: [{ kind: 'column', binding: { limit: -5 } }] }).visuals[0].binding.limit, 3);
+        });
+
+        test('normalizing gives each visual kind only the binding fields it uses', () => {
+            const spec = dashboardNormalizeSpec({
+                visuals: [
+                    { kind: 'kpi', binding: { dimension: 'Region', grain: 'month', measure2: 'Units' } },
+                    { kind: 'trend', binding: { dimension: 'Region' } },
+                    { kind: 'scatter', binding: { measure2: 'Units' } }
+                ]
+            });
+            assertEqual(spec.visuals[0].binding.dimension, null, 'kpi has no dimension');
+            assertEqual(spec.visuals[0].binding.grain, null, 'kpi has no grain');
+            assertEqual(spec.visuals[0].binding.measure2, null, 'kpi has no second measure');
+            assertEqual(spec.visuals[1].binding.grain, 'month', 'trend keeps a grain');
+            assertEqual(spec.visuals[1].binding.dimension, null, 'trend has no dimension');
+            assertEqual(spec.visuals[2].binding.measure2, 'Units', 'scatter keeps a second measure');
+        });
+
+        test('sample data is stable for the same visual and varies across visuals', () => {
+            const spec = dashboardStarterSpec();
+            const first = dashboardResolveSample(spec.visuals[0]);
+            const again = dashboardResolveSample(spec.visuals[0]);
+            assertEqual(first.value, again.value, 'same visual gives the same number every time');
+            assertTrue(first.value !== dashboardResolveSample(spec.visuals[1]).value, 'different visuals differ');
+        });
+
+        test('sample data matches the shape each visual kind needs', () => {
+            const build = (kind, binding) => dashboardResolveSample(dashboardNormalizeVisual({ kind, binding }, 0));
+
+            assertEqual(build('kpi', { measure: 'Revenue' }).kind, 'kpi');
+            assertEqual(build('trend', { measure: 'Revenue', grain: 'month' }).points.length, 12);
+            assertEqual(build('trend', { measure: 'Revenue', grain: 'year' }).points.length, 5);
+            assertEqual(build('column', { measure: 'Revenue', dimension: 'Region', limit: 6 }).points.length, 6);
+            assertEqual(build('donut', { measure: 'Revenue', dimension: 'Region', limit: 20 }).points.length, 6, 'donut caps at 6 slices');
+            assertTrue(build('scatter', { measure: 'Revenue', measure2: 'Units' }).points.every(p => 'x' in p && 'y' in p), 'scatter gives xy points');
+        });
+
+        test('categorical sample data comes back sorted largest first', () => {
+            const points = dashboardResolveSample(dashboardNormalizeVisual({ kind: 'bar', binding: { measure: 'Revenue', dimension: 'Region', limit: 8 } }, 0)).points;
+            for (let i = 1; i < points.length; i++) {
+                assertTrue(points[i - 1].value >= points[i].value, 'descending order');
+            }
+        });
+
+        test('dashboardFormatValue picks a sensible unit for the measure name', () => {
+            assertEqual(dashboardFormatValue(1234567, 'Revenue', 'sum'), '$1.2M');
+            assertEqual(dashboardFormatValue(4200, 'Order Count', 'count'), '4.2K');
+            assertEqual(dashboardFormatValue(12.5, 'Margin Rate', 'average'), '12.5%');
+            assertEqual(dashboardFormatValue(0, 'Revenue', 'sum'), '$0.0');
+        });
+
+        test('dashboardBindingSummary reads as a sentence for each kind', () => {
+            const summary = (kind, binding) => dashboardBindingSummary(dashboardNormalizeVisual({ kind, binding }, 0));
+            assertEqual(summary('kpi', { measure: 'Revenue', aggregation: 'sum' }), 'sum of Revenue');
+            assertEqual(summary('column', { measure: 'Revenue', aggregation: 'sum', dimension: 'Region' }), 'sum of Revenue by Region');
+            assertEqual(summary('trend', { measure: 'Revenue', aggregation: 'average', grain: 'quarter' }), 'average of Revenue per quarter');
         });
 
         const passed = results.filter(r => r.pass).length;

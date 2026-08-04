@@ -18,6 +18,7 @@ and a card on the landing page, and it's a new tool.
 | Timestamp Converter | `tools/timestamp-converter/` | Unix/date conversion across timezones, ISO 8601, relative time |
 | Column Statistics | `tools/column-stats/` | Per-column min/max/mean/median/stddev/nulls — instant data profiling, no mapping step |
 | Instant Dashboard | `tools/instant-dashboard/` | Profiles any file and builds a dashboard shaped around what it finds, with no column mapping or setup |
+| Dashboard Builder | `tools/dashboard-builder/` | Capture a dashboard request (visuals, measures, breakdowns) and share it as a link that renders the requested layout |
 | SQL Workbench | `tools/sql-workbench/` | Load CSV/Excel/JSON files as tables and query them with standard SQLite, including joins across files |
 | Lookup & Merge | `tools/lookup-merge/` | Match two files on a shared key and pull columns across, reporting unmatched rows |
 | Fuzzy Duplicate Finder | `tools/fuzzy-dupes/` | Finds near-duplicate values that exact deduplication misses, with an adjustable similarity threshold |
@@ -77,6 +78,12 @@ that Instant Dashboard runs on. It decides what each column actually is
 (date, measure, category, identifier, free text) and which charts are worth
 drawing for the shape it found.
 
+`tools/shared/dashboard-spec.js` and `tools/shared/dashboard-render.js` are the
+two halves of Dashboard Builder. The spec module owns the request format
+(version 1), normalizes it, and encodes it to a URL-safe string; the render
+module turns a spec into KPI tiles and Chart.js visuals. See "Dashboard
+Builder" below for how the two fit together.
+
 `tools/shared/sanitize.js` is an allowlist HTML sanitizer used by Markdown
 Previewer. `marked` does not sanitize its output (the option was removed in
 v5), so rendering a README from an untrusted source straight into `innerHTML`
@@ -127,12 +134,15 @@ library's output through `tools/shared/sanitize.js` before rendering.
 
   | Code | View | Tools |
   |---|---|---|
-  | `1159` | Data Analyst | all 24 tools |
-  | `7284` | Leadership | Data Analyzer, Instant Dashboard, Pivot & Chart Explorer, Chart Builder |
-  | `5931` | Marketing | QR Generator, Color Tools, Markdown Previewer, Text Analyzer, Chart Builder, Instant Dashboard |
-  | `4067` | IT / Dev | JSON Formatter, Regex Tester, Base64/URL Encoder, Timestamp Converter, Text Diff, File Diff, SQL Workbench, Code Helper, JWT Decoder, Test Data Generator, Instant Dashboard |
-  | `8412` | HR / Operations | Data Cleaner, Format Converter, Column Statistics, Timestamp Converter, Lookup & Merge, Fuzzy Duplicate Finder, Instant Dashboard |
-  | `2650` | Finance | Data Analyzer, Column Statistics, Pivot & Chart Explorer, File Diff, SQL Workbench, Lookup & Merge, Chart Builder, Instant Dashboard |
+  | `1159` | Data Analyst | all 25 tools |
+  | `7284` | Leadership | Data Analyzer, Instant Dashboard, Dashboard Builder, Pivot & Chart Explorer, Chart Builder |
+  | `5931` | Marketing | QR Generator, Color Tools, Markdown Previewer, Text Analyzer, Chart Builder, Instant Dashboard, Dashboard Builder |
+  | `4067` | IT / Dev | JSON Formatter, Regex Tester, Base64/URL Encoder, Timestamp Converter, Text Diff, File Diff, SQL Workbench, Code Helper, JWT Decoder, Test Data Generator, Instant Dashboard, Dashboard Builder |
+  | `8412` | HR / Operations | Data Cleaner, Format Converter, Column Statistics, Timestamp Converter, Lookup & Merge, Fuzzy Duplicate Finder, Instant Dashboard, Dashboard Builder |
+  | `2650` | Finance | Data Analyzer, Column Statistics, Pivot & Chart Explorer, File Diff, SQL Workbench, Lookup & Merge, Chart Builder, Instant Dashboard, Dashboard Builder |
+
+  Dashboard Builder is on every code on the assumption that anyone might want to
+  request a dashboard. Trim it out of any view where that is not true.
 
   A code is not remembered anywhere (no `localStorage`, no URL param), so it
   has to be re-entered on every fresh load by design, and there's no way to
@@ -145,6 +155,43 @@ library's output through `tools/shared/sanitize.js` before rendering.
   gate entirely, since there's no backend to actually check credentials
   against. Real per-person restriction would need a server with
   authentication, which is a different architecture than this static site.
+
+## Dashboard Builder (`tools/dashboard-builder/`)
+
+Somebody wants a dashboard. Rather than describing it over email, they pick the
+visuals here, say what each one measures and how it breaks down, and send a
+link. Whoever builds the real thing sees the exact layout that was asked for.
+
+`index.html` is the request form with a live preview. `view.html` is the
+read-only viewer. There is no server and nothing is saved anywhere: the entire
+request is encoded into the URL fragment, so the link *is* the dashboard. A
+five-visual request comes to roughly 1.8 KB of URL. Fragments are never sent to
+the server, so nothing about the request reaches Azure.
+
+Seven visual kinds are available (KPI tile, trend line, column, bar, donut,
+table, scatter), each laid out at quarter, half, or full width on a twelve
+column grid.
+
+**The numbers are placeholders.** Every visual carries a `binding`
+(`source`, `measure`, `aggregation`, `dimension`, `measure2`, `grain`, `limit`,
+`filters`) describing the data it wants, and `dashboardResolveSample` invents
+plausible figures for that shape. The figures are seeded from the visual's id
+and title, so a given link always shows the same numbers and the layout can be
+reviewed and signed off without anyone thinking the values are real. When a
+data feed exists, `dashboardResolveSample` is the single function that gets
+replaced; nothing else in the renderer changes.
+
+Because a spec arrives from a URL that anyone can edit, `dashboardNormalizeSpec`
+treats it as untrusted: every enum is clamped to a known value, text is length
+capped, counts are bounded, unknown visual kinds fall back to a column chart,
+and prototype keys like `__proto__` are rejected by an own-property check. The
+renderer builds every node with `textContent`, so a spec carrying markup renders
+as literal text rather than HTML. `dashboardDecodeSpec` returns `null` on junk
+instead of throwing.
+
+"Download HTML" produces a standalone file with both shared modules and the
+spec inlined, for anyone who wants a copy that does not depend on the hub
+staying up. It still loads Tailwind and Chart.js from their CDNs.
 
 ## Data Analyzer (`tools/data-analyzer/`)
 
@@ -165,10 +212,11 @@ code they cover.
 `tests/shared.test.html` covers `tools/shared/`: CSV parsing and export,
 HTML escaping and sanitizing, header uniquifying, Excel grid reshaping and
 header row detection, SQL table-name sanitizing and type inference, summary
-statistics and percentiles, fuzzy matching, JSON flattening, and the column
-profiling behind Instant Dashboard. It loads the exact files the tools load, so
-a failure here means a failure in every tool that depends on that module
-(75 assertions).
+statistics and percentiles, fuzzy matching, JSON flattening, the column
+profiling behind Instant Dashboard, and the Dashboard Builder spec format
+(round trips, clamping of untrusted specs, sample data shape). It loads the
+exact files the tools load, so a failure here means a failure in every tool
+that depends on that module (89 assertions).
 
 `tests/data-analyzer.test.html` is a small, self-contained in-browser test
 suite for the Data Analyzer's engine — regression math, seasonal forecasting,
@@ -195,29 +243,25 @@ http://localhost:8020/tools/data-analyzer/ to go straight to the analyzer.
 restrict local script loading over the `file://` protocol — `serve.sh`
 avoids that entirely.)
 
-## Publish to GitHub Pages
+## Publishing
 
-1. Create a new GitHub repository (public, so Pages is free) — either on
-   github.com or with `gh repo create`.
-2. From this folder:
-   ```bash
-   git init
-   git add .
-   git commit -m "Static data analyzer"
-   git branch -M main
-   git remote add origin https://github.com/<your-username>/<your-repo>.git
-   git push -u origin main
-   ```
-3. On GitHub: repo → **Settings → Pages** → under "Build and deployment",
-   set **Source** to "Deploy from a branch", branch `main`, folder `/ (root)`.
-   Save.
-4. Wait ~1 minute, then your app is live at
-   `https://<your-username>.github.io/<your-repo>/`.
+The hub is hosted on **Azure Static Web Apps**, deployed from the GitHub repo
+by the workflow in `.github/workflows/`. Edit the files, commit, and push:
+the Action rebuilds and redeploys on every push to `main`. There is no build
+step, no server to restart, and nothing to redeploy manually.
 
-## Updating it later
+The site is static end to end, so a deploy is just a file copy. If a change
+looks right at `http://localhost:8020` via `./serve.sh`, it will look the same
+once deployed.
 
-Edit the files, commit, and push — GitHub Pages redeploys automatically on
-every push to `main`. No server to restart, nothing to redeploy manually.
+Two things to know if a backend is ever added (the Dashboard Builder data feed
+is the likely first case):
+
+- Static Web Apps includes managed Azure Functions on the free tier, but the
+  workflow ships with `api_location: ""`. It has to point at an `api` folder
+  before any function will deploy.
+- Static Web Apps does not include a database. Persisting anything means
+  adding a separate resource such as Table Storage or Cosmos DB.
 
 ## Renaming the hub
 

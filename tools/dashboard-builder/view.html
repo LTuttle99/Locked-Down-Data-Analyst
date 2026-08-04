@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Preview — Data and Analytics Hub</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600&display=swap" rel="stylesheet">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2300133C'/%3E%3Ctext x='16' y='23' font-family='Georgia,serif' font-size='19' fill='%230062F1' text-anchor='middle'%3EH%3C/text%3E%3C/svg%3E">
+    <style>
+        h1, h2 { font-family: 'Lora', Georgia, serif; }
+        @media print {
+            .no-print { display: none !important; }
+            body { background: #ffffff; }
+        }
+    </style>
+</head>
+
+<body class="bg-slate-50 text-slate-900 min-h-screen font-sans">
+
+    <header class="no-print border-b border-slate-200 bg-white px-8 py-4 flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+            <a href="../../index.html" class="text-xs text-slate-500 hover:text-[#0062F1]">&larr; Hub</a>
+            <div class="h-6 w-px bg-slate-100"></div>
+            <h2 class="text-lg font-semibold text-[#00133C]">Dashboard Preview</h2>
+        </div>
+        <div class="flex items-center gap-3">
+            <button onclick="window.print()" class="text-xs text-[#0062F1] hover:text-[#00133C] font-medium">Print / PDF</button>
+            <a id="edit-link" href="index.html" class="text-xs text-[#0062F1] hover:text-[#00133C] font-medium">Edit this request</a>
+        </div>
+    </header>
+
+    <main class="max-w-6xl mx-auto p-6">
+        <div id="empty-state" class="hidden bg-white border border-slate-200 rounded-xl p-10 text-center">
+            <h1 class="text-xl font-semibold text-[#00133C]">Nothing to show</h1>
+            <p class="text-sm text-slate-600 mt-2 max-w-md mx-auto">
+                This page builds a dashboard from a spec carried in the link itself. The link you opened
+                has no spec attached, or the spec could not be read.
+            </p>
+            <a href="index.html" class="inline-block mt-5 bg-[#0062F1] hover:bg-[#0050C7] text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition-colors">
+                Build a dashboard request
+            </a>
+        </div>
+
+        <div id="dashboard"></div>
+    </main>
+
+    <script src="../shared/dashboard-spec.js"></script>
+    <script src="../shared/dashboard-render.js"></script>
+    <script>
+        function boot() {
+            const spec = dashboardDecodeSpec(window.location.hash);
+            const empty = document.getElementById('empty-state');
+            const host = document.getElementById('dashboard');
+
+            if (!spec) {
+                empty.classList.remove('hidden');
+                host.classList.add('hidden');
+                return;
+            }
+
+            empty.classList.add('hidden');
+            host.classList.remove('hidden');
+            document.title = `${spec.title} — Dashboard Preview`;
+            document.getElementById('edit-link').href = `index.html${window.location.hash}`;
+
+            dashboardRenderSpec(spec, host);
+        }
+
+        window.addEventListener('hashchange', boot);
+        boot();
+    </script>
+</body>
+</html>
