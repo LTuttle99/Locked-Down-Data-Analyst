@@ -103,6 +103,22 @@
                             </div>
                         </div>
 
+                        <div class="pt-3 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                                <label class="field-label" for="opt-palette">Colours</label>
+                                <select id="opt-palette" class="field"></select>
+                            </div>
+                            <div>
+                                <label class="field-label" for="opt-accent">Main colour</label>
+                                <div class="flex gap-2 items-center">
+                                    <input type="color" id="opt-accent" value="#0062f1" class="h-8 w-12 rounded border border-slate-300 bg-white cursor-pointer">
+                                    <button onclick="clearAccent()" class="text-[11px] text-slate-500 hover:text-[#0062F1] font-medium">Use palette default</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="palette-preview" class="flex gap-1"></div>
+
                         <div class="pt-3 border-t border-slate-100">
                             <span class="field-label">Show on the dashboard</span>
                             <label class="flex items-center gap-2 text-xs text-slate-700 cursor-pointer mt-1">
@@ -112,6 +128,10 @@
                             <label class="flex items-center gap-2 text-xs text-slate-700 cursor-pointer mt-1.5">
                                 <input type="checkbox" id="opt-deltas" checked class="accent-[#0062F1]">
                                 Change vs prior period on KPI tiles
+                            </label>
+                            <label class="flex items-center gap-2 text-xs text-slate-700 cursor-pointer mt-1.5">
+                                <input type="checkbox" id="opt-edit" checked class="accent-[#0062F1]">
+                                An "Edit this dashboard" link on the built file
                             </label>
                         </div>
                     </div>
@@ -931,32 +951,107 @@
                 .replace(/\u2029/g, "\\u2029");
         }
 
+        function clearAccent() {
+            spec.accent = null;
+            document.getElementById('opt-accent').value = dashboardPaletteFor(spec)[0];
+            refresh(false);
+            renderPalettePreview();
+        }
+
+        function renderPalettePreview() {
+            const host = document.getElementById('palette-preview');
+            host.textContent = '';
+            for (const colour of dashboardPaletteFor(spec).slice(0, 8)) {
+                const chip = document.createElement('span');
+                chip.className = 'h-4 flex-1 rounded';
+                chip.style.background = colour;
+                chip.title = colour;
+                host.appendChild(chip);
+            }
+        }
+
+        function adoptHandoff() {
+            let raw = null;
+            try {
+                raw = sessionStorage.getItem('dashboardHandoff');
+                sessionStorage.removeItem('dashboardHandoff');
+            } catch (e) {
+                return;
+            }
+            if (!raw) return;
+
+            try {
+                const handed = JSON.parse(raw);
+                if (!handed || !Array.isArray(handed.rows) || handed.rows.length === 0) return;
+
+                dataset = classifyDataset({ columns: handed.columns, rows: handed.rows }, handed.source || 'the dashboard you came from');
+                if (handed.dateColumn) dataset.dateColumn = handed.dateColumn;
+
+                document.getElementById('data-status').textContent =
+                    `${dataset.source} — ${dataset.rowCount.toLocaleString()} rows, carried over from the dashboard you were viewing`;
+                document.getElementById('clear-data').classList.remove('hidden');
+            } catch (e) {
+            }
+        }
+
+        function builderUrl() {
+            return window.location.href.replace(/[?#].*$/, '');
+        }
+
         function standaloneBoot(normalized, baked, live) {
             const specJson = safeJson(normalized);
             const bakedJson = safeJson(baked);
 
-            if (!live) {
-                return `dashboardRenderSpec(dashboardNormalizeSpec(${specJson}), document.getElementById('dashboard'), { dataset: ${bakedJson} });`;
-            }
-
-            return [
+            const lines = [
                 `var SPEC = dashboardNormalizeSpec(${specJson});`,
                 `var SNAPSHOT = ${bakedJson};`,
+                `var BUILDER = ${safeJson(builderUrl())};`,
                 'var HOST = document.getElementById("dashboard");',
-                'dashboardRenderSpec(SPEC, HOST, { dataset: SNAPSHOT });',
-                'fetchGoogleSheet(SPEC.source.url).then(function (parsed) {',
-                '  var profiles = profileDataset(parsed.columns, parsed.rows);',
-                '  var dateProfile = profiles.filter(function (p) { return p.type === "date"; })[0];',
-                '  dashboardRenderSpec(SPEC, HOST, { dataset: {',
-                '    source: "the connected Google Sheet",',
-                '    columns: parsed.columns,',
-                '    rows: parsed.rows,',
-                '    rowCount: parsed.rows.length,',
-                '    dateColumn: dateProfile ? dateProfile.name : null,',
-                '    selections: {}',
-                '  } });',
-                '}).catch(function () {});'
-            ].join('\n');
+                'var DATASET = SNAPSHOT;',
+                'dashboardRenderSpec(SPEC, HOST, { dataset: DATASET });'
+            ];
+
+            if (live) {
+                lines.push(
+                    'fetchGoogleSheet(SPEC.source.url).then(function (parsed) {',
+                    '  var profiles = profileDataset(parsed.columns, parsed.rows);',
+                    '  var dateProfile = profiles.filter(function (p) { return p.type === "date"; })[0];',
+                    '  DATASET = {',
+                    '    source: "the connected Google Sheet",',
+                    '    columns: parsed.columns,',
+                    '    rows: parsed.rows,',
+                    '    rowCount: parsed.rows.length,',
+                    '    dateColumn: dateProfile ? dateProfile.name : null,',
+                    '    selections: {}',
+                    '  };',
+                    '  dashboardRenderSpec(SPEC, HOST, { dataset: DATASET });',
+                    '}).catch(function () {});'
+                );
+            }
+
+            if (normalized.showEditLink !== false) {
+                lines.push(
+                    'var bar = document.createElement("div");',
+                    'bar.className = "max-w-6xl mx-auto px-6 pb-8 text-right";',
+                    'var edit = document.createElement("a");',
+                    'edit.className = "text-[11px] text-slate-400 hover:text-[#0062F1] font-medium";',
+                    'edit.textContent = "Edit this dashboard";',
+                    'edit.href = BUILDER + "#" + dashboardEncodeSpec(SPEC);',
+                    'edit.addEventListener("click", function () {',
+                    '  try {',
+                    '    if (DATASET && DATASET.rows && DATASET.rows.length) {',
+                    '      sessionStorage.setItem("dashboardHandoff", JSON.stringify({',
+                    '        source: DATASET.source, columns: DATASET.columns, rows: DATASET.rows, dateColumn: DATASET.dateColumn',
+                    '      }));',
+                    '    }',
+                    '  } catch (e) {}',
+                    '});',
+                    'bar.appendChild(edit);',
+                    'document.body.appendChild(bar);'
+                );
+            }
+
+            return lines.join('\n');
         }
 
         async function downloadStandalone() {
@@ -1033,6 +1128,8 @@
             spec = dashboardDecodeSpec(window.location.hash) || dashboardNormalizeSpec({ title: '', visuals: [], slicers: [] });
             nextId = spec.visuals.length + 1;
 
+            adoptHandoff();
+
             document.getElementById('meta-title').value = spec.title === 'Untitled dashboard' ? '' : spec.title;
             document.getElementById('meta-subtitle').value = spec.subtitle;
             document.getElementById('meta-requester').value = spec.requester;
@@ -1040,8 +1137,13 @@
             document.getElementById('meta-refresh').value = spec.refresh;
             document.getElementById('opt-captions').checked = spec.showCaptions !== false;
             document.getElementById('opt-deltas').checked = spec.showDeltas !== false;
+            document.getElementById('opt-edit').checked = spec.showEditLink !== false;
 
-            if (spec.subtitle || spec.requester || spec.audience || !spec.showCaptions || !spec.showDeltas) toggleDetails();
+            fillSelect(document.getElementById('opt-palette'), DASHBOARD_PALETTE_NAMES, spec.palette,
+                (n) => n.charAt(0).toUpperCase() + n.slice(1));
+            document.getElementById('opt-accent').value = dashboardPaletteFor(spec)[0];
+
+            if (spec.subtitle || spec.requester || spec.audience || !spec.showCaptions || !spec.showDeltas || !spec.showEditLink || spec.palette !== 'hub' || spec.accent) toggleDetails();
 
             const bind = (id, key) => {
                 const el = document.getElementById(id);
@@ -1062,6 +1164,22 @@
 
             bindToggle('opt-captions', 'showCaptions');
             bindToggle('opt-deltas', 'showDeltas');
+            bindToggle('opt-edit', 'showEditLink');
+
+            document.getElementById('opt-palette').addEventListener('change', (e) => {
+                spec.palette = e.target.value;
+                spec.accent = null;
+                document.getElementById('opt-accent').value = dashboardPaletteFor(spec)[0];
+                refresh(false);
+                renderPalettePreview();
+            });
+            document.getElementById('opt-accent').addEventListener('input', (e) => {
+                spec.accent = e.target.value;
+                refresh(false);
+                renderPalettePreview();
+            });
+
+            renderPalettePreview();
 
             refresh();
         }

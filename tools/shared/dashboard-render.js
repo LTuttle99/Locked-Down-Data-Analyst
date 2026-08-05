@@ -1,5 +1,3 @@
-const DASHBOARD_PALETTE = ["#0062F1", "#00133C", "#DC6803", "#059669", "#7C3AED", "#DB2777", "#0891B2", "#CA8A04", "#65A30D", "#E11D48"];
-
 const DASHBOARD_WIDTH_CLASSES = {
   quarter: "md:col-span-3",
   half: "md:col-span-6",
@@ -26,10 +24,21 @@ function dashboardChartOptions(extra) {
   }, extra || {});
 }
 
-function dashboardDrawKpi(host, visual, data, showDelta) {
+function dashboardFade(hex, alpha) {
+  const clean = /^#[0-9a-fA-F]{6}$/.test(String(hex)) ? String(hex) : "#0062F1";
+  const r = parseInt(clean.slice(1, 3), 16);
+  const g = parseInt(clean.slice(3, 5), 16);
+  const b = parseInt(clean.slice(5, 7), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+function dashboardDrawKpi(host, visual, data, showDelta, palette) {
   const wrap = dashboardElement("div", "flex flex-col justify-center h-full");
-  wrap.appendChild(dashboardElement("p", "text-3xl font-bold text-[#00133C] leading-tight",
-    dashboardFormatValue(data.value, visual.binding.measure, visual.binding.aggregation, dashboardBindingFormat(visual.binding))));
+
+  const big = dashboardElement("p", "text-3xl font-bold leading-tight",
+    dashboardFormatValue(data.value, visual.binding.measure, visual.binding.aggregation, dashboardBindingFormat(visual.binding)));
+  big.style.color = palette[0];
+  wrap.appendChild(big);
 
   if (showDelta) {
     const delta = data.delta;
@@ -67,7 +76,7 @@ function dashboardDrawTable(host, visual, data) {
   host.appendChild(scroller);
 }
 
-function dashboardDrawChart(host, visual, data, charts) {
+function dashboardDrawChart(host, visual, data, charts, palette) {
   const frame = dashboardElement("div", visual.width === "full" ? "h-72" : "h-56");
   const canvas = document.createElement("canvas");
   frame.appendChild(canvas);
@@ -87,8 +96,8 @@ function dashboardDrawChart(host, visual, data, charts) {
         labels: data.points.map((p) => p.label),
         datasets: [{
           data: data.points.map((p) => p.value),
-          borderColor: DASHBOARD_PALETTE[0],
-          backgroundColor: "rgba(0,98,241,0.12)",
+          borderColor: palette[0],
+          backgroundColor: dashboardFade(palette[0], 0.12),
           fill: true,
           tension: 0.3,
           pointRadius: data.points.length > 20 ? 0 : 3
@@ -111,7 +120,7 @@ function dashboardDrawChart(host, visual, data, charts) {
         labels: data.points.map((p) => p.label),
         datasets: [{
           data: data.points.map((p) => p.value),
-          backgroundColor: data.points.map((_, i) => DASHBOARD_PALETTE[i % DASHBOARD_PALETTE.length]),
+          backgroundColor: data.points.map((_, i) => palette[i % palette.length]),
           borderColor: "#ffffff",
           borderWidth: 2
         }]
@@ -129,7 +138,7 @@ function dashboardDrawChart(host, visual, data, charts) {
   if (visual.kind === "scatter") {
     charts.push(new Chart(canvas, {
       type: "scatter",
-      data: { datasets: [{ data: data.points, backgroundColor: "rgba(0,98,241,0.45)", pointRadius: 3 }] },
+      data: { datasets: [{ data: data.points, backgroundColor: dashboardFade(palette[0], 0.45), pointRadius: 3 }] },
       options: dashboardChartOptions({
         scales: {
           x: { title: { display: true, text: visual.binding.measure, font: { size: 10 } }, ticks: { color: "#475569", font: { size: 10 } }, grid: { color: "#f1f5f9" } },
@@ -145,7 +154,7 @@ function dashboardDrawChart(host, visual, data, charts) {
     type: "bar",
     data: {
       labels: data.points.map((p) => p.label),
-      datasets: [{ data: data.points.map((p) => p.value), backgroundColor: DASHBOARD_PALETTE[0], borderRadius: 4 }]
+      datasets: [{ data: data.points.map((p) => p.value), backgroundColor: palette[0], borderRadius: 4 }]
     },
     options: dashboardChartOptions({
       indexAxis: horizontal ? "y" : "x",
@@ -179,11 +188,11 @@ function dashboardRenderVisual(visual, options, charts) {
   if (data.empty) {
     card.appendChild(dashboardElement("div", "text-xs text-slate-500 bg-slate-50 border border-dashed border-slate-300 rounded-lg px-3 py-6 text-center", data.empty));
   } else if (visual.kind === "kpi") {
-    dashboardDrawKpi(card, visual, data, options.showDeltas);
+    dashboardDrawKpi(card, visual, data, options.showDeltas, options.palette);
   } else if (visual.kind === "table") {
     dashboardDrawTable(card, visual, data);
   } else {
-    dashboardDrawChart(card, visual, data, charts);
+    dashboardDrawChart(card, visual, data, charts, options.palette);
   }
 
   if (visual.notes && options.showNotes) {
@@ -316,6 +325,7 @@ function dashboardRenderSpec(spec, container, options = {}) {
   const settings = Object.assign(
     { showNotes: true, showHeader: true, showFooter: true },
     { showCaptions: spec.showCaptions !== false, showDeltas: spec.showDeltas !== false },
+    { palette: dashboardPaletteFor(spec) },
     options
   );
   const charts = [];

@@ -22,6 +22,29 @@ const DASHBOARD_SLICER_TYPES = ["list", "dropdown", "range", "date range"];
 
 const DASHBOARD_FORMATS = ["auto", "percent", "number", "currency"];
 
+const DASHBOARD_PALETTES = {
+  hub: ["#0062F1", "#00133C", "#DC6803", "#059669", "#7C3AED", "#DB2777", "#0891B2", "#CA8A04", "#65A30D", "#E11D48"],
+  ocean: ["#0E7490", "#0369A1", "#1E3A8A", "#0D9488", "#155E75", "#3B82F6", "#14B8A6", "#1D4ED8", "#22D3EE", "#312E81"],
+  forest: ["#15803D", "#166534", "#4D7C0F", "#065F46", "#84CC16", "#047857", "#3F6212", "#10B981", "#14532D", "#A3E635"],
+  sunset: ["#EA580C", "#DC2626", "#D97706", "#BE123C", "#F59E0B", "#9A3412", "#F43F5E", "#B45309", "#FB923C", "#7F1D1D"],
+  plum: ["#7C3AED", "#6D28D9", "#A21CAF", "#4C1D95", "#C026D3", "#8B5CF6", "#DB2777", "#581C87", "#E879F9", "#9D174D"],
+  slate: ["#334155", "#0F172A", "#64748B", "#1E293B", "#94A3B8", "#475569", "#CBD5E1", "#0B1220", "#7C8CA1", "#E2E8F0"]
+};
+
+const DASHBOARD_PALETTE_NAMES = Object.keys(DASHBOARD_PALETTES);
+
+function dashboardCleanColor(value) {
+  const text = String(value === null || value === undefined ? "" : value).trim();
+  return /^#[0-9a-fA-F]{6}$/.test(text) ? text.toLowerCase() : null;
+}
+
+function dashboardPaletteFor(spec) {
+  const base = DASHBOARD_PALETTES[spec && spec.palette] || DASHBOARD_PALETTES.hub;
+  const accent = spec ? dashboardCleanColor(spec.accent) : null;
+  if (!accent) return base;
+  return [accent].concat(base.filter((c) => c.toLowerCase() !== accent));
+}
+
 const DASHBOARD_TEXT_LIMIT = 160;
 
 function dashboardCleanText(value, limit = DASHBOARD_TEXT_LIMIT) {
@@ -149,6 +172,9 @@ function dashboardNormalizeSpec(raw) {
     source: dashboardNormalizeSource(source.source),
     showCaptions: dashboardBoolean(source.showCaptions, true),
     showDeltas: dashboardBoolean(source.showDeltas, true),
+    showEditLink: dashboardBoolean(source.showEditLink, true),
+    palette: dashboardPickOption(source.palette, DASHBOARD_PALETTE_NAMES, "hub"),
+    accent: dashboardCleanColor(source.accent),
     slicers: slicers.map(dashboardNormalizeSlicer).filter(Boolean),
     visuals: visuals.map(dashboardNormalizeVisual)
   };

@@ -1152,6 +1152,83 @@
             assertDeep(dashboardDecodeSpec(dashboardEncodeSpec(off)), off);
         });
 
+        test('palette defaults to hub and only accepts known names', () => {
+            assertEqual(dashboardNormalizeSpec({}).palette, 'hub');
+            assertEqual(dashboardNormalizeSpec({ palette: 'forest' }).palette, 'forest');
+            assertEqual(dashboardNormalizeSpec({ palette: 'chartreuse' }).palette, 'hub', 'unknown name falls back');
+            assertEqual(dashboardNormalizeSpec({ palette: 123 }).palette, 'hub', 'junk falls back');
+        });
+
+        test('a custom accent colour must be a real hex value', () => {
+            assertEqual(dashboardNormalizeSpec({ accent: '#FF8800' }).accent, '#ff8800');
+            assertEqual(dashboardNormalizeSpec({}).accent, null, 'none by default');
+            assertEqual(dashboardNormalizeSpec({ accent: 'red' }).accent, null, 'names rejected');
+            assertEqual(dashboardNormalizeSpec({ accent: '#fff' }).accent, null, 'short hex rejected');
+            assertEqual(dashboardNormalizeSpec({ accent: 'url(evil)' }).accent, null, 'css injection rejected');
+            assertEqual(dashboardNormalizeSpec({ accent: '#0062F1; background: url(x)' }).accent, null, 'trailing css rejected');
+        });
+
+        test('dashboardPaletteFor puts a custom accent first without duplicating it', () => {
+            const base = dashboardPaletteFor(dashboardNormalizeSpec({ palette: 'ocean' }));
+            assertDeep(base, DASHBOARD_PALETTES.ocean, 'no accent means the palette as-is');
+
+            const accented = dashboardPaletteFor(dashboardNormalizeSpec({ palette: 'ocean', accent: '#FF8800' }));
+            assertEqual(accented[0], '#ff8800', 'accent leads');
+            assertEqual(accented.length, DASHBOARD_PALETTES.ocean.length + 1, 'nothing lost');
+
+            const reuse = dashboardPaletteFor(dashboardNormalizeSpec({ palette: 'ocean', accent: DASHBOARD_PALETTES.ocean[3] }));
+            assertEqual(reuse[0], DASHBOARD_PALETTES.ocean[3].toLowerCase());
+            assertEqual(reuse.length, DASHBOARD_PALETTES.ocean.length, 'picking an existing palette colour does not lengthen it');
+            assertEqual(new Set(reuse.map(c => c.toLowerCase())).size, reuse.length, 'no colour appears twice');
+        });
+
+        test('every palette has enough distinct colours for a donut', () => {
+            for (const name of DASHBOARD_PALETTE_NAMES) {
+                const colours = DASHBOARD_PALETTES[name];
+                assertTrue(colours.length >= 6, `${name} has at least six`);
+                assertEqual(new Set(colours).size, colours.length, `${name} has no duplicates`);
+                assertTrue(colours.every(c => /^#[0-9A-Fa-f]{6}$/.test(c)), `${name} is all valid hex`);
+            }
+        });
+
+        test('colour choices survive a round trip', () => {
+            const spec = dashboardNormalizeSpec({ palette: 'sunset', accent: '#123456' });
+            assertDeep(dashboardDecodeSpec(dashboardEncodeSpec(spec)), spec);
+        });
+
+        test('the edit link toggle defaults to on and round trips', () => {
+            assertEqual(dashboardNormalizeSpec({}).showEditLink, true);
+            const off = dashboardNormalizeSpec({ showEditLink: false });
+            assertEqual(off.showEditLink, false);
+            assertEqual(dashboardDecodeSpec(dashboardEncodeSpec(off)).showEditLink, false);
+        });
+
+        test('a spec round trips unchanged through an edit cycle', () => {
+            const original = dashboardNormalizeSpec({
+                title: 'Pipeline',
+                subtitle: 'Weekly review',
+                showCaptions: false,
+                slicers: [{ id: 's1', field: 'Rep', type: 'dropdown' }],
+                visuals: [{
+                    id: 'v1', kind: 'kpi', title: 'Close Rate',
+                    binding: {
+                        measure: 'Deal ID', aggregation: 'count',
+                        filters: [{ field: 'Stage', op: 'equals', value: 'Won' }],
+                        divideBy: { measure: 'Deal ID', aggregation: 'count', filters: [] },
+                        format: 'percent'
+                    }
+                }]
+            });
+
+            const reopened = dashboardDecodeSpec(dashboardEncodeSpec(original));
+            assertDeep(reopened, original, 'everything survives being reopened for editing');
+
+            reopened.title = 'Pipeline v2';
+            const again = dashboardDecodeSpec(dashboardEncodeSpec(reopened));
+            assertEqual(again.title, 'Pipeline v2');
+            assertDeep(again.visuals, original.visuals, 'editing the title leaves the visuals alone');
+        });
+
         test('toggle values are coerced to real booleans', () => {
             assertEqual(dashboardNormalizeSpec({ showCaptions: 'false' }).showCaptions, false, 'string false');
             assertEqual(dashboardNormalizeSpec({ showCaptions: 'true' }).showCaptions, true, 'string true');

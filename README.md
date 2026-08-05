@@ -171,12 +171,30 @@ link. Whoever builds the real thing sees the exact layout that was asked for.
 The built dashboard is the deliverable: this is not a request form that
 something else gets built from.
 
-Two display options live under "More details", both on by default so older
-links are unaffected: `showCaptions` prints what each visual measures under its
-title (`sum of Revenue by Region`), and `showDeltas` prints the change against
-the prior period on KPI tiles. Turn both off for a cleaner board when the
-audience already knows what they are looking at. They travel in the link and in
-the downloaded file like any other setting.
+Display options live under "More details", all on by default so older links are
+unaffected: `showCaptions` prints what each visual measures under its title
+(`sum of Revenue by Region`), `showDeltas` prints the change against the prior
+period on KPI tiles, and `showEditLink` puts an "Edit this dashboard" link on
+the built file. Turn them off for a cleaner board when the audience already
+knows what they are looking at. They travel in the link and in the downloaded
+file like any other setting.
+
+Colours are set the same way. `palette` picks one of six named palettes and
+`accent` overrides the main colour with any hex value, applied consistently to
+KPI text, bars, lines, area fills and donut slices. A custom accent moves to the
+front of the palette rather than replacing it, so donut slices keep enough
+distinct colours. Hex is validated on the way in, since a spec arrives from a
+URL and the value ends up in CSS.
+
+### Editing a dashboard after it is out
+
+A dashboard is never a dead end. A share link opens straight back into the
+builder, and a **downloaded or pushed HTML file carries an "Edit this
+dashboard" link** that reopens it in the builder with every visual, slicer,
+filter, ratio and colour intact. When the built dashboard is served from the
+same site as the builder, the rows it carries are handed across too, so you land
+in the builder with real numbers rather than placeholders. Edit, download again,
+and replace the file. A Google Sheet dashboard simply reconnects to its sheet.
 
 The builder opens empty and is worked through in three numbered steps: load a
 file, add visuals, add slicers. Visuals are listed one per line showing their
