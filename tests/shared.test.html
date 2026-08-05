@@ -1183,6 +1183,7 @@
         test('a spec with slicers bakes rows projected to referenced columns only', () => {
             const data = salesFixture();
             const spec = dashboardNormalizeSpec({
+                showEditLink: false,
                 slicers: [{ id: 's1', field: 'Region', type: 'dropdown' }],
                 visuals: [{ id: 'v1', kind: 'kpi', binding: { measure: 'Revenue', aggregation: 'sum' } }]
             });
@@ -1195,9 +1196,36 @@
             assertTrue(!baked.columns.includes('Segment'), 'drops the unreferenced dimension');
         });
 
+        test('an editable dashboard bakes every column so editing can restore it', () => {
+            const data = salesFixture();
+            const spec = dashboardNormalizeSpec({
+                showEditLink: true,
+                slicers: [{ id: 's1', field: 'Region', type: 'dropdown' }],
+                visuals: [{ id: 'v1', kind: 'kpi', binding: { measure: 'Revenue', aggregation: 'sum' } }]
+            });
+            const baked = dashboardBakeDataset(spec, data);
+            assertDeep(baked.columns, data.columns, 'nothing dropped');
+            assertTrue(baked.columns.includes('Units'), 'a column no visual uses still travels');
+            assertTrue(baked.columns.includes('Segment'), 'and so does an unused dimension');
+        });
+
+        test('a dashboard with the edit link off still projects to keep the file small', () => {
+            const data = salesFixture();
+            const spec = dashboardNormalizeSpec({
+                showEditLink: false,
+                slicers: [{ id: 's1', field: 'Region', type: 'dropdown' }],
+                visuals: [{ id: 'v1', kind: 'kpi', binding: { measure: 'Revenue', aggregation: 'sum' } }]
+            });
+            const baked = dashboardBakeDataset(spec, data);
+            assertTrue(!baked.columns.includes('Units'), 'unreferenced columns dropped');
+            assertTrue(baked.columns.includes('Revenue'), 'the measure is kept');
+            assertTrue(baked.columns.includes('Region'), 'the slicer column is kept');
+        });
+
         test('baking caps the row count it will embed', () => {
             const data = salesFixture();
             const spec = dashboardNormalizeSpec({
+                showEditLink: false,
                 slicers: [{ id: 's1', field: 'Region', type: 'dropdown' }],
                 visuals: [{ id: 'v1', kind: 'kpi', binding: { measure: 'Revenue', aggregation: 'sum' } }]
             });

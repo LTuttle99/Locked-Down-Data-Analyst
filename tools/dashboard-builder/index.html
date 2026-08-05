@@ -195,6 +195,14 @@
                         </div>
                     </div>
 
+                    <div id="placeholder-warning" class="hidden bg-amber-50 border border-amber-300 rounded-lg px-3 py-2.5 mb-3">
+                        <p class="text-xs text-amber-800 font-medium">The numbers in the preview are made up.</p>
+                        <p class="text-[11px] text-amber-700 mt-0.5">
+                            No data is loaded, so every figure is a placeholder generated from the shape you
+                            asked for. Load your file above to see real values.
+                        </p>
+                    </div>
+
                     <div id="visual-list" class="space-y-2 mb-3"></div>
                     <div id="add-buttons" class="flex flex-wrap gap-2"></div>
                 </div>
@@ -950,6 +958,11 @@
 
         function refresh(rebuildEditor = true) {
             const normalized = dashboardNormalizeSpec(spec);
+
+            const warning = document.getElementById('placeholder-warning');
+            const usingPlaceholders = !dataset && normalized.visuals.length > 0;
+            warning.classList.toggle('hidden', !usingPlaceholders);
+
             if (rebuildEditor) renderEditor();
             renderPreview(normalized);
             document.getElementById('share-link').value = currentLink(normalized);
@@ -1085,6 +1098,7 @@
 
                 document.getElementById('clear-data').classList.remove('hidden');
                 retargetBindings();
+                rememberDataset();
                 refresh();
                 showToast('File loaded. The visuals now use your data.');
             } catch (err) {
@@ -1118,6 +1132,7 @@
 
                 document.getElementById('clear-data').classList.remove('hidden');
                 retargetBindings();
+                rememberDataset();
                 refresh();
                 showToast('Sheet connected. The dashboard will re-read it on every open.');
             } catch (err) {
@@ -1129,6 +1144,7 @@
         function clearDataset() {
             dataset = null;
             spec.source = null;
+            rememberDataset();
             document.getElementById('data-status').textContent = '';
             document.getElementById('data-input').value = '';
             document.getElementById('sheet-url').value = '';
@@ -1232,27 +1248,78 @@
             }
         }
 
+        const DATASET_KEY = 'dashboardBuilderDataset';
+
+        function rememberDataset() {
+            try {
+                if (!dataset) {
+                    sessionStorage.removeItem(DATASET_KEY);
+                    return;
+                }
+                sessionStorage.setItem(DATASET_KEY, JSON.stringify({
+                    source: dataset.source,
+                    columns: dataset.columns,
+                    rows: dataset.rows,
+                    dateColumn: dataset.dateColumn,
+                    sheetUrl: dataset.sheetUrl || null
+                }));
+            } catch (e) {
+                sessionStorage.removeItem(DATASET_KEY);
+            }
+        }
+
+        function restoreDataset() {
+            let raw = null;
+            try {
+                raw = sessionStorage.getItem(DATASET_KEY);
+            } catch (e) {
+                return false;
+            }
+            if (!raw) return false;
+
+            try {
+                const saved = JSON.parse(raw);
+                if (!saved || !Array.isArray(saved.rows) || saved.rows.length === 0) return false;
+
+                dataset = classifyDataset({ columns: saved.columns, rows: saved.rows }, saved.source || 'your file');
+                if (saved.dateColumn) dataset.dateColumn = saved.dateColumn;
+                if (saved.sheetUrl) dataset.sheetUrl = saved.sheetUrl;
+
+                document.getElementById('data-status').textContent =
+                    `${dataset.source} — ${dataset.rowCount.toLocaleString()} rows, ${dataset.columns.length} columns (still loaded)`;
+                document.getElementById('clear-data').classList.remove('hidden');
+                return true;
+            } catch (e) {
+                return false;
+            }
+        }
+
         function adoptHandoff() {
             let raw = null;
             try {
                 raw = sessionStorage.getItem('dashboardHandoff');
                 sessionStorage.removeItem('dashboardHandoff');
             } catch (e) {
-                return;
+                return false;
             }
-            if (!raw) return;
+            if (!raw) return false;
 
             try {
                 const handed = JSON.parse(raw);
-                if (!handed || !Array.isArray(handed.rows) || handed.rows.length === 0) return;
+                if (!handed || !Array.isArray(handed.rows) || handed.rows.length === 0) return false;
 
                 dataset = classifyDataset({ columns: handed.columns, rows: handed.rows }, handed.source || 'the dashboard you came from');
                 if (handed.dateColumn) dataset.dateColumn = handed.dateColumn;
 
                 document.getElementById('data-status').textContent =
-                    `${dataset.source} — ${dataset.rowCount.toLocaleString()} rows, carried over from the dashboard you were viewing`;
+                    `${dataset.source} — ${dataset.rowCount.toLocaleString()} rows, ${dataset.columns.length} columns, carried over from the dashboard you were viewing`;
                 document.getElementById('clear-data').classList.remove('hidden');
+                rememberDataset();
+                return true;
             } catch (e) {
+                document.getElementById('data-status').textContent =
+                    'The dashboard you came from could not hand its data over, so load the file again to see real numbers.';
+                return false;
             }
         }
 
@@ -1390,7 +1457,7 @@
             spec = dashboardDecodeSpec(window.location.hash) || dashboardNormalizeSpec({ title: '', visuals: [], slicers: [] });
             nextId = spec.visuals.length + 1;
 
-            adoptHandoff();
+            if (!adoptHandoff()) restoreDataset();
 
             document.getElementById('meta-title').value = spec.title === 'Untitled dashboard' ? '' : spec.title;
             document.getElementById('meta-subtitle').value = spec.subtitle;

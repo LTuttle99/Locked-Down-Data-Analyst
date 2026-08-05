@@ -356,7 +356,9 @@ function dashboardBakeDataset(spec, dataset, maxRows = 50000) {
     return Object.assign(base, { baked, interactive: false });
   }
 
-  const columns = dashboardSpecColumns(spec, dataset);
+  const columns = spec.showEditLink === false
+    ? dashboardSpecColumns(spec, dataset)
+    : (dataset.columns || []).slice();
   const rows = (dataset.rows || []).slice(0, maxRows).map((row) => {
     const out = {};
     for (const column of columns) out[column] = row[column] === undefined ? null : row[column];

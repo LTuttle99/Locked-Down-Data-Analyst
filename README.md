@@ -186,6 +186,17 @@ front of the palette rather than replacing it, so donut slices keep enough
 distinct colours. Hex is validated on the way in, since a spec arrives from a
 URL and the value ends up in CSS.
 
+### Keeping hold of the data
+
+The builder remembers the loaded file in `sessionStorage`, so refreshing the
+page keeps your real numbers instead of silently dropping back to placeholders.
+When there genuinely is no data, an amber banner says so in as many words,
+because invented figures that look real are worse than no figures at all.
+
+Arriving from an "Edit this dashboard" link always wins over that remembered
+file, so editing a dashboard never shows you data from whatever you happened to
+be working on before.
+
 ### Editing a dashboard after it is out
 
 A dashboard is never a dead end. A share link opens straight back into the
@@ -314,9 +325,11 @@ depends on whether the dashboard is interactive:
 
 - *No slicers:* only the computed series per visual. A 50 MB export collapses to
   a few KB, and no raw records ride along.
-- *With slicers:* the rows themselves, since the viewer needs to re-filter them.
-  They are projected down to just the columns the spec actually references and
-  capped at 50,000 rows, and the file reports when it truncated.
+- *With slicers:* the rows themselves, since the viewer needs to re-filter them,
+  capped at 50,000 rows with the file reporting when it truncated. **Every**
+  column travels, not just the ones the spec references, so clicking "Edit this
+  dashboard" hands the builder the whole table back. Turning the edit link off
+  projects down to referenced columns instead, trading editability for size.
 
 **Share link** encodes the spec (not the data) into the URL fragment, so the
 recipient attaches their own copy of the file. The viewer tells them which
