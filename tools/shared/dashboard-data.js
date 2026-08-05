@@ -45,11 +45,26 @@ function dashboardMatchesFilter(row, filter) {
   return true;
 }
 
+const DASHBOARD_INCLUSIVE_OPERATORS = new Set(["equals", "contains", "in list"]);
+
 function dashboardApplyFilters(rows, filters) {
   if (!filters || filters.length === 0) return rows;
   const usable = filters.filter((f) => f && f.field);
   if (usable.length === 0) return rows;
-  return rows.filter((row) => usable.every((f) => dashboardMatchesFilter(row, f)));
+
+  const groups = new Map();
+  for (const filter of usable) {
+    const inclusive = DASHBOARD_INCLUSIVE_OPERATORS.has(filter.op);
+    const key = inclusive ? `any:${filter.field}` : `all:${filter.field}:${filter.op}`;
+    if (!groups.has(key)) groups.set(key, { inclusive, filters: [] });
+    groups.get(key).filters.push(filter);
+  }
+
+  const clauses = Array.from(groups.values());
+
+  return rows.filter((row) => clauses.every((clause) => (clause.inclusive
+    ? clause.filters.some((f) => dashboardMatchesFilter(row, f))
+    : clause.filters.every((f) => dashboardMatchesFilter(row, f)))));
 }
 
 function dashboardAggregate(rows, measure, aggregation) {
@@ -82,6 +97,24 @@ function dashboardAggregate(rows, measure, aggregation) {
   return numbers.reduce((a, b) => a + b, 0);
 }
 
+function dashboardComputeValue(scopedRows, binding) {
+  const numerator = dashboardAggregate(dashboardApplyFilters(scopedRows, binding.filters), binding.measure, binding.aggregation);
+  if (!binding.divideBy) return numerator;
+
+  const denominator = dashboardAggregate(
+    dashboardApplyFilters(scopedRows, binding.divideBy.filters),
+    binding.divideBy.measure,
+    binding.divideBy.aggregation
+  );
+
+  if (!denominator) return 0;
+
+  const ratio = numerator / denominator;
+  if (!Number.isFinite(ratio)) return 0;
+
+  return dashboardBindingFormat(binding) === "percent" ? ratio * 100 : ratio;
+}
+
 function dashboardPeriodKey(date, grain) {
   const y = date.getUTCFullYear();
   const m = date.getUTCMonth();
@@ -110,7 +143,7 @@ function dashboardFindDateColumn(rows, columns) {
   return null;
 }
 
-function dashboardGroupSeries(rows, dimension, measure, aggregation, limit) {
+function dashboardGroupSeries(rows, dimension, binding, limit) {
   const groups = new Map();
 
   for (const row of rows) {
@@ -120,10 +153,11 @@ function dashboardGroupSeries(rows, dimension, measure, aggregation, limit) {
   }
 
   const series = Array.from(groups.entries())
-    .map(([label, groupRows]) => ({ label, value: dashboardAggregate(groupRows, measure, aggregation) }))
+    .map(([label, groupRows]) => ({ label, value: dashboardComputeValue(groupRows, binding) }))
     .sort((a, b) => b.value - a.value);
 
   if (series.length <= limit) return series;
+  if (binding.divideBy) return series.slice(0, limit);
 
   const top = series.slice(0, limit - 1);
   const restRows = series.slice(limit - 1);
@@ -132,7 +166,7 @@ function dashboardGroupSeries(rows, dimension, measure, aggregation, limit) {
   return top;
 }
 
-function dashboardTimeSeries(rows, dateColumn, measure, aggregation, grain) {
+function dashboardTimeSeries(rows, dateColumn, binding, grain) {
   const groups = new Map();
 
   for (const row of rows) {
@@ -145,7 +179,7 @@ function dashboardTimeSeries(rows, dateColumn, measure, aggregation, grain) {
 
   return Array.from(groups.entries())
     .sort((a, b) => (a[0] < b[0] ? -1 : 1))
-    .map(([label, groupRows]) => ({ label, value: dashboardAggregate(groupRows, measure, aggregation) }));
+    .map(([label, groupRows]) => ({ label, value: dashboardComputeValue(groupRows, binding) }));
 }
 
 function dashboardSlicerOptions(rows, slicer) {
@@ -202,16 +236,16 @@ function dashboardApplySlicers(rows, slicers, selections) {
 function dashboardResolveFromRows(visual, dataset) {
   const binding = visual.binding;
   const columns = dataset.columns || [];
-  const sliced = dashboardApplySlicers(dataset.rows || [], dataset.slicers, dataset.selections);
-  const rows = dashboardApplyFilters(sliced, binding.filters);
+  const scoped = dashboardApplySlicers(dataset.rows || [], dataset.slicers, dataset.selections);
+  const rows = dashboardApplyFilters(scoped, binding.filters);
 
   if (visual.kind === "kpi") {
-    const value = dashboardAggregate(rows, binding.measure, binding.aggregation);
-    const dateColumn = dataset.dateColumn || dashboardFindDateColumn(rows, columns);
+    const value = dashboardComputeValue(scoped, binding);
+    const dateColumn = dataset.dateColumn || dashboardFindDateColumn(scoped, columns);
     let delta = 0;
 
     if (dateColumn) {
-      const series = dashboardTimeSeries(rows, dateColumn, binding.measure, binding.aggregation, "month");
+      const series = dashboardTimeSeries(scoped, dateColumn, binding, "month");
       if (series.length >= 2) {
         const last = series[series.length - 1].value;
         const prior = series[series.length - 2].value;
@@ -223,9 +257,9 @@ function dashboardResolveFromRows(visual, dataset) {
   }
 
   if (visual.kind === "trend") {
-    const dateColumn = dataset.dateColumn || dashboardFindDateColumn(rows, columns);
+    const dateColumn = dataset.dateColumn || dashboardFindDateColumn(scoped, columns);
     if (!dateColumn) return { kind: "series", points: [], empty: "No date column was found in this file." };
-    const points = dashboardTimeSeries(rows, dateColumn, binding.measure, binding.aggregation, binding.grain);
+    const points = dashboardTimeSeries(scoped, dateColumn, binding, binding.grain);
     return { kind: "series", points, empty: points.length === 0 ? "No rows had a readable date." : null };
   }
 
@@ -245,7 +279,7 @@ function dashboardResolveFromRows(visual, dataset) {
   }
 
   const limit = visual.kind === "donut" ? Math.min(binding.limit, 6) : binding.limit;
-  const points = dashboardGroupSeries(rows, binding.dimension, binding.measure, binding.aggregation, limit);
+  const points = dashboardGroupSeries(binding.divideBy ? scoped : rows, binding.dimension, binding, limit);
   return { kind: "series", points, empty: points.length === 0 ? "No rows matched the filters." : null };
 }
 

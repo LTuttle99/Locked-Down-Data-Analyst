@@ -374,7 +374,9 @@
             const label = document.createElement('span');
             label.className = 'field-label';
             label.style.marginBottom = '0';
-            label.textContent = `Filters${visual.binding.filters.length ? ` (${visual.binding.filters.length})` : ''}`;
+            label.textContent = visual.binding.divideBy
+                ? `Filters, top number only${visual.binding.filters.length ? ` (${visual.binding.filters.length})` : ''}`
+                : `Filters${visual.binding.filters.length ? ` (${visual.binding.filters.length})` : ''}`;
             head.appendChild(label);
 
             const add = document.createElement('button');
@@ -389,12 +391,80 @@
             head.appendChild(add);
             wrap.appendChild(head);
 
+            if (visual.binding.filters.length > 1) {
+                const note = document.createElement('p');
+                note.className = 'text-[10px] text-slate-500 mb-1.5';
+                note.textContent = 'Filters on the same column are combined with "or", different columns with "and".';
+                wrap.appendChild(note);
+            }
+
             if (visual.binding.filters.length > 0) {
                 const list = document.createElement('div');
                 list.className = 'space-y-1.5';
                 visual.binding.filters.forEach((filter, i) => list.appendChild(buildFilterRow(visual, filter, i)));
                 wrap.appendChild(list);
             }
+
+            return wrap;
+        }
+
+        function buildRatioSection(visual) {
+            const binding = visual.binding;
+            const wrap = document.createElement('div');
+            wrap.className = 'mt-2 pt-2 border-t border-slate-200';
+
+            const head = document.createElement('div');
+            head.className = 'flex items-center justify-between mb-1.5';
+
+            const label = document.createElement('span');
+            label.className = 'field-label';
+            label.style.marginBottom = '0';
+            label.textContent = 'Divide by another number';
+            head.appendChild(label);
+
+            const toggle = document.createElement('button');
+            toggle.type = 'button';
+            toggle.className = 'text-[11px] text-[#0062F1] hover:text-[#00133C] font-medium';
+            toggle.textContent = binding.divideBy ? 'Remove' : '+ Add';
+            toggle.addEventListener('click', () => {
+                if (binding.divideBy) {
+                    binding.divideBy = null;
+                    binding.format = 'auto';
+                } else {
+                    const fallback = dataset ? dataset.columns[0] : binding.measure;
+                    binding.divideBy = { measure: binding.measure || fallback, aggregation: binding.aggregation, filters: [] };
+                    binding.format = 'percent';
+                }
+                refresh();
+            });
+            head.appendChild(toggle);
+            wrap.appendChild(head);
+
+            if (!binding.divideBy) {
+                const hint = document.createElement('p');
+                hint.className = 'text-[10px] text-slate-500';
+                hint.textContent = 'For rates like close rate: filter the top number to what counts as a win, and divide by the count of everything.';
+                wrap.appendChild(hint);
+                return wrap;
+            }
+
+            const grid = document.createElement('div');
+            grid.className = 'grid grid-cols-2 sm:grid-cols-3 gap-2';
+            grid.appendChild(labelledField('Bottom number', columnField('measure', binding.divideBy.measure, 'Revenue', (v) => {
+                binding.divideBy.measure = v; refresh(false);
+            }, binding.divideBy.aggregation)));
+            grid.appendChild(labelledField('Aggregation', selectField(DASHBOARD_AGGREGATIONS, binding.divideBy.aggregation, (v) => {
+                binding.divideBy.aggregation = v; refresh();
+            })));
+            grid.appendChild(labelledField('Show as', selectField(['percent', 'number'], binding.format === 'number' ? 'number' : 'percent', (v) => {
+                binding.format = v; refresh(false);
+            }, (f) => (f === 'percent' ? 'Percentage' : 'Plain ratio'))));
+            wrap.appendChild(grid);
+
+            const explain = document.createElement('p');
+            explain.className = 'text-[10px] text-slate-500 mt-1.5';
+            explain.textContent = `${binding.aggregation} of ${binding.measure}${binding.filters.length ? ' (filtered)' : ''} divided by ${binding.divideBy.aggregation} of ${binding.divideBy.measure} (all rows).`;
+            wrap.appendChild(explain);
 
             return wrap;
         }
@@ -508,6 +578,7 @@
                 notes.value = visual.notes;
                 notes.addEventListener('input', () => { visual.notes = notes.value; refresh(false); });
                 advanced.appendChild(notes);
+                advanced.appendChild(buildRatioSection(visual));
                 advanced.appendChild(buildFilterSection(visual));
             }
 

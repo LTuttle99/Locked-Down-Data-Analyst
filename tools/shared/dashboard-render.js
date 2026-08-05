@@ -29,7 +29,7 @@ function dashboardChartOptions(extra) {
 function dashboardDrawKpi(host, visual, data, showDelta) {
   const wrap = dashboardElement("div", "flex flex-col justify-center h-full");
   wrap.appendChild(dashboardElement("p", "text-3xl font-bold text-[#00133C] leading-tight",
-    dashboardFormatValue(data.value, visual.binding.measure, visual.binding.aggregation)));
+    dashboardFormatValue(data.value, visual.binding.measure, visual.binding.aggregation, dashboardBindingFormat(visual.binding))));
 
   if (showDelta) {
     const delta = data.delta;
@@ -57,7 +57,7 @@ function dashboardDrawTable(host, visual, data) {
     const row = dashboardElement("tr");
     row.appendChild(dashboardElement("td", "py-2 pr-3 text-slate-700", point.label));
     row.appendChild(dashboardElement("td", "py-2 pl-3 text-right text-slate-900 font-medium",
-      dashboardFormatValue(point.value, visual.binding.measure, visual.binding.aggregation)));
+      dashboardFormatValue(point.value, visual.binding.measure, visual.binding.aggregation, dashboardBindingFormat(visual.binding))));
     tbody.appendChild(row);
   }
 
@@ -77,7 +77,8 @@ function dashboardDrawChart(host, visual, data, charts) {
 
   const measure = visual.binding.measure;
   const aggregation = visual.binding.aggregation;
-  const tick = (value) => dashboardFormatValue(value, measure, aggregation);
+  const format = dashboardBindingFormat(visual.binding);
+  const tick = (value) => dashboardFormatValue(value, measure, aggregation, format);
 
   if (visual.kind === "trend") {
     charts.push(new Chart(canvas, {

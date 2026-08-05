@@ -20,6 +20,8 @@ const DASHBOARD_FILTER_OPERATORS = ["equals", "not equals", "greater than", "les
 
 const DASHBOARD_SLICER_TYPES = ["list", "dropdown", "range", "date range"];
 
+const DASHBOARD_FORMATS = ["auto", "percent", "number", "currency"];
+
 const DASHBOARD_TEXT_LIMIT = 160;
 
 function dashboardCleanText(value, limit = DASHBOARD_TEXT_LIMIT) {
@@ -48,6 +50,21 @@ function dashboardNormalizeFilter(raw) {
   };
 }
 
+function dashboardNormalizeDivideBy(raw) {
+  if (!raw || typeof raw !== "object") return null;
+
+  const measure = dashboardCleanText(raw.measure, 60);
+  if (measure === "") return null;
+
+  return {
+    measure,
+    aggregation: dashboardPickOption(raw.aggregation, DASHBOARD_AGGREGATIONS, "count"),
+    filters: Array.isArray(raw.filters)
+      ? raw.filters.map(dashboardNormalizeFilter).filter(Boolean).slice(0, 8)
+      : []
+  };
+}
+
 function dashboardNormalizeBinding(raw, kind) {
   const shape = DASHBOARD_VISUAL_KINDS[kind];
   const source = raw || {};
@@ -62,7 +79,9 @@ function dashboardNormalizeBinding(raw, kind) {
     limit: dashboardCleanInteger(source.limit, 3, 50, 10),
     filters: Array.isArray(source.filters)
       ? source.filters.map(dashboardNormalizeFilter).filter(Boolean).slice(0, 8)
-      : []
+      : [],
+    divideBy: dashboardNormalizeDivideBy(source.divideBy),
+    format: dashboardPickOption(source.format, DASHBOARD_FORMATS, "auto")
   };
 
   return binding;
@@ -227,8 +246,9 @@ function dashboardCategoryLabels(dimension, count, rand) {
   return labels;
 }
 
-function dashboardMeasureScale(measure, aggregation) {
+function dashboardMeasureScale(measure, aggregation, binding) {
   const name = String(measure || "").toLowerCase();
+  if (binding && dashboardBindingFormat(binding) === "percent") return 60;
   if (aggregation === "count" || aggregation === "distinct count") return 400;
   if (/rate|percent|margin|share|ratio/.test(name)) return 40;
   if (/revenue|sales|amount|spend|cost|value|premium|gwp|balance/.test(name)) return 250000;
@@ -239,7 +259,7 @@ function dashboardMeasureScale(measure, aggregation) {
 function dashboardResolveSample(visual) {
   const binding = visual.binding;
   const rand = dashboardRandom(dashboardSeedFrom(`${visual.id}|${visual.title}|${binding.measure}`));
-  const scale = dashboardMeasureScale(binding.measure, binding.aggregation);
+  const scale = dashboardMeasureScale(binding.measure, binding.aggregation, binding);
   const jitter = () => 0.7 + rand() * 0.6;
 
   if (visual.kind === "kpi") {
@@ -279,20 +299,24 @@ function dashboardResolveSample(visual) {
   return { kind: "series", points };
 }
 
-function dashboardFormatValue(value, measure, aggregation) {
+function dashboardFormatValue(value, measure, aggregation, format) {
   const name = String(measure || "").toLowerCase();
   const n = Number(value) || 0;
+  const abs = Math.abs(n);
 
-  if (aggregation === "count" || aggregation === "distinct count") {
-    return Math.round(n).toLocaleString("en-US");
+  if (format === "percent") return `${n.toFixed(1)}%`;
+
+  if (format !== "number" && format !== "currency") {
+    if (aggregation === "count" || aggregation === "distinct count") {
+      return Math.round(n).toLocaleString("en-US");
+    }
+    if (/rate|percent|margin|share|ratio/.test(name)) return `${n.toFixed(1)}%`;
   }
 
-  if (/rate|percent|margin|share|ratio/.test(name)) return `${n.toFixed(1)}%`;
-
-  const currency = /revenue|sales|amount|spend|cost|value|premium|gwp|balance|price|fee/.test(name)
-    && aggregation !== "count" && aggregation !== "distinct count";
+  const currency = format === "currency" || (format !== "number"
+    && /revenue|sales|amount|spend|cost|value|premium|gwp|balance|price|fee/.test(name)
+    && aggregation !== "count" && aggregation !== "distinct count");
   const prefix = currency ? "$" : "";
-  const abs = Math.abs(n);
 
   if (abs >= 1e9) return `${prefix}${(n / 1e9).toFixed(1)}B`;
   if (abs >= 1e6) return `${prefix}${(n / 1e6).toFixed(1)}M`;
@@ -300,14 +324,30 @@ function dashboardFormatValue(value, measure, aggregation) {
   return `${prefix}${n.toFixed(abs < 10 ? 1 : 0)}`;
 }
 
+function dashboardBindingFormat(binding) {
+  if (binding.format && binding.format !== "auto") return binding.format;
+  return binding.divideBy ? "percent" : "auto";
+}
+
 function dashboardBindingSummary(visual) {
   const b = visual.binding;
   const parts = [`${b.aggregation} of ${b.measure}`];
 
+  if (b.filters.length > 0 && b.divideBy) {
+    parts.push(`where ${b.filters.map((f) => `${f.field} ${f.op} ${f.value}`).join(" or ")}`);
+  }
+
+  if (b.divideBy) {
+    parts.push(`divided by ${b.divideBy.aggregation} of ${b.divideBy.measure}`);
+    if (dashboardBindingFormat(b) === "percent") parts.push("as a percentage");
+  }
+
   if (b.dimension) parts.push(`by ${b.dimension}`);
   if (b.measure2) parts.push(`against ${b.measure2}`);
   if (b.grain) parts.push(`per ${b.grain}`);
-  if (b.filters.length > 0) parts.push(`filtered on ${b.filters.map((f) => f.field).join(", ")}`);
+  if (b.filters.length > 0 && !b.divideBy) {
+    parts.push(`filtered on ${Array.from(new Set(b.filters.map((f) => f.field))).join(", ")}`);
+  }
 
   return parts.join(" ");
 }

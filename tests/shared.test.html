@@ -852,6 +852,142 @@
             assertEqual(run('less than', '15'), 1);
         });
 
+        function pipelineFixture() {
+            const rows = [
+                { Deal: 'D1', Region: 'North', Status: 'Won', Revenue: 100, Cost: 60 },
+                { Deal: 'D2', Region: 'North', Status: 'Lost', Revenue: 200, Cost: 120 },
+                { Deal: 'D3', Region: 'North', Status: 'Won', Revenue: 300, Cost: 150 },
+                { Deal: 'D4', Region: 'South', Status: 'Lost', Revenue: 400, Cost: 300 },
+                { Deal: 'D5', Region: 'South', Status: 'Lost', Revenue: 500, Cost: 200 },
+                { Deal: 'D6', Region: 'East', Status: 'Won', Revenue: 600, Cost: 240 }
+            ];
+            return { columns: ['Deal', 'Region', 'Status', 'Revenue', 'Cost'], rows, rowCount: rows.length, dateColumn: null };
+        }
+
+        test('a close rate divides a filtered count by the count of everything', () => {
+            const data = pipelineFixture();
+            const out = dashboardResolveFromRows(visual('kpi', {
+                measure: 'Deal', aggregation: 'count',
+                filters: [{ field: 'Status', op: 'equals', value: 'Won' }],
+                divideBy: { measure: 'Deal', aggregation: 'count', filters: [] },
+                format: 'percent'
+            }), data);
+            assertClose(out.value, 50, 0.001, '3 won out of 6 deals');
+        });
+
+        test('a ratio of two numeric columns gives a margin', () => {
+            const data = pipelineFixture();
+            const out = dashboardResolveFromRows(visual('kpi', {
+                measure: 'Cost', aggregation: 'sum',
+                divideBy: { measure: 'Revenue', aggregation: 'sum', filters: [] },
+                format: 'percent'
+            }), data);
+            assertClose(out.value, (1070 / 2100) * 100, 0.001);
+        });
+
+        test('a plain ratio is not multiplied by a hundred', () => {
+            const data = pipelineFixture();
+            const out = dashboardResolveFromRows(visual('kpi', {
+                measure: 'Revenue', aggregation: 'sum',
+                divideBy: { measure: 'Deal', aggregation: 'count', filters: [] },
+                format: 'number'
+            }), data);
+            assertClose(out.value, 2100 / 6, 0.001, 'average deal size');
+        });
+
+        test('close rate can be broken down by a dimension', () => {
+            const data = pipelineFixture();
+            const out = dashboardResolveFromRows(visual('column', {
+                measure: 'Deal', aggregation: 'count', dimension: 'Region', limit: 10,
+                filters: [{ field: 'Status', op: 'equals', value: 'Won' }],
+                divideBy: { measure: 'Deal', aggregation: 'count', filters: [] },
+                format: 'percent'
+            }), data);
+
+            const byRegion = Object.fromEntries(out.points.map(p => [p.label, p.value]));
+            assertClose(byRegion.North, 200 / 3, 0.001, '2 of 3 won in North');
+            assertClose(byRegion.East, 100, 0.001, '1 of 1 won in East');
+            assertClose(byRegion.South, 0, 0.001, 'no wins in South, still shown');
+            assertEqual(out.points.length, 3, 'a region with zero wins is not dropped');
+        });
+
+        test('a ratio never divides by zero', () => {
+            const out = dashboardResolveFromRows(visual('kpi', {
+                measure: 'Deal', aggregation: 'count',
+                filters: [{ field: 'Status', op: 'equals', value: 'Won' }],
+                divideBy: { measure: 'Deal', aggregation: 'count', filters: [{ field: 'Status', op: 'equals', value: 'Nonexistent' }] },
+                format: 'percent'
+            }), pipelineFixture());
+            assertEqual(out.value, 0, 'no crash, no Infinity');
+        });
+
+        test('a ratio breakdown does not lump the tail into a meaningless Other', () => {
+            const rows = makeRows(40, i => ({ Deal: `D${i}`, Region: `R${i % 8}`, Status: i % 3 === 0 ? 'Won' : 'Lost' }));
+            const data = { columns: ['Deal', 'Region', 'Status'], rows, rowCount: rows.length, dateColumn: null };
+
+            const ratio = dashboardResolveFromRows(visual('column', {
+                measure: 'Deal', aggregation: 'count', dimension: 'Region', limit: 3,
+                filters: [{ field: 'Status', op: 'equals', value: 'Won' }],
+                divideBy: { measure: 'Deal', aggregation: 'count', filters: [] },
+                format: 'percent'
+            }), data);
+            assertEqual(ratio.points.length, 3, 'top three only');
+            assertTrue(!ratio.points.some(p => p.label.startsWith('Other')), 'percentages are never summed into Other');
+            assertTrue(ratio.points.every(p => p.value <= 100), 'no percentage exceeds a hundred');
+
+            const plain = dashboardResolveFromRows(visual('column', {
+                measure: 'Deal', aggregation: 'count', dimension: 'Region', limit: 3
+            }), data);
+            assertTrue(plain.points.some(p => p.label.startsWith('Other')), 'plain counts still roll up into Other');
+        });
+
+        test('two filters on the same column are combined with or', () => {
+            const data = pipelineFixture();
+            const rows = dashboardApplyFilters(data.rows, [
+                { field: 'Region', op: 'equals', value: 'North' },
+                { field: 'Region', op: 'equals', value: 'South' }
+            ]);
+            assertEqual(rows.length, 5, 'North plus South, not nothing');
+        });
+
+        test('filters on different columns are still combined with and', () => {
+            const data = pipelineFixture();
+            const rows = dashboardApplyFilters(data.rows, [
+                { field: 'Region', op: 'equals', value: 'North' },
+                { field: 'Status', op: 'equals', value: 'Won' }
+            ]);
+            assertEqual(rows.length, 2, 'North and Won');
+        });
+
+        test('excluding several values from one column still excludes all of them', () => {
+            const data = pipelineFixture();
+            const rows = dashboardApplyFilters(data.rows, [
+                { field: 'Region', op: 'not equals', value: 'North' },
+                { field: 'Region', op: 'not equals', value: 'South' }
+            ]);
+            assertEqual(rows.length, 1, 'only East survives');
+            assertEqual(rows[0].Region, 'East');
+        });
+
+        test('a numeric range on one column still narrows from both ends', () => {
+            const data = pipelineFixture();
+            const rows = dashboardApplyFilters(data.rows, [
+                { field: 'Revenue', op: 'greater than', value: '150' },
+                { field: 'Revenue', op: 'less than', value: '450' }
+            ]);
+            assertEqual(rows.length, 3, 'between 150 and 450');
+        });
+
+        test('mixing include and exclude on one column keeps both meanings', () => {
+            const data = pipelineFixture();
+            const rows = dashboardApplyFilters(data.rows, [
+                { field: 'Region', op: 'equals', value: 'North' },
+                { field: 'Region', op: 'equals', value: 'South' },
+                { field: 'Status', op: 'not equals', value: 'Lost' }
+            ]);
+            assertEqual(rows.length, 2, 'North or South, and not Lost');
+        });
+
         test('slicer selections stack across slicers', () => {
             const data = salesFixture();
             data.slicers = [

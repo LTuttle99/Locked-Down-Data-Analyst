@@ -211,6 +211,36 @@ this order:
    shows the same numbers and the layout can be reviewed before real data is
    attached. The footer says plainly that the numbers are not real.
 
+### Rates and percentages
+
+A binding can divide one aggregate by another, which is how you get anything
+the six aggregations cannot express on their own. `binding.divideBy` holds a
+second `{measure, aggregation, filters}`, and `binding.format` decides whether
+the result reads as a percentage or a plain ratio.
+
+The rule that makes rates work: **the visual's own filters narrow the top
+number only, while the bottom number sees every row in scope.** So a close rate
+is "count of Deal ID where Stage equals Won" over "count of Deal ID", which is
+exactly how it reads in the builder. Margin is sum of Cost over sum of Revenue
+as a percentage; average deal size is sum of Revenue over count of Deal ID as a
+plain ratio.
+
+Ratios work on KPI tiles, breakdowns and trends alike, so close rate by region
+and close rate over time both work. Slicers re-scope the numerator and the
+denominator together, which is the part a naive implementation gets wrong.
+Two details fall out of this: a category with no wins still appears at 0 rather
+than vanishing, and a ratio breakdown never rolls its tail into an "Other"
+bucket, because summing percentages is meaningless.
+
+### How multiple filters combine
+
+Filters on the **same column** are combined with "or", filters on **different
+columns** with "and". So two filters saying Region equals North and Region
+equals South give you both regions rather than nothing. This matches how
+slicers behave in every BI tool. Exclusions are the exception and stay "and",
+so Region not equals North plus Region not equals South excludes both, and
+numeric comparisons stay "and" so greater than and less than form a range.
+
 ### Google Sheets
 
 `tools/shared/sheet-connect.js` reads a sheet straight from a pasted link, with
