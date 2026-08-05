@@ -33,10 +33,12 @@ function dashboardFade(hex, alpha) {
 }
 
 function dashboardDrawKpi(host, visual, data, showDelta, palette) {
-  const wrap = dashboardElement("div", "flex flex-col justify-center h-full");
+  const wrap = dashboardElement("div", "flex-1 flex flex-col justify-center min-h-[4rem]");
 
-  const big = dashboardElement("p", "text-3xl font-bold leading-tight",
-    dashboardFormatValue(data.value, visual.binding.measure, visual.binding.aggregation, dashboardBindingFormat(visual.binding)));
+  const text = dashboardFormatValue(data.value, visual.binding.measure, visual.binding.aggregation, dashboardBindingFormat(visual.binding));
+  const size = text.length > 12 ? "text-xl" : text.length > 8 ? "text-2xl" : "text-3xl";
+
+  const big = dashboardElement("p", `${size} font-bold leading-tight break-words`, text);
   big.style.color = palette[0];
   wrap.appendChild(big);
 
@@ -74,6 +76,40 @@ function dashboardDrawTable(host, visual, data) {
   table.appendChild(tbody);
   scroller.appendChild(table);
   host.appendChild(scroller);
+}
+
+function dashboardDrawDetails(host, visual, data) {
+  const scroller = dashboardElement("div", "overflow-auto max-h-80 flex-1");
+  const table = dashboardElement("table", "w-full text-left text-xs");
+
+  const thead = dashboardElement("thead", "sticky top-0 bg-white");
+  const headRow = dashboardElement("tr", "border-b border-slate-200 text-slate-600 uppercase");
+  for (const column of data.columns) {
+    headRow.appendChild(dashboardElement("th", "py-2 pr-3 font-semibold whitespace-nowrap", column));
+  }
+  thead.appendChild(headRow);
+
+  const tbody = dashboardElement("tbody", "divide-y divide-slate-100");
+  for (const row of data.rows) {
+    const tr = dashboardElement("tr");
+    for (const column of data.columns) {
+      const raw = row[column];
+      const value = raw instanceof Date ? raw.toISOString().slice(0, 10) : raw;
+      tr.appendChild(dashboardElement("td", "py-1.5 pr-3 text-slate-700 whitespace-nowrap",
+        value === null || value === undefined || value === "" ? "" : String(value)));
+    }
+    tbody.appendChild(tr);
+  }
+
+  table.appendChild(thead);
+  table.appendChild(tbody);
+  scroller.appendChild(table);
+  host.appendChild(scroller);
+
+  if (data.total > data.rows.length) {
+    host.appendChild(dashboardElement("p", "text-[11px] text-slate-500 mt-2 shrink-0",
+      `Showing ${data.rows.length.toLocaleString()} of ${data.total.toLocaleString()} rows.`));
+  }
 }
 
 function dashboardDrawChart(host, visual, data, charts, palette) {
@@ -172,10 +208,12 @@ function dashboardDrawChart(host, visual, data, charts, palette) {
 }
 
 function dashboardRenderVisual(visual, options, charts) {
-  const card = dashboardElement("div", `bg-white border border-slate-200 rounded-xl p-4 col-span-12 ${DASHBOARD_WIDTH_CLASSES[visual.width] || DASHBOARD_WIDTH_CLASSES.half}`);
+  const card = dashboardElement("div", `bg-white border border-slate-200 rounded-xl p-4 col-span-12 flex flex-col overflow-hidden ${DASHBOARD_WIDTH_CLASSES[visual.width] || DASHBOARD_WIDTH_CLASSES.half}`);
 
-  const head = dashboardElement("div", "mb-3");
-  head.appendChild(dashboardElement("h3", "text-sm font-semibold text-[#00133C] leading-snug", visual.title));
+  const head = dashboardElement("div", "mb-3 shrink-0");
+  const heading = dashboardElement("h3", "text-sm font-semibold text-[#00133C] leading-snug break-words", visual.title);
+  heading.title = visual.title;
+  head.appendChild(heading);
   if (options.showCaptions) {
     head.appendChild(dashboardElement("p", "text-[11px] text-slate-500 mt-0.5", dashboardBindingSummary(visual)));
   }
@@ -191,6 +229,8 @@ function dashboardRenderVisual(visual, options, charts) {
     dashboardDrawKpi(card, visual, data, options.showDeltas, options.palette);
   } else if (visual.kind === "table") {
     dashboardDrawTable(card, visual, data);
+  } else if (visual.kind === "details") {
+    dashboardDrawDetails(card, visual, data);
   } else {
     dashboardDrawChart(card, visual, data, charts, options.palette);
   }
@@ -220,28 +260,63 @@ function dashboardSlicerControl(slicer, dataset, onChange) {
   if (slicer.type === "range" || slicer.type === "date range") {
     const isDate = slicer.type === "date range";
     const current = selections[slicer.id] || { min: options.min, max: options.max };
-    const input = document.createElement("input");
-    input.type = "range";
-    input.min = String(options.min);
-    input.max = String(options.max);
-    input.step = isDate ? "86400000" : String(Math.max(1, (options.max - options.min) / 100));
-    input.value = String(current.max);
-    input.className = "w-full accent-[#0062F1]";
+    const step = isDate ? 86400000 : Math.max(1, (options.max - options.min) / 100);
 
-    const readout = dashboardElement("p", "text-[11px] text-slate-600 mt-1", "");
     const describe = (v) => (isDate
       ? new Date(v).toISOString().slice(0, 10)
       : dashboardFormatValue(v, slicer.field, "sum"));
-    readout.textContent = `${describe(options.min)} to ${describe(Number(input.value))}`;
 
-    input.addEventListener("input", () => {
-      readout.textContent = `${describe(options.min)} to ${describe(Number(input.value))}`;
-    });
-    input.addEventListener("change", () => {
-      onChange(slicer.id, { min: options.min, max: Number(input.value) });
-    });
+    const readout = dashboardElement("p", "text-[11px] text-slate-600 mt-1", "");
 
-    wrap.appendChild(input);
+    const makeHandle = (value) => {
+      const input = document.createElement("input");
+      input.type = "range";
+      input.min = String(options.min);
+      input.max = String(options.max);
+      input.step = String(step);
+      input.value = String(value);
+      input.className = "w-full accent-[#0062F1]";
+      return input;
+    };
+
+    const lower = makeHandle(Math.max(options.min, Math.min(current.min, options.max)));
+    const upper = makeHandle(Math.min(options.max, Math.max(current.max, options.min)));
+
+    const bounds = () => {
+      const a = Number(lower.value);
+      const b = Number(upper.value);
+      return { min: Math.min(a, b), max: Math.max(a, b) };
+    };
+
+    const paint = () => {
+      const { min, max } = bounds();
+      readout.textContent = `${describe(min)} to ${describe(max)}`;
+    };
+
+    const commit = () => {
+      const { min, max } = bounds();
+      const whole = min <= options.min && max >= options.max;
+      onChange(slicer.id, whole ? "" : { min, max });
+    };
+
+    for (const handle of [lower, upper]) {
+      handle.addEventListener("input", paint);
+      handle.addEventListener("change", commit);
+    }
+
+    paint();
+
+    const stack = dashboardElement("div", "flex flex-col gap-0.5");
+    const fromRow = dashboardElement("div", "flex items-center gap-2");
+    fromRow.appendChild(dashboardElement("span", "text-[10px] text-slate-400 w-8 shrink-0", "From"));
+    fromRow.appendChild(lower);
+    const toRow = dashboardElement("div", "flex items-center gap-2");
+    toRow.appendChild(dashboardElement("span", "text-[10px] text-slate-400 w-8 shrink-0", "To"));
+    toRow.appendChild(upper);
+
+    stack.appendChild(fromRow);
+    stack.appendChild(toRow);
+    wrap.appendChild(stack);
     wrap.appendChild(readout);
     return wrap;
   }
@@ -332,6 +407,10 @@ function dashboardRenderSpec(spec, container, options = {}) {
 
   if (settings.dataset) settings.dataset.slicers = spec.slicers;
 
+  const visuals = typeof dashboardEffectiveBinding === "function"
+    ? spec.visuals.map((v) => Object.assign({}, v, { binding: dashboardEffectiveBinding(v, spec) }))
+    : spec.visuals;
+
   container.textContent = "";
 
   if (settings.showHeader) {
@@ -359,14 +438,14 @@ function dashboardRenderSpec(spec, container, options = {}) {
     });
   }
 
-  if (spec.visuals.length === 0) {
+  if (visuals.length === 0) {
     container.appendChild(dashboardElement("div", "bg-white border border-dashed border-slate-300 rounded-xl p-10 text-center text-sm text-slate-500",
       "No visuals yet. Add one to see the dashboard take shape."));
     return charts;
   }
 
   const grid = dashboardElement("div", "grid grid-cols-12 gap-4");
-  for (const visual of spec.visuals) grid.appendChild(dashboardRenderVisual(visual, settings, charts));
+  for (const visual of visuals) grid.appendChild(dashboardRenderVisual(visual, settings, charts));
   container.appendChild(grid);
 
   if (settings.showFooter) {

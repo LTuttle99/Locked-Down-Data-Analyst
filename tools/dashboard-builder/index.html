@@ -169,8 +169,20 @@
                 </div>
 
                 <div class="bg-white border border-slate-200 rounded-xl p-5">
+                    <div class="flex items-center justify-between mb-2">
+                        <h3 class="text-sm font-medium text-slate-700">2. Measures <span class="font-normal text-slate-400">(optional)</span></h3>
+                        <button onclick="addMeasure()" class="text-xs text-[#0062F1] hover:text-[#00133C] font-medium">+ Add measure</button>
+                    </div>
+                    <p class="text-xs text-slate-600 mb-3">
+                        A named calculation you define once and reuse in any visual, like Won Deals or
+                        Close Rate. Change it here and every visual using it updates.
+                    </p>
+                    <div id="measure-list" class="space-y-2"></div>
+                </div>
+
+                <div class="bg-white border border-slate-200 rounded-xl p-5">
                     <div class="flex items-center justify-between mb-3">
-                        <h3 class="text-sm font-medium text-slate-700">2. Visuals</h3>
+                        <h3 class="text-sm font-medium text-slate-700">3. Visuals</h3>
                         <span id="visual-count" class="text-xs text-slate-500"></span>
                     </div>
                     <div class="bg-slate-50 border border-slate-200 rounded-lg p-3 mb-3">
@@ -189,7 +201,7 @@
 
                 <div class="bg-white border border-slate-200 rounded-xl p-5">
                     <div class="flex items-center justify-between mb-2">
-                        <h3 class="text-sm font-medium text-slate-700">3. Slicers <span class="font-normal text-slate-400">(optional)</span></h3>
+                        <h3 class="text-sm font-medium text-slate-700">4. Slicers <span class="font-normal text-slate-400">(optional)</span></h3>
                         <button onclick="addSlicer()" class="text-xs text-[#0062F1] hover:text-[#00133C] font-medium">+ Add slicer</button>
                     </div>
                     <p class="text-xs text-slate-600 mb-3">
@@ -242,6 +254,7 @@
         let nextId = 1;
         let dataset = null;
         let openVisual = null;
+        let openMeasure = null;
         const openAdvanced = new Set();
 
         function toggleHelp() {
@@ -363,7 +376,7 @@
             return Array.from(seen).sort();
         }
 
-        function buildFilterRow(visual, filter, filterIndex) {
+        function buildFilterRow(filters, filter, filterIndex) {
             const row = document.createElement('div');
             row.className = 'flex gap-1.5 items-center';
 
@@ -377,26 +390,25 @@
                 row.appendChild(textField(filter.value, 'Value', (v) => { filter.value = v; refresh(false); }));
             }
 
-            row.appendChild(iconButton('✕', 'Remove filter', () => {
-                visual.binding.filters.splice(filterIndex, 1);
+            row.appendChild(iconButton('\u2715', 'Remove filter', () => {
+                filters.splice(filterIndex, 1);
                 refresh();
             }, 'danger'));
 
             return row;
         }
 
-        function buildFilterSection(visual) {
+        function buildFilterList(filters, labelText) {
             const wrap = document.createElement('div');
             wrap.className = 'mt-2 pt-2 border-t border-slate-200';
 
             const head = document.createElement('div');
             head.className = 'flex items-center justify-between mb-1.5';
+
             const label = document.createElement('span');
             label.className = 'field-label';
             label.style.marginBottom = '0';
-            label.textContent = visual.binding.divideBy
-                ? `Filters, top number only${visual.binding.filters.length ? ` (${visual.binding.filters.length})` : ''}`
-                : `Filters${visual.binding.filters.length ? ` (${visual.binding.filters.length})` : ''}`;
+            label.textContent = `${labelText}${filters.length ? ` (${filters.length})` : ''}`;
             head.appendChild(label);
 
             const add = document.createElement('button');
@@ -405,27 +417,31 @@
             add.textContent = '+ Add filter';
             add.addEventListener('click', () => {
                 const field = dataset ? dataset.columns[0] : '';
-                visual.binding.filters.push({ field: field || 'Column', op: 'equals', value: '' });
+                filters.push({ field: field || 'Column', op: 'equals', value: '' });
                 refresh();
             });
             head.appendChild(add);
             wrap.appendChild(head);
 
-            if (visual.binding.filters.length > 1) {
+            if (filters.length > 1) {
                 const note = document.createElement('p');
                 note.className = 'text-[10px] text-slate-500 mb-1.5';
                 note.textContent = 'Filters on the same column are combined with "or", different columns with "and".';
                 wrap.appendChild(note);
             }
 
-            if (visual.binding.filters.length > 0) {
+            if (filters.length > 0) {
                 const list = document.createElement('div');
                 list.className = 'space-y-1.5';
-                visual.binding.filters.forEach((filter, i) => list.appendChild(buildFilterRow(visual, filter, i)));
+                filters.forEach((filter, i) => list.appendChild(buildFilterRow(filters, filter, i)));
                 wrap.appendChild(list);
             }
 
             return wrap;
+        }
+
+        function buildFilterSection(visual) {
+            return buildFilterList(visual.binding.filters, visual.binding.divideBy ? 'Filters, top number only' : 'Filters');
         }
 
         function buildRatioSection(visual) {
@@ -481,12 +497,246 @@
             }, (f) => (f === 'percent' ? 'Percentage' : 'Plain ratio'))));
             wrap.appendChild(grid);
 
+            wrap.appendChild(buildFilterList(binding.divideBy.filters, 'Filters, bottom number only'));
+
             const explain = document.createElement('p');
             explain.className = 'text-[10px] text-slate-500 mt-1.5';
-            explain.textContent = `${binding.aggregation} of ${binding.measure}${binding.filters.length ? ' (filtered)' : ''} divided by ${binding.divideBy.aggregation} of ${binding.divideBy.measure} (all rows).`;
+            const top = `${binding.aggregation} of ${binding.measure}${binding.filters.length ? ' (filtered)' : ''}`;
+            const bottom = `${binding.divideBy.aggregation} of ${binding.divideBy.measure}${binding.divideBy.filters.length ? ' (filtered)' : ' (all rows)'}`;
+            explain.textContent = `${top} divided by ${bottom}.`;
             wrap.appendChild(explain);
 
             return wrap;
+        }
+
+        function addMeasure() {
+            const fallback = dataset ? (dataset.measureColumns[0] || dataset.columns[0]) : 'Revenue';
+            spec.measures.push({
+                id: `m${spec.measures.length + 1}_${Date.now().toString(36).slice(-4)}`,
+                name: `Measure ${spec.measures.length + 1}`,
+                measure: fallback,
+                aggregation: 'sum',
+                filters: [],
+                divideBy: null,
+                format: 'auto'
+            });
+            openMeasure = spec.measures[spec.measures.length - 1].id;
+            refresh();
+        }
+
+        function measureUsedBy(id) {
+            return spec.visuals.filter((v) => v.binding.measureRef === id).length;
+        }
+
+        function buildMeasureEditor(measure, index) {
+            const open = openMeasure === measure.id;
+            const card = document.createElement('div');
+            card.className = `border rounded-lg bg-slate-50 ${open ? 'border-[#0062F1]' : 'border-slate-200'}`;
+
+            const head = document.createElement('div');
+            head.className = 'flex items-center gap-2 p-2.5';
+
+            const toggle = document.createElement('button');
+            toggle.type = 'button';
+            toggle.className = 'flex items-center gap-2 flex-1 min-w-0 text-left';
+            toggle.addEventListener('click', () => {
+                openMeasure = open ? null : measure.id;
+                renderEditor();
+            });
+
+            const caret = document.createElement('span');
+            caret.className = 'text-slate-400 text-[10px] w-3 shrink-0';
+            caret.textContent = open ? '\u25BC' : '\u25B6';
+            toggle.appendChild(caret);
+
+            const name = document.createElement('span');
+            name.className = 'text-xs font-semibold text-[#00133C] truncate';
+            name.textContent = measure.name;
+            toggle.appendChild(name);
+
+            const detail = document.createElement('span');
+            detail.className = 'text-[11px] text-slate-500 truncate';
+            const bottom = measure.divideBy ? ` over ${measure.divideBy.aggregation} of ${measure.divideBy.measure}` : '';
+            const used = measureUsedBy(measure.id);
+            detail.textContent = `${measure.aggregation} of ${measure.measure}${bottom}${used ? ` \u00b7 used ${used}\u00d7` : ''}`;
+            toggle.appendChild(detail);
+
+            head.appendChild(toggle);
+            head.appendChild(iconButton('\u2715', 'Remove measure', () => {
+                for (const v of spec.visuals) {
+                    if (v.binding.measureRef === measure.id) v.binding.measureRef = null;
+                }
+                spec.measures.splice(index, 1);
+                refresh();
+            }, 'danger'));
+            card.appendChild(head);
+
+            if (!open) return card;
+
+            const body = document.createElement('div');
+            body.className = 'px-2.5 pb-2.5 space-y-2';
+
+            body.appendChild(labelledField('Name', textField(measure.name, 'Won Deals', (v) => { measure.name = v; refresh(false); })));
+
+            const grid = document.createElement('div');
+            grid.className = 'grid grid-cols-2 sm:grid-cols-3 gap-2';
+            grid.appendChild(labelledField(countsAnything(measure.aggregation) ? 'Count of' : 'Column',
+                columnField('measure', measure.measure, 'Revenue', (v) => { measure.measure = v; refresh(false); }, measure.aggregation)));
+            grid.appendChild(labelledField('Aggregation', selectField(DASHBOARD_AGGREGATIONS, measure.aggregation, (v) => { measure.aggregation = v; refresh(); })));
+            grid.appendChild(labelledField('Show as', selectField(DASHBOARD_FORMATS, measure.format, (v) => { measure.format = v; refresh(false); },
+                (f) => ({ auto: 'Automatic', percent: 'Percentage', number: 'Plain number', currency: 'Currency' })[f])));
+            body.appendChild(grid);
+
+            const ratioWrap = document.createElement('div');
+            ratioWrap.className = 'mt-2 pt-2 border-t border-slate-200';
+            const ratioHead = document.createElement('div');
+            ratioHead.className = 'flex items-center justify-between mb-1.5';
+            const ratioLabel = document.createElement('span');
+            ratioLabel.className = 'field-label';
+            ratioLabel.style.marginBottom = '0';
+            ratioLabel.textContent = 'Divide by another number';
+            ratioHead.appendChild(ratioLabel);
+
+            const ratioToggle = document.createElement('button');
+            ratioToggle.type = 'button';
+            ratioToggle.className = 'text-[11px] text-[#0062F1] hover:text-[#00133C] font-medium';
+            ratioToggle.textContent = measure.divideBy ? 'Remove' : '+ Add';
+            ratioToggle.addEventListener('click', () => {
+                if (measure.divideBy) {
+                    measure.divideBy = null;
+                    measure.format = 'auto';
+                } else {
+                    measure.divideBy = { measure: measure.measure, aggregation: measure.aggregation, filters: [] };
+                    measure.format = 'percent';
+                }
+                refresh();
+            });
+            ratioHead.appendChild(ratioToggle);
+            ratioWrap.appendChild(ratioHead);
+
+            if (measure.divideBy) {
+                const ratioGrid = document.createElement('div');
+                ratioGrid.className = 'grid grid-cols-2 gap-2';
+                ratioGrid.appendChild(labelledField('Bottom number', columnField('measure', measure.divideBy.measure, 'Revenue', (v) => { measure.divideBy.measure = v; refresh(false); }, measure.divideBy.aggregation)));
+                ratioGrid.appendChild(labelledField('Aggregation', selectField(DASHBOARD_AGGREGATIONS, measure.divideBy.aggregation, (v) => { measure.divideBy.aggregation = v; refresh(); })));
+                ratioWrap.appendChild(ratioGrid);
+                ratioWrap.appendChild(buildFilterList(measure.divideBy.filters, 'Filters, bottom number only'));
+            }
+
+            body.appendChild(ratioWrap);
+            body.appendChild(buildFilterList(measure.filters, measure.divideBy ? 'Filters, top number only' : 'Filters'));
+            card.appendChild(body);
+
+            return card;
+        }
+
+        function renderMeasureEditor() {
+            const list = document.getElementById('measure-list');
+            list.textContent = '';
+
+            if (spec.measures.length === 0) {
+                const hint = document.createElement('p');
+                hint.className = 'text-xs text-slate-400 italic';
+                hint.textContent = 'None yet. Visuals can define their own numbers without one.';
+                list.appendChild(hint);
+                return;
+            }
+
+            spec.measures.forEach((measure, index) => list.appendChild(buildMeasureEditor(measure, index)));
+        }
+
+        function buildColumnPicker(visual) {
+            const wrap = document.createElement('div');
+            const chosen = visual.binding.columns || [];
+
+            const head = document.createElement('div');
+            head.className = 'flex items-center justify-between mb-1';
+            const label = document.createElement('span');
+            label.className = 'field-label';
+            label.style.marginBottom = '0';
+            label.textContent = `Columns to show${chosen.length ? ` (${chosen.length})` : ''}`;
+            head.appendChild(label);
+            wrap.appendChild(head);
+
+            if (!dataset) {
+                const hint = document.createElement('p');
+                hint.className = 'text-[10px] text-slate-500';
+                hint.textContent = 'Load a file and its columns appear here to tick.';
+                wrap.appendChild(hint);
+                return wrap;
+            }
+
+            const list = document.createElement('div');
+            list.className = 'flex flex-wrap gap-1.5';
+
+            for (const column of dataset.columns) {
+                const active = chosen.includes(column);
+                const chip = document.createElement('button');
+                chip.type = 'button';
+                chip.textContent = column;
+                chip.className = `text-[11px] rounded-full px-2.5 py-1 border transition-colors ${active
+                    ? 'bg-[#0062F1] border-[#0062F1] text-white'
+                    : 'bg-white border-slate-300 text-slate-600 hover:border-[#0062F1]'}`;
+                chip.addEventListener('click', () => {
+                    const next = chosen.slice();
+                    const at = next.indexOf(column);
+                    if (at === -1) next.push(column);
+                    else next.splice(at, 1);
+                    visual.binding.columns = next;
+                    refresh();
+                });
+                list.appendChild(chip);
+            }
+
+            wrap.appendChild(list);
+
+            const hint = document.createElement('p');
+            hint.className = 'text-[10px] text-slate-500 mt-1';
+            hint.textContent = chosen.length ? 'Shown in the order you tick them.' : 'None ticked, so every column is shown.';
+            wrap.appendChild(hint);
+
+            return wrap;
+        }
+
+        function advancedSection(visual, index) {
+            const advanced = document.createElement('div');
+            const advancedOpen = openAdvanced.has(visual.id);
+
+            const advancedToggle = document.createElement('button');
+            advancedToggle.type = 'button';
+            advancedToggle.className = 'text-[11px] text-slate-500 hover:text-[#0062F1] font-medium';
+            advancedToggle.textContent = advancedOpen ? 'Fewer options' : 'More options';
+            advancedToggle.addEventListener('click', () => {
+                if (advancedOpen) openAdvanced.delete(visual.id);
+                else openAdvanced.add(visual.id);
+                renderEditor();
+            });
+            advanced.appendChild(advancedToggle);
+
+            if (!advancedOpen) return advanced;
+
+            const shape = DASHBOARD_VISUAL_KINDS[visual.kind];
+            const extra = document.createElement('div');
+            extra.className = 'grid grid-cols-2 sm:grid-cols-3 gap-2 mt-2';
+            extra.appendChild(labelledField('Width', selectField(DASHBOARD_WIDTHS, visual.width, (v) => { visual.width = v; refresh(false); }, (w) => ({ quarter: 'Quarter', half: 'Half', full: 'Full width' })[w])));
+            extra.appendChild(labelledField('Chart type', selectField(Object.keys(DASHBOARD_VISUAL_KINDS), visual.kind, (v) => changeKind(index, v), (k) => DASHBOARD_VISUAL_KINDS[k].label)));
+            if (!dataset) {
+                extra.appendChild(labelledField('Source table', textField(visual.binding.source, 'Sales', (v) => { visual.binding.source = v; refresh(false); })));
+            }
+            advanced.appendChild(extra);
+
+            const notes = document.createElement('textarea');
+            notes.className = 'field resize-y mt-2';
+            notes.rows = 1;
+            notes.placeholder = 'Notes about this visual';
+            notes.value = visual.notes;
+            notes.addEventListener('input', () => { visual.notes = notes.value; refresh(false); });
+            advanced.appendChild(notes);
+
+            if (!shape.needsColumns) advanced.appendChild(buildRatioSection(visual));
+            advanced.appendChild(buildFilterSection(visual));
+
+            return advanced;
         }
 
         function buildVisualEditor(visual, index) {
@@ -540,6 +790,52 @@
             titleInput.className = 'field font-medium';
             body.appendChild(labelledField('Title', titleInput));
 
+            if (shape.needsColumns) {
+                body.appendChild(buildColumnPicker(visual));
+
+                const detailGrid = document.createElement('div');
+                detailGrid.className = 'grid grid-cols-2 sm:grid-cols-3 gap-2';
+                detailGrid.appendChild(labelledField('Sort by', columnField('any', visual.binding.sortBy || '', 'Column', (v) => { visual.binding.sortBy = v; refresh(false); })));
+                detailGrid.appendChild(labelledField('Direction', selectField(['none', 'ascending', 'descending'], visual.binding.sort, (v) => { visual.binding.sort = v; refresh(false); },
+                    (d) => ({ none: 'File order', ascending: 'Smallest first', descending: 'Largest first' })[d])));
+                detailGrid.appendChild(labelledField('Show rows', selectField(['10', '15', '20', '30', '50'], String(visual.binding.limit), (v) => { visual.binding.limit = Number(v); refresh(false); })));
+                body.appendChild(detailGrid);
+                body.appendChild(advancedSection(visual, index));
+                card.appendChild(body);
+                return card;
+            }
+
+            if (spec.measures.length > 0) {
+                const named = spec.measures.find((m) => m.id === visual.binding.measureRef);
+                const ids = [''].concat(spec.measures.map((m) => m.id));
+                body.appendChild(labelledField('Number to show', selectField(ids, visual.binding.measureRef || '', (v) => {
+                    visual.binding.measureRef = v || null;
+                    refresh();
+                }, (id) => (id ? (spec.measures.find((m) => m.id === id) || {}).name : 'Define it below'))));
+
+                if (named) {
+                    const note = document.createElement('p');
+                    note.className = 'text-[10px] text-slate-500';
+                    note.textContent = `Using the "${named.name}" measure. Edit it under Measures to change every visual that uses it.`;
+                    body.appendChild(note);
+
+                    if (shape.needsDimension) {
+                        const dimGrid = document.createElement('div');
+                        dimGrid.className = 'grid grid-cols-2 gap-2';
+                        dimGrid.appendChild(labelledField('Break down by', columnField('dimension', visual.binding.dimension, 'Region', (v) => { visual.binding.dimension = v; refresh(false); })));
+                        dimGrid.appendChild(labelledField('Show top', selectField(['5', '6', '8', '10', '15', '20'], String(visual.binding.limit), (v) => { visual.binding.limit = Number(v); refresh(false); })));
+                        body.appendChild(dimGrid);
+                    }
+                    if (shape.needsGrain) {
+                        body.appendChild(labelledField('Time grain', selectField(DASHBOARD_GRAINS, visual.binding.grain, (v) => { visual.binding.grain = v; refresh(false); })));
+                    }
+
+                    body.appendChild(advancedSection(visual, index));
+                    card.appendChild(body);
+                    return card;
+                }
+            }
+
             const grid = document.createElement('div');
             grid.className = 'grid grid-cols-2 sm:grid-cols-3 gap-2';
 
@@ -567,42 +863,7 @@
 
             body.appendChild(grid);
 
-            const advanced = document.createElement('div');
-            const advancedOpen = openAdvanced.has(visual.id);
-
-            const advancedToggle = document.createElement('button');
-            advancedToggle.type = 'button';
-            advancedToggle.className = 'text-[11px] text-slate-500 hover:text-[#0062F1] font-medium';
-            advancedToggle.textContent = advancedOpen ? 'Fewer options' : 'More options';
-            advancedToggle.addEventListener('click', () => {
-                if (advancedOpen) openAdvanced.delete(visual.id);
-                else openAdvanced.add(visual.id);
-                renderEditor();
-            });
-            advanced.appendChild(advancedToggle);
-
-            if (advancedOpen) {
-                const extra = document.createElement('div');
-                extra.className = 'grid grid-cols-2 sm:grid-cols-3 gap-2 mt-2';
-                extra.appendChild(labelledField('Width', selectField(DASHBOARD_WIDTHS, visual.width, (v) => { visual.width = v; refresh(false); }, (w) => ({ quarter: 'Quarter', half: 'Half', full: 'Full width' })[w])));
-                extra.appendChild(labelledField('Chart type', selectField(Object.keys(DASHBOARD_VISUAL_KINDS), visual.kind, (v) => changeKind(index, v), (k) => DASHBOARD_VISUAL_KINDS[k].label)));
-                if (!dataset) {
-                    extra.appendChild(labelledField('Source table', textField(visual.binding.source, 'Sales', (v) => { visual.binding.source = v; refresh(false); })));
-                }
-                advanced.appendChild(extra);
-
-                const notes = document.createElement('textarea');
-                notes.className = 'field resize-y mt-2';
-                notes.rows = 1;
-                notes.placeholder = 'Notes about this visual';
-                notes.value = visual.notes;
-                notes.addEventListener('input', () => { visual.notes = notes.value; refresh(false); });
-                advanced.appendChild(notes);
-                advanced.appendChild(buildRatioSection(visual));
-                advanced.appendChild(buildFilterSection(visual));
-            }
-
-            body.appendChild(advanced);
+            body.appendChild(advancedSection(visual, index));
             card.appendChild(body);
 
             return card;
@@ -654,6 +915,7 @@
         }
 
         function renderEditor() {
+            renderMeasureEditor();
             renderSlicerEditor();
 
             const list = document.getElementById('visual-list');

@@ -7,6 +7,7 @@ const DASHBOARD_VISUAL_KINDS = {
   bar: { label: "Bar chart", needsDimension: true, needsGrain: false, needsSecondMeasure: false, defaultWidth: "half" },
   donut: { label: "Donut chart", needsDimension: true, needsGrain: false, needsSecondMeasure: false, defaultWidth: "half" },
   table: { label: "Table", needsDimension: true, needsGrain: false, needsSecondMeasure: false, defaultWidth: "half" },
+  details: { label: "Detail rows", needsDimension: false, needsGrain: false, needsSecondMeasure: false, needsColumns: true, defaultWidth: "full" },
   scatter: { label: "Scatter plot", needsDimension: false, needsGrain: false, needsSecondMeasure: true, defaultWidth: "half" }
 };
 
@@ -104,7 +105,13 @@ function dashboardNormalizeBinding(raw, kind) {
       ? source.filters.map(dashboardNormalizeFilter).filter(Boolean).slice(0, 8)
       : [],
     divideBy: dashboardNormalizeDivideBy(source.divideBy),
-    format: dashboardPickOption(source.format, DASHBOARD_FORMATS, "auto")
+    format: dashboardPickOption(source.format, DASHBOARD_FORMATS, "auto"),
+    measureRef: dashboardCleanText(source.measureRef, 24) || null,
+    columns: shape.needsColumns && Array.isArray(source.columns)
+      ? source.columns.map((c) => dashboardCleanText(c, 60)).filter(Boolean).slice(0, 12)
+      : null,
+    sort: shape.needsColumns ? dashboardPickOption(source.sort, ["none", "ascending", "descending"], "none") : null,
+    sortBy: shape.needsColumns ? dashboardCleanText(source.sortBy, 60) : null
   };
 
   return binding;
@@ -130,6 +137,43 @@ function dashboardBoolean(value, fallback) {
   if (value === "true") return true;
   if (value === "false") return false;
   return fallback;
+}
+
+function dashboardNormalizeMeasure(raw, index) {
+  const source = raw && typeof raw === "object" ? raw : {};
+  const name = dashboardCleanText(source.name, 60);
+  if (name === "") return null;
+
+  return {
+    id: dashboardCleanText(source.id, 24) || `m${index + 1}`,
+    name,
+    measure: dashboardCleanText(source.measure, 60) || "Not specified",
+    aggregation: dashboardPickOption(source.aggregation, DASHBOARD_AGGREGATIONS, "sum"),
+    filters: Array.isArray(source.filters)
+      ? source.filters.map(dashboardNormalizeFilter).filter(Boolean).slice(0, 8)
+      : [],
+    divideBy: dashboardNormalizeDivideBy(source.divideBy),
+    format: dashboardPickOption(source.format, DASHBOARD_FORMATS, "auto")
+  };
+}
+
+function dashboardFindMeasure(spec, id) {
+  if (!spec || !Array.isArray(spec.measures) || !id) return null;
+  return spec.measures.find((m) => m.id === id) || null;
+}
+
+function dashboardEffectiveBinding(visual, spec) {
+  const named = dashboardFindMeasure(spec, visual.binding.measureRef);
+  if (!named) return visual.binding;
+
+  return Object.assign({}, visual.binding, {
+    measure: named.measure,
+    aggregation: named.aggregation,
+    filters: named.filters,
+    divideBy: named.divideBy,
+    format: named.format,
+    measureName: named.name
+  });
 }
 
 function dashboardNormalizeSlicer(raw, index) {
@@ -160,6 +204,7 @@ function dashboardNormalizeSpec(raw) {
   const source = raw && typeof raw === "object" ? raw : {};
   const visuals = Array.isArray(source.visuals) ? source.visuals.slice(0, 24) : [];
   const slicers = Array.isArray(source.slicers) ? source.slicers.slice(0, 8) : [];
+  const measures = Array.isArray(source.measures) ? source.measures.slice(0, 16) : [];
 
   return {
     v: DASHBOARD_SPEC_VERSION,
@@ -175,6 +220,7 @@ function dashboardNormalizeSpec(raw) {
     showEditLink: dashboardBoolean(source.showEditLink, true),
     palette: dashboardPickOption(source.palette, DASHBOARD_PALETTE_NAMES, "hub"),
     accent: dashboardCleanColor(source.accent),
+    measures: measures.map(dashboardNormalizeMeasure).filter(Boolean),
     slicers: slicers.map(dashboardNormalizeSlicer).filter(Boolean),
     visuals: visuals.map(dashboardNormalizeVisual)
   };
@@ -357,6 +403,24 @@ function dashboardBindingFormat(binding) {
 
 function dashboardBindingSummary(visual) {
   const b = visual.binding;
+
+  if (visual.kind === "details") {
+    const shown = b.columns && b.columns.length ? `${b.columns.length} columns` : "every column";
+    const bits = [`Rows of ${b.source || "the data"}, showing ${shown}`];
+    if (b.sort !== "none" && b.sortBy) bits.push(`sorted by ${b.sortBy} ${b.sort}`);
+    if (b.filters.length > 0) {
+      bits.push(`filtered on ${Array.from(new Set(b.filters.map((f) => f.field))).join(", ")}`);
+    }
+    return bits.join(", ");
+  }
+
+  if (b.measureName) {
+    const named = [b.measureName];
+    if (b.dimension) named.push(`by ${b.dimension}`);
+    if (b.grain) named.push(`per ${b.grain}`);
+    return named.join(" ");
+  }
+
   const parts = [`${b.aggregation} of ${b.measure}`];
 
   if (b.filters.length > 0 && b.divideBy) {
@@ -365,6 +429,9 @@ function dashboardBindingSummary(visual) {
 
   if (b.divideBy) {
     parts.push(`divided by ${b.divideBy.aggregation} of ${b.divideBy.measure}`);
+    if (b.divideBy.filters.length > 0) {
+      parts.push(`where ${b.divideBy.filters.map((f) => `${f.field} ${f.op} ${f.value}`).join(" or ")}`);
+    }
     if (dashboardBindingFormat(b) === "percent") parts.push("as a percentage");
   }
 

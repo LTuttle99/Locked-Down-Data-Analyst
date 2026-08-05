@@ -263,6 +263,32 @@ function dashboardResolveFromRows(visual, dataset) {
     return { kind: "series", points, empty: points.length === 0 ? "No rows had a readable date." : null };
   }
 
+  if (visual.kind === "details") {
+    const chosen = (binding.columns && binding.columns.length ? binding.columns : columns).filter((c) => columns.includes(c));
+    if (chosen.length === 0) {
+      return { kind: "rows", columns: [], rows: [], empty: "Pick at least one column to show." };
+    }
+
+    let listed = rows;
+    if (binding.sort !== "none" && binding.sortBy && columns.includes(binding.sortBy)) {
+      const direction = binding.sort === "ascending" ? 1 : -1;
+      listed = rows.slice().sort((a, b) => {
+        const x = dashboardCellNumber(a[binding.sortBy]);
+        const y = dashboardCellNumber(b[binding.sortBy]);
+        if (x !== null && y !== null) return (x - y) * direction;
+        return dashboardCellText(a[binding.sortBy]).localeCompare(dashboardCellText(b[binding.sortBy])) * direction;
+      });
+    }
+
+    return {
+      kind: "rows",
+      columns: chosen,
+      rows: listed.slice(0, binding.limit),
+      total: listed.length,
+      empty: listed.length === 0 ? "No rows matched the filters." : null
+    };
+  }
+
   if (visual.kind === "scatter") {
     const points = [];
     for (const row of rows) {
@@ -290,15 +316,26 @@ function dashboardResolveVisual(visual, dataset) {
   return dashboardResolveSample(visual);
 }
 
+function dashboardSpecVisuals(spec) {
+  if (typeof dashboardEffectiveBinding !== "function") return spec.visuals;
+  return spec.visuals.map((v) => Object.assign({}, v, { binding: dashboardEffectiveBinding(v, spec) }));
+}
+
 function dashboardSpecColumns(spec, dataset) {
   const wanted = new Set();
 
   for (const slicer of spec.slicers) wanted.add(slicer.field);
-  for (const visual of spec.visuals) {
+  for (const visual of dashboardSpecVisuals(spec)) {
     wanted.add(visual.binding.measure);
     if (visual.binding.dimension) wanted.add(visual.binding.dimension);
     if (visual.binding.measure2) wanted.add(visual.binding.measure2);
+    if (visual.binding.columns) for (const c of visual.binding.columns) wanted.add(c);
+    if (visual.binding.sortBy) wanted.add(visual.binding.sortBy);
     for (const filter of visual.binding.filters) wanted.add(filter.field);
+    if (visual.binding.divideBy) {
+      wanted.add(visual.binding.divideBy.measure);
+      for (const filter of visual.binding.divideBy.filters) wanted.add(filter.field);
+    }
   }
   if (dataset && dataset.dateColumn) wanted.add(dataset.dateColumn);
 
@@ -315,7 +352,7 @@ function dashboardBakeDataset(spec, dataset, maxRows = 50000) {
 
   if (spec.slicers.length === 0) {
     const baked = {};
-    for (const visual of spec.visuals) baked[visual.id] = dashboardResolveFromRows(visual, dataset);
+    for (const visual of dashboardSpecVisuals(spec)) baked[visual.id] = dashboardResolveFromRows(visual, dataset);
     return Object.assign(base, { baked, interactive: false });
   }
 

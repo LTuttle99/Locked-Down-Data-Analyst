@@ -204,10 +204,16 @@ options", and the dashboard description, owner, audience and refresh sit behind
 "More details". Adding a visual names it and points it at sensible columns
 automatically, so a usable dashboard is a few clicks with no typing.
 
-Seven visual kinds are available (KPI tile, trend line, column, bar, donut,
-table, scatter), each laid out at quarter, half, or full width on a twelve
-column grid, plus **slicers**: dropdown, chip list, numeric range, and date
-range controls that filter every visual at once for whoever is looking at it.
+Eight visual kinds are available (KPI tile, trend line, column, bar, donut,
+table, detail rows, scatter), each laid out at quarter, half, or full width on a
+twelve column grid, plus **slicers**: dropdown, chip list, numeric range, and
+date range controls that filter every visual at once for whoever is looking at
+it. Range and date range slicers have a handle at each end, so both bounds move.
+
+**Detail rows** is the odd one out: it lists rows as they are, with no
+aggregation, showing whichever columns you tick and sorted by whichever column
+you choose. It reports the true match count when it shows fewer rows than
+matched, so a capped table never reads as the whole story.
 
 ### Where the data comes from
 
@@ -229,6 +235,18 @@ this order:
    shows the same numbers and the layout can be reviewed before real data is
    attached. The footer says plainly that the numbers are not real.
 
+### Named measures
+
+`spec.measures` holds reusable calculations, the Power BI measure idea: a name,
+a column, an aggregation, its own filters, an optional divisor and a format. A
+visual sets `binding.measureRef` to use one instead of defining its own number.
+`dashboardEffectiveBinding` folds the named measure into the visual's binding at
+render and bake time, so nothing downstream needs to know measures exist. The
+visual keeps its own dimension, grain and limit, so one "Win Rate" measure
+serves a KPI tile and a breakdown by region at once. Edit the measure and every
+visual using it changes together; a dangling reference quietly falls back to
+the visual's own binding.
+
 ### Rates and percentages
 
 A binding can divide one aggregate by another, which is how you get anything
@@ -237,9 +255,10 @@ second `{measure, aggregation, filters}`, and `binding.format` decides whether
 the result reads as a percentage or a plain ratio.
 
 The rule that makes rates work: **the visual's own filters narrow the top
-number only, while the bottom number sees every row in scope.** So a close rate
-is "count of Deal ID where Stage equals Won" over "count of Deal ID", which is
-exactly how it reads in the builder. Margin is sum of Cost over sum of Revenue
+number only, and the bottom number has its own filters.** So a close rate over
+everything is "count of Deal ID where Stage equals Won" over "count of Deal ID",
+while a win rate on closed business filters the bottom number to Won or Lost and
+leaves Open deals out of both halves. Margin is sum of Cost over sum of Revenue
 as a percentage; average deal size is sum of Revenue over count of Deal ID as a
 plain ratio.
 

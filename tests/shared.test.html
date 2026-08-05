@@ -988,6 +988,138 @@
             assertEqual(rows.length, 2, 'North or South, and not Lost');
         });
 
+        test('a named measure feeds a visual that references it', () => {
+            const spec = dashboardNormalizeSpec({
+                measures: [{
+                    id: 'm1', name: 'Win Rate', measure: 'Deal', aggregation: 'count',
+                    filters: [{ field: 'Status', op: 'equals', value: 'Won' }],
+                    divideBy: { measure: 'Deal', aggregation: 'count', filters: [] },
+                    format: 'percent'
+                }],
+                visuals: [{ id: 'v1', kind: 'kpi', binding: { measureRef: 'm1' } }]
+            });
+
+            const effective = dashboardEffectiveBinding(spec.visuals[0], spec);
+            assertEqual(effective.measure, 'Deal');
+            assertEqual(effective.aggregation, 'count');
+            assertEqual(effective.filters.length, 1);
+            assertEqual(effective.format, 'percent');
+            assertEqual(effective.measureName, 'Win Rate');
+
+            const out = dashboardResolveFromRows({ kind: 'kpi', binding: effective }, pipelineFixture());
+            assertClose(out.value, 50, 0.001, 'three won out of six');
+        });
+
+        test('editing a measure changes every visual that uses it', () => {
+            const spec = dashboardNormalizeSpec({
+                measures: [{ id: 'm1', name: 'Revenue', measure: 'Revenue', aggregation: 'sum' }],
+                visuals: [
+                    { id: 'v1', kind: 'kpi', binding: { measureRef: 'm1' } },
+                    { id: 'v2', kind: 'column', binding: { measureRef: 'm1', dimension: 'Region' } }
+                ]
+            });
+            const data = pipelineFixture();
+
+            const sumBefore = dashboardResolveFromRows({ kind: 'kpi', binding: dashboardEffectiveBinding(spec.visuals[0], spec) }, data).value;
+            assertEqual(sumBefore, 2100);
+
+            spec.measures[0].aggregation = 'average';
+            const both = spec.visuals.map((v) => dashboardEffectiveBinding(v, spec));
+            assertTrue(both.every((b) => b.aggregation === 'average'), 'both visuals follow the change');
+            assertClose(dashboardResolveFromRows({ kind: 'kpi', binding: both[0] }, data).value, 350, 0.001);
+        });
+
+        test('a visual keeps its own dimension and grain when using a measure', () => {
+            const spec = dashboardNormalizeSpec({
+                measures: [{ id: 'm1', name: 'Revenue', measure: 'Revenue', aggregation: 'sum' }],
+                visuals: [{ id: 'v1', kind: 'column', binding: { measureRef: 'm1', dimension: 'Region', limit: 5 } }]
+            });
+            const effective = dashboardEffectiveBinding(spec.visuals[0], spec);
+            assertEqual(effective.dimension, 'Region', 'dimension stays on the visual');
+            assertEqual(effective.limit, 5, 'limit stays on the visual');
+        });
+
+        test('a dangling measure reference falls back to the visual own binding', () => {
+            const spec = dashboardNormalizeSpec({
+                measures: [],
+                visuals: [{ id: 'v1', kind: 'kpi', binding: { measureRef: 'gone', measure: 'Revenue', aggregation: 'sum' } }]
+            });
+            const effective = dashboardEffectiveBinding(spec.visuals[0], spec);
+            assertEqual(effective.measure, 'Revenue');
+            assertEqual(effective.aggregation, 'sum');
+            assertEqual(effective.measureName, undefined, 'no name when the measure is missing');
+        });
+
+        test('measures are normalized and nameless ones dropped', () => {
+            const spec = dashboardNormalizeSpec({
+                measures: [
+                    { name: 'Good', measure: 'Revenue', aggregation: 'telepathy' },
+                    { measure: 'Revenue' },
+                    null,
+                    'junk'
+                ]
+            });
+            assertEqual(spec.measures.length, 1, 'only the named one survives');
+            assertEqual(spec.measures[0].aggregation, 'sum', 'unknown aggregation clamped');
+            assertEqual(spec.measures[0].id, 'm1', 'gets an id');
+        });
+
+        test('measures survive a round trip', () => {
+            const spec = dashboardNormalizeSpec({
+                measures: [{ id: 'm1', name: 'Win Rate', measure: 'Deal', aggregation: 'count', format: 'percent',
+                    filters: [{ field: 'Status', op: 'equals', value: 'Won' }],
+                    divideBy: { measure: 'Deal', aggregation: 'count', filters: [{ field: 'Status', op: 'not equals', value: 'Open' }] } }],
+                visuals: [{ id: 'v1', kind: 'kpi', binding: { measureRef: 'm1' } }]
+            });
+            assertDeep(dashboardDecodeSpec(dashboardEncodeSpec(spec)), spec);
+        });
+
+        test('the divisor can be filtered independently of the numerator', () => {
+            const data = pipelineFixture();
+            const closedOnly = dashboardResolveFromRows(visual('kpi', {
+                measure: 'Deal', aggregation: 'count',
+                filters: [{ field: 'Status', op: 'equals', value: 'Won' }],
+                divideBy: { measure: 'Deal', aggregation: 'count', filters: [{ field: 'Status', op: 'not equals', value: 'Open' }] },
+                format: 'percent'
+            }), data);
+            assertClose(closedOnly.value, 50, 0.001, 'no Open rows in this fixture so it matches the plain rate');
+
+            const wonOverLost = dashboardResolveFromRows(visual('kpi', {
+                measure: 'Deal', aggregation: 'count',
+                filters: [{ field: 'Status', op: 'equals', value: 'Won' }],
+                divideBy: { measure: 'Deal', aggregation: 'count', filters: [{ field: 'Status', op: 'equals', value: 'Lost' }] },
+                format: 'percent'
+            }), data);
+            assertClose(wonOverLost.value, 100, 0.001, 'three won over three lost');
+        });
+
+        test('a detail visual lists chosen columns without aggregating', () => {
+            const data = pipelineFixture();
+            const out = dashboardResolveFromRows(visual('details', {
+                columns: ['Deal', 'Region'], limit: 10, sort: 'none'
+            }), data);
+            assertEqual(out.kind, 'rows');
+            assertDeep(out.columns, ['Deal', 'Region']);
+            assertEqual(out.rows.length, 6, 'every row listed, nothing rolled up');
+            assertEqual(out.rows[0].Deal, 'D1');
+        });
+
+        test('a detail visual sorts, limits and reports the true total', () => {
+            const data = pipelineFixture();
+            const out = dashboardResolveFromRows(visual('details', {
+                columns: ['Deal', 'Revenue'], limit: 3, sort: 'descending', sortBy: 'Revenue'
+            }), data);
+            assertEqual(out.rows.length, 3, 'limited');
+            assertEqual(out.total, 6, 'total is the full match count');
+            assertEqual(out.rows[0].Revenue, 600, 'largest first');
+            assertTrue(out.rows[0].Revenue >= out.rows[1].Revenue, 'descending');
+        });
+
+        test('a detail visual with no columns chosen shows them all', () => {
+            const out = dashboardResolveFromRows(visual('details', { limit: 10 }), pipelineFixture());
+            assertDeep(out.columns, ['Deal', 'Region', 'Status', 'Revenue', 'Cost']);
+        });
+
         test('slicer selections stack across slicers', () => {
             const data = salesFixture();
             data.slicers = [
