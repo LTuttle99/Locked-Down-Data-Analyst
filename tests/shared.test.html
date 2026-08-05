@@ -1005,6 +1005,31 @@
             assertTrue(!googleSheetLooksLikeHtml('name,revenue\nAda,100'), 'real csv');
         });
 
+        test('caption and delta toggles default to on and survive a round trip', () => {
+            const fresh = dashboardNormalizeSpec({});
+            assertEqual(fresh.showCaptions, true, 'captions on by default');
+            assertEqual(fresh.showDeltas, true, 'deltas on by default');
+
+            const off = dashboardNormalizeSpec({ showCaptions: false, showDeltas: false });
+            assertEqual(off.showCaptions, false);
+            assertEqual(off.showDeltas, false);
+            assertDeep(dashboardDecodeSpec(dashboardEncodeSpec(off)), off);
+        });
+
+        test('toggle values are coerced to real booleans', () => {
+            assertEqual(dashboardNormalizeSpec({ showCaptions: 'false' }).showCaptions, false, 'string false');
+            assertEqual(dashboardNormalizeSpec({ showCaptions: 'true' }).showCaptions, true, 'string true');
+            assertEqual(dashboardNormalizeSpec({ showCaptions: 0 }).showCaptions, true, 'junk falls back to on');
+            assertEqual(dashboardNormalizeSpec({ showDeltas: null }).showDeltas, true, 'null falls back to on');
+        });
+
+        test('an older link with no toggles still shows both', () => {
+            const legacy = { v: 1, title: 'Old', visuals: [{ id: 'v1', kind: 'kpi', binding: { measure: 'Revenue' } }] };
+            const spec = dashboardNormalizeSpec(legacy);
+            assertEqual(spec.showCaptions, true);
+            assertEqual(spec.showDeltas, true);
+        });
+
         test('a spec only accepts a Google Sheets source url', () => {
             assertEqual(dashboardNormalizeSpec({ source: { kind: 'googleSheet', url: 'https://docs.google.com/spreadsheets/d/1AbC/edit' } }).source.kind, 'googleSheet');
             assertEqual(dashboardNormalizeSpec({ source: { kind: 'googleSheet', url: 'https://evil.test/steal' } }).source, null, 'rejects other hosts');

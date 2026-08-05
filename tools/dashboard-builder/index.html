@@ -102,6 +102,18 @@
                                 <select id="meta-refresh" class="field"></select>
                             </div>
                         </div>
+
+                        <div class="pt-3 border-t border-slate-100">
+                            <span class="field-label">Show on the dashboard</span>
+                            <label class="flex items-center gap-2 text-xs text-slate-700 cursor-pointer mt-1">
+                                <input type="checkbox" id="opt-captions" checked class="accent-[#0062F1]">
+                                What each visual measures, under its title
+                            </label>
+                            <label class="flex items-center gap-2 text-xs text-slate-700 cursor-pointer mt-1.5">
+                                <input type="checkbox" id="opt-deltas" checked class="accent-[#0062F1]">
+                                Change vs prior period on KPI tiles
+                            </label>
+                        </div>
                     </div>
                 </div>
 
@@ -955,8 +967,10 @@
             document.getElementById('meta-requester').value = spec.requester;
             document.getElementById('meta-audience').value = spec.audience;
             document.getElementById('meta-refresh').value = spec.refresh;
+            document.getElementById('opt-captions').checked = spec.showCaptions !== false;
+            document.getElementById('opt-deltas').checked = spec.showDeltas !== false;
 
-            if (spec.subtitle || spec.requester || spec.audience) toggleDetails();
+            if (spec.subtitle || spec.requester || spec.audience || !spec.showCaptions || !spec.showDeltas) toggleDetails();
 
             const bind = (id, key) => {
                 const el = document.getElementById(id);
@@ -969,6 +983,14 @@
             bind('meta-requester', 'requester');
             bind('meta-audience', 'audience');
             bind('meta-refresh', 'refresh');
+
+            const bindToggle = (id, key) => {
+                const el = document.getElementById(id);
+                el.addEventListener('change', () => { spec[key] = el.checked; refresh(false); });
+            };
+
+            bindToggle('opt-captions', 'showCaptions');
+            bindToggle('opt-deltas', 'showDeltas');
 
             refresh();
         }

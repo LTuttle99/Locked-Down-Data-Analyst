@@ -83,6 +83,13 @@ function dashboardNormalizeVisual(raw, index) {
   };
 }
 
+function dashboardBoolean(value, fallback) {
+  if (value === true || value === false) return value;
+  if (value === "true") return true;
+  if (value === "false") return false;
+  return fallback;
+}
+
 function dashboardNormalizeSlicer(raw, index) {
   const source = raw && typeof raw === "object" ? raw : {};
   const field = dashboardCleanText(source.field, 60);
@@ -121,6 +128,8 @@ function dashboardNormalizeSpec(raw) {
     refresh: dashboardPickOption(source.refresh, ["real time", "hourly", "daily", "weekly", "monthly"], "daily"),
     created: /^\d{4}-\d{2}-\d{2}$/.test(source.created) ? source.created : new Date().toISOString().slice(0, 10),
     source: dashboardNormalizeSource(source.source),
+    showCaptions: dashboardBoolean(source.showCaptions, true),
+    showDeltas: dashboardBoolean(source.showDeltas, true),
     slicers: slicers.map(dashboardNormalizeSlicer).filter(Boolean),
     visuals: visuals.map(dashboardNormalizeVisual)
   };

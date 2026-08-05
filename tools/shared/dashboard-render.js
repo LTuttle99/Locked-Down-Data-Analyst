@@ -26,16 +26,18 @@ function dashboardChartOptions(extra) {
   }, extra || {});
 }
 
-function dashboardDrawKpi(host, visual, data) {
+function dashboardDrawKpi(host, visual, data, showDelta) {
   const wrap = dashboardElement("div", "flex flex-col justify-center h-full");
   wrap.appendChild(dashboardElement("p", "text-3xl font-bold text-[#00133C] leading-tight",
     dashboardFormatValue(data.value, visual.binding.measure, visual.binding.aggregation)));
 
-  const delta = data.delta;
-  const tone = delta >= 0 ? "text-emerald-600" : "text-red-600";
-  const arrow = delta >= 0 ? "▲" : "▼";
-  wrap.appendChild(dashboardElement("p", `text-xs font-medium mt-1 ${tone}`,
-    `${arrow} ${Math.abs(delta * 100).toFixed(1)}% vs prior period`));
+  if (showDelta) {
+    const delta = data.delta;
+    const tone = delta >= 0 ? "text-emerald-600" : "text-red-600";
+    const arrow = delta >= 0 ? "▲" : "▼";
+    wrap.appendChild(dashboardElement("p", `text-xs font-medium mt-1 ${tone}`,
+      `${arrow} ${Math.abs(delta * 100).toFixed(1)}% vs prior period`));
+  }
 
   host.appendChild(wrap);
 }
@@ -164,7 +166,9 @@ function dashboardRenderVisual(visual, options, charts) {
 
   const head = dashboardElement("div", "mb-3");
   head.appendChild(dashboardElement("h3", "text-sm font-semibold text-[#00133C] leading-snug", visual.title));
-  head.appendChild(dashboardElement("p", "text-[11px] text-slate-500 mt-0.5", dashboardBindingSummary(visual)));
+  if (options.showCaptions) {
+    head.appendChild(dashboardElement("p", "text-[11px] text-slate-500 mt-0.5", dashboardBindingSummary(visual)));
+  }
   card.appendChild(head);
 
   const data = typeof dashboardResolveVisual === "function"
@@ -174,7 +178,7 @@ function dashboardRenderVisual(visual, options, charts) {
   if (data.empty) {
     card.appendChild(dashboardElement("div", "text-xs text-slate-500 bg-slate-50 border border-dashed border-slate-300 rounded-lg px-3 py-6 text-center", data.empty));
   } else if (visual.kind === "kpi") {
-    dashboardDrawKpi(card, visual, data);
+    dashboardDrawKpi(card, visual, data, options.showDeltas);
   } else if (visual.kind === "table") {
     dashboardDrawTable(card, visual, data);
   } else {
@@ -308,7 +312,11 @@ function dashboardRenderSlicers(spec, container, dataset, rerender) {
 }
 
 function dashboardRenderSpec(spec, container, options = {}) {
-  const settings = Object.assign({ showNotes: true, showHeader: true, showFooter: true }, options);
+  const settings = Object.assign(
+    { showNotes: true, showHeader: true, showFooter: true },
+    { showCaptions: spec.showCaptions !== false, showDeltas: spec.showDeltas !== false },
+    options
+  );
   const charts = [];
 
   if (settings.dataset) settings.dataset.slicers = spec.slicers;
