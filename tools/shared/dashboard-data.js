@@ -53,7 +53,13 @@ function dashboardApplyFilters(rows, filters) {
 }
 
 function dashboardAggregate(rows, measure, aggregation) {
-  if (aggregation === "count") return rows.length;
+  if (aggregation === "count") {
+    let present = 0;
+    for (const row of rows) {
+      if (!dashboardCellIsBlank(row[measure])) present++;
+    }
+    return present;
+  }
 
   if (aggregation === "distinct count") {
     const seen = new Set();

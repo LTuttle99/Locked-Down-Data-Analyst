@@ -97,6 +97,16 @@ function dashboardNormalizeSlicer(raw, index) {
   };
 }
 
+function dashboardNormalizeSource(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  if (raw.kind !== "googleSheet") return null;
+
+  const url = dashboardCleanText(raw.url, 400);
+  if (!/^https:\/\/docs\.google\.com\/spreadsheets\//.test(url)) return null;
+
+  return { kind: "googleSheet", url };
+}
+
 function dashboardNormalizeSpec(raw) {
   const source = raw && typeof raw === "object" ? raw : {};
   const visuals = Array.isArray(source.visuals) ? source.visuals.slice(0, 24) : [];
@@ -110,6 +120,7 @@ function dashboardNormalizeSpec(raw) {
     audience: dashboardCleanText(source.audience, 80),
     refresh: dashboardPickOption(source.refresh, ["real time", "hourly", "daily", "weekly", "monthly"], "daily"),
     created: /^\d{4}-\d{2}-\d{2}$/.test(source.created) ? source.created : new Date().toISOString().slice(0, 10),
+    source: dashboardNormalizeSource(source.source),
     slicers: slicers.map(dashboardNormalizeSlicer).filter(Boolean),
     visuals: visuals.map(dashboardNormalizeVisual)
   };
@@ -262,6 +273,10 @@ function dashboardResolveSample(visual) {
 function dashboardFormatValue(value, measure, aggregation) {
   const name = String(measure || "").toLowerCase();
   const n = Number(value) || 0;
+
+  if (aggregation === "count" || aggregation === "distinct count") {
+    return Math.round(n).toLocaleString("en-US");
+  }
 
   if (/rate|percent|margin|share|ratio/.test(name)) return `${n.toFixed(1)}%`;
 

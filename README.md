@@ -78,13 +78,16 @@ that Instant Dashboard runs on. It decides what each column actually is
 (date, measure, category, identifier, free text) and which charts are worth
 drawing for the shape it found.
 
-Three modules make up Dashboard Builder. `tools/shared/dashboard-spec.js` owns
+Four modules make up Dashboard Builder. `tools/shared/dashboard-spec.js` owns
 the dashboard format (version 1), normalizes it, encodes it to a URL-safe
 string, and generates placeholder figures.
 `tools/shared/dashboard-data.js` aggregates real rows against a binding and
 applies filters and slicer selections. `tools/shared/dashboard-render.js` turns
 a spec plus resolved data into slicer controls, KPI tiles and Chart.js visuals.
-See "Dashboard Builder" below for how they fit together.
+`tools/shared/dashboard-parse.js` turns typed instructions into visuals.
+`tools/shared/sheet-connect.js` reads a Google Sheet from a pasted link and is
+usable on its own by any tool that wants sheet input. See "Dashboard Builder"
+below for how they fit together.
 
 `tools/shared/sanitize.js` is an allowlist HTML sanitizer used by Markdown
 Previewer. `marked` does not sanitize its output (the option was removed in
@@ -185,19 +188,50 @@ range controls that filter every visual at once for whoever is looking at it.
 
 Every visual carries a `binding` (`source`, `measure`, `aggregation`,
 `dimension`, `measure2`, `grain`, `limit`, `filters`) describing the data it
-wants. Three resolvers can satisfy it, and `dashboardResolveVisual` picks in
+wants. Several resolvers can satisfy it, and `dashboardResolveVisual` picks in
 this order:
 
-1. **Real rows.** Load a CSV or Excel file and `dashboardResolveFromRows`
-   aggregates it for real: sum, average, count, min, max and distinct count,
-   grouped by a dimension or by day, week, month, quarter or year.
-   `profileDataset` decides which columns are offered as measures and which as
-   dimensions, so identifier columns stay out of the measure list.
+1. **Real rows.** A CSV or Excel file, or a connected Google Sheet.
+   `dashboardResolveFromRows` aggregates for real: sum, average, count, min,
+   max and distinct count, grouped by a dimension or by day, week, month,
+   quarter or year. `profileDataset` decides which columns are offered as
+   measures and which as dimensions, so identifier columns stay out of the
+   measure list. Count and distinct count are offered on **every** column, not
+   just numeric ones, since counting names is a normal thing to want.
 2. **Baked results.** A downloaded dashboard carries its own precomputed data.
 3. **Placeholders.** With no data at all, `dashboardResolveSample` invents
    plausible figures seeded from the visual's id, so a given dashboard always
    shows the same numbers and the layout can be reviewed before real data is
    attached. The footer says plainly that the numbers are not real.
+
+### Google Sheets
+
+`tools/shared/sheet-connect.js` reads a sheet straight from a pasted link, with
+no API key, no sign-in and no backend. `googleSheetRefFromUrl` pulls the
+spreadsheet id and tab out of whichever URL shape you paste, and
+`googleSheetCsvUrls` builds the CSV export candidates, which
+`fetchGoogleSheet` tries in turn until one returns something that is not a
+sign-in page. Only `docs.google.com/spreadsheets` URLs are ever accepted, both
+when connecting and when a spec is decoded from a link.
+
+The sheet has to be readable without signing in ("Anyone with the link", or
+published to the web), because the browser fetches it directly with no
+credentials. When a sheet is connected, the URL is stored on the spec, so a
+downloaded dashboard **re-reads the sheet every time it is opened** and stays
+current. It renders its baked snapshot first and swaps in live data when the
+fetch returns, so it still works if the sheet later becomes unreachable.
+
+### Building from typed instructions
+
+`tools/shared/dashboard-parse.js` turns plain words into visuals. Typing
+`revenue by region, total orders, revenue over time, let me filter by segment`
+produces three visuals and a slicer, bound to real columns. It is deterministic
+with no AI and no network: it splits on commas and newlines, matches
+aggregation and chart-shape keywords, and resolves column names by exact match,
+token match, or fuzzy match through `similarity` from `match.js`, so `regoin`
+still finds `Region`. It handles ranking phrasing (`top 5 sales rep by revenue`)
+where "by" introduces the measure rather than the dimension. Anything it cannot
+work out is handed back verbatim and reported, rather than guessed at.
 
 ### Two ways to hand it over
 

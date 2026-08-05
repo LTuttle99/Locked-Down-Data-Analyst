@@ -61,6 +61,7 @@
 
     <script src="../shared/parse.js"></script>
     <script src="../shared/profile.js"></script>
+    <script src="../shared/sheet-connect.js"></script>
     <script src="../shared/dashboard-spec.js"></script>
     <script src="../shared/dashboard-data.js"></script>
     <script src="../shared/dashboard-render.js"></script>
@@ -145,6 +146,33 @@
                 : 'Attach a CSV or Excel file to see real numbers instead of placeholders.';
 
             render();
+
+            if (spec.source && spec.source.kind === 'googleSheet') loadConnectedSheet();
+        }
+
+        async function loadConnectedSheet() {
+            const status = document.getElementById('data-status');
+            status.textContent = 'Reading the connected Google Sheet...';
+
+            try {
+                const parsed = await fetchGoogleSheet(spec.source.url);
+                const profiles = profileDataset(parsed.columns, parsed.rows);
+                const dateProfile = profiles.find((p) => p.type === 'date');
+
+                dataset = {
+                    source: 'the connected Google Sheet',
+                    columns: parsed.columns.slice(),
+                    rows: parsed.rows,
+                    rowCount: parsed.rows.length,
+                    dateColumn: dateProfile ? dateProfile.name : null,
+                    selections: {}
+                };
+
+                document.getElementById('data-prompt').classList.add('hidden');
+                render();
+            } catch (err) {
+                status.textContent = `${err.message} The numbers below are placeholders until it can be read, or you can attach a file instead.`;
+            }
         }
 
         window.addEventListener('hashchange', boot);

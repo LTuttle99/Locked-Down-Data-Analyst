@@ -37,6 +37,8 @@
     <script src="../tools/shared/sanitize.js"></script>
     <script src="../tools/shared/dashboard-spec.js"></script>
     <script src="../tools/shared/dashboard-data.js"></script>
+    <script src="../tools/shared/sheet-connect.js"></script>
+    <script src="../tools/shared/dashboard-parse.js"></script>
 
     <script>
         const results = [];
@@ -722,7 +724,9 @@
 
         test('dashboardFormatValue picks a sensible unit for the measure name', () => {
             assertEqual(dashboardFormatValue(1234567, 'Revenue', 'sum'), '$1.2M');
-            assertEqual(dashboardFormatValue(4200, 'Order Count', 'count'), '4.2K');
+            assertEqual(dashboardFormatValue(4200, 'Order Count', 'count'), '4,200', 'counts are whole numbers');
+            assertEqual(dashboardFormatValue(5, 'Rep Name', 'distinct count'), '5', 'no stray decimal on a small count');
+            assertEqual(dashboardFormatValue(12.5, 'Margin Rate', 'count'), '13', 'counting never renders as a percent');
             assertEqual(dashboardFormatValue(12.5, 'Margin Rate', 'average'), '12.5%');
             assertEqual(dashboardFormatValue(0, 'Revenue', 'sum'), '$0.0');
         });
@@ -758,9 +762,28 @@
             assertEqual(dashboardAggregate(rows, 'n', 'average'), 20);
             assertEqual(dashboardAggregate(rows, 'n', 'min'), 10);
             assertEqual(dashboardAggregate(rows, 'n', 'max'), 30);
-            assertEqual(dashboardAggregate(rows, 'n', 'count'), 4);
+            assertEqual(dashboardAggregate(rows, 'n', 'count'), 3, 'counts non-blank values, not rows');
             assertEqual(dashboardAggregate(rows, 'k', 'distinct count'), 2);
             assertEqual(dashboardAggregate([], 'n', 'sum'), 0);
+        });
+
+        test('count and distinct count work on text columns, not just numbers', () => {
+            const rows = [{ name: 'Ada' }, { name: 'Grace' }, { name: 'Ada' }, { name: '' }, { name: null }];
+            assertEqual(dashboardAggregate(rows, 'name', 'count'), 3, 'three rows have a name');
+            assertEqual(dashboardAggregate(rows, 'name', 'distinct count'), 2, 'two different names');
+            assertEqual(dashboardAggregate(rows, 'name', 'sum'), 0, 'summing text is meaningless, not an error');
+        });
+
+        test('a KPI can count a text column end to end', () => {
+            const data = salesFixture();
+            const out = dashboardResolveFromRows(visual('kpi', { measure: 'Region', aggregation: 'distinct count' }), data);
+            assertEqual(out.value, 4, 'four distinct regions');
+        });
+
+        test('a breakdown can count a text column by another column', () => {
+            const data = salesFixture();
+            const out = dashboardResolveFromRows(visual('column', { measure: 'Order ID', aggregation: 'count', dimension: 'Region', limit: 10 }), data);
+            assertEqual(out.points.reduce((s, p) => s + p.value, 0), 120, 'every row counted once');
         });
 
         test('dashboardAggregate reads currency and comma formatted numbers', () => {
@@ -936,6 +959,153 @@
             assertEqual(dashboardResolveVisual(v, data).value, expected, 'real rows win');
             assertEqual(dashboardResolveVisual(v, { baked: { v1: { kind: 'kpi', value: 42, delta: 0 } } }).value, 42, 'baked used when no rows');
             assertTrue(dashboardResolveVisual(v, null).value !== expected, 'falls back to sample data');
+        });
+
+        test('googleSheetRefFromUrl reads the id and tab from every link shape', () => {
+            const edit = googleSheetRefFromUrl('https://docs.google.com/spreadsheets/d/1AbC_dEf-123/edit#gid=456');
+            assertEqual(edit.id, '1AbC_dEf-123');
+            assertEqual(edit.gid, '456');
+            assertEqual(edit.published, false);
+
+            const query = googleSheetRefFromUrl('https://docs.google.com/spreadsheets/d/1AbC_dEf-123/edit?gid=789#gid=789');
+            assertEqual(query.gid, '789');
+
+            const noTab = googleSheetRefFromUrl('https://docs.google.com/spreadsheets/d/1AbC_dEf-123/');
+            assertEqual(noTab.gid, null);
+
+            const pub = googleSheetRefFromUrl('https://docs.google.com/spreadsheets/d/e/2PACX-1vABC/pubhtml?gid=12');
+            assertEqual(pub.published, true);
+            assertEqual(pub.id, '2PACX-1vABC');
+        });
+
+        test('googleSheetRefFromUrl rejects things that are not sheet links', () => {
+            assertEqual(googleSheetRefFromUrl(''), null);
+            assertEqual(googleSheetRefFromUrl('https://example.com/data.csv'), null);
+            assertEqual(googleSheetRefFromUrl('not a url'), null);
+            assertEqual(googleSheetRefFromUrl('https://docs.google.com/document/d/1AbC/edit'), null);
+        });
+
+        test('googleSheetCsvUrls builds export urls that keep the tab', () => {
+            const urls = googleSheetCsvUrls('https://docs.google.com/spreadsheets/d/1AbC/edit#gid=456');
+            assertTrue(urls.length >= 2, 'offers more than one endpoint to try');
+            assertTrue(urls[0].includes('gviz/tq'), 'tries the gviz endpoint first');
+            assertTrue(urls.every(u => u.includes('456')), 'every candidate keeps the tab');
+            assertTrue(urls.every(u => u.startsWith('https://docs.google.com/')), 'never points anywhere else');
+        });
+
+        test('googleSheetCsvUrls uses the published endpoint for published sheets', () => {
+            const urls = googleSheetCsvUrls('https://docs.google.com/spreadsheets/d/e/2PACX-1vABC/pubhtml');
+            assertEqual(urls.length, 1);
+            assertTrue(urls[0].includes('/pub?'), 'published endpoint');
+            assertTrue(urls[0].includes('output=csv'), 'asks for csv');
+        });
+
+        test('googleSheetLooksLikeHtml spots a sign-in page returned instead of csv', () => {
+            assertTrue(googleSheetLooksLikeHtml('<!DOCTYPE html><html><head>'), 'html doctype');
+            assertTrue(!googleSheetLooksLikeHtml('name,revenue\nAda,100'), 'real csv');
+        });
+
+        test('a spec only accepts a Google Sheets source url', () => {
+            assertEqual(dashboardNormalizeSpec({ source: { kind: 'googleSheet', url: 'https://docs.google.com/spreadsheets/d/1AbC/edit' } }).source.kind, 'googleSheet');
+            assertEqual(dashboardNormalizeSpec({ source: { kind: 'googleSheet', url: 'https://evil.test/steal' } }).source, null, 'rejects other hosts');
+            assertEqual(dashboardNormalizeSpec({ source: { kind: 'ftp', url: 'https://docs.google.com/spreadsheets/d/1AbC' } }).source, null, 'rejects other kinds');
+            assertEqual(dashboardNormalizeSpec({ source: 'nope' }).source, null, 'rejects junk');
+            assertEqual(dashboardNormalizeSpec({}).source, null, 'absent by default');
+        });
+
+        const parseCatalogue = {
+            source: 'sales.csv',
+            columns: ['Order ID', 'Order Date', 'Region', 'Segment', 'Sales Rep', 'Revenue', 'Units'],
+            measureColumns: ['Revenue', 'Units'],
+            dimensionColumns: ['Region', 'Segment', 'Sales Rep'],
+            dateColumn: 'Order Date'
+        };
+
+        test('instructions build a breakdown from plain words', () => {
+            const out = parseDashboardInstructions('revenue by region', parseCatalogue);
+            assertEqual(out.visuals.length, 1);
+            assertEqual(out.visuals[0].kind, 'column');
+            assertEqual(out.visuals[0].binding.measure, 'Revenue');
+            assertEqual(out.visuals[0].binding.dimension, 'Region');
+            assertEqual(out.visuals[0].binding.aggregation, 'sum');
+            assertEqual(out.visuals[0].title, 'Revenue by Region');
+        });
+
+        test('instructions split on commas and newlines', () => {
+            const out = parseDashboardInstructions('revenue by region, total units\nrevenue over time', parseCatalogue);
+            assertEqual(out.visuals.length, 3);
+            assertDeep(out.visuals.map(v => v.kind), ['column', 'kpi', 'trend']);
+        });
+
+        test('instructions pick up the aggregation word', () => {
+            const agg = (text) => parseDashboardInstructions(text, parseCatalogue).visuals[0].binding.aggregation;
+            assertEqual(agg('total revenue'), 'sum');
+            assertEqual(agg('average revenue by region'), 'average');
+            assertEqual(agg('count of order id'), 'count');
+            assertEqual(agg('distinct count of sales rep'), 'distinct count');
+            assertEqual(agg('highest revenue by region'), 'max');
+        });
+
+        test('instructions recognise chart shapes', () => {
+            const kind = (text) => parseDashboardInstructions(text, parseCatalogue).visuals[0].kind;
+            assertEqual(kind('revenue over time'), 'trend');
+            assertEqual(kind('monthly revenue'), 'trend');
+            assertEqual(kind('share of revenue by segment'), 'donut');
+            assertEqual(kind('table of revenue by sales rep'), 'table');
+            assertEqual(kind('revenue against units'), 'scatter');
+            assertEqual(kind('total revenue'), 'kpi');
+        });
+
+        test('instructions read the time grain', () => {
+            const grain = (text) => parseDashboardInstructions(text, parseCatalogue).visuals[0].binding.grain;
+            assertEqual(grain('revenue by month'), 'month');
+            assertEqual(grain('revenue by quarter'), 'quarter');
+            assertEqual(grain('weekly revenue'), 'week');
+        });
+
+        test('instructions read a top N limit', () => {
+            const out = parseDashboardInstructions('top 5 sales rep by revenue', parseCatalogue);
+            assertEqual(out.visuals[0].binding.limit, 5);
+            assertEqual(out.visuals[0].binding.dimension, 'Sales Rep');
+        });
+
+        test('instructions match columns loosely, including near misses', () => {
+            const out = parseDashboardInstructions('revenues by regoin', parseCatalogue);
+            assertEqual(out.visuals[0].binding.measure, 'Revenue');
+            assertEqual(out.visuals[0].binding.dimension, 'Region');
+        });
+
+        test('instructions build slicers when asked to filter', () => {
+            const out = parseDashboardInstructions('let me filter by segment, revenue by region', parseCatalogue);
+            assertEqual(out.slicers.length, 1);
+            assertEqual(out.slicers[0].field, 'Segment');
+            assertEqual(out.slicers[0].type, 'dropdown');
+            assertEqual(out.visuals.length, 1);
+        });
+
+        test('a slicer on a number becomes a range and on a date a date range', () => {
+            assertEqual(parseDashboardInstructions('filter by revenue', parseCatalogue).slicers[0].type, 'range');
+            assertEqual(parseDashboardInstructions('filter by order date', parseCatalogue).slicers[0].type, 'date range');
+        });
+
+        test('instructions report what they could not understand', () => {
+            const out = parseDashboardInstructions('revenue by region, something entirely unrelated', parseCatalogue);
+            assertEqual(out.visuals.length, 1);
+            assertEqual(out.unmatched.length, 1);
+            assertTrue(out.unmatched[0].includes('unrelated'), 'hands back the clause it failed on');
+        });
+
+        test('instructions with no data still produce a layout', () => {
+            const out = parseDashboardInstructions('revenue by region', { columns: [], measureColumns: [], dimensionColumns: [], dateColumn: null });
+            assertEqual(out.visuals.length + out.unmatched.length, 1, 'either builds something or says it could not');
+        });
+
+        test('parsed visuals survive normalization into a real spec', () => {
+            const out = parseDashboardInstructions('revenue by region, total units, revenue over time', parseCatalogue);
+            const spec = dashboardNormalizeSpec({ visuals: out.visuals, slicers: out.slicers });
+            assertEqual(spec.visuals.length, 3);
+            assertTrue(spec.visuals.every(v => v.title !== ''), 'every visual got named');
+            assertDeep(dashboardDecodeSpec(dashboardEncodeSpec(spec)), spec);
         });
 
         const passed = results.filter(r => r.pass).length;

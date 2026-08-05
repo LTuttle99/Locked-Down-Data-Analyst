@@ -31,11 +31,49 @@
     </header>
 
     <main class="max-w-[1500px] mx-auto p-6">
-        <p class="text-sm text-slate-600 max-w-3xl mb-5">
-            Build a dashboard by picking the visuals, saying what each one measures, and adding slicers
-            people can filter with. Load a CSV or Excel file and it draws from your real data. Download
-            it as a single HTML file, or send the link.
-        </p>
+        <div class="mb-5">
+            <div class="flex items-baseline gap-3">
+                <p class="text-sm text-slate-600 max-w-3xl">
+                    Build a dashboard by picking the visuals, saying what each one measures, and adding
+                    slicers people can filter with. Download it as a single HTML file, or send the link.
+                </p>
+                <button onclick="toggleHelp()" id="help-toggle" class="text-xs text-[#0062F1] hover:text-[#00133C] font-medium whitespace-nowrap">New here?</button>
+            </div>
+
+            <div id="help-panel" class="hidden mt-3 bg-white border border-slate-200 rounded-xl p-5 max-w-3xl">
+                <h3 class="text-sm font-semibold text-[#00133C] mb-2">How this works</h3>
+                <ol class="text-xs text-slate-600 space-y-2 list-decimal pl-4">
+                    <li>
+                        <strong class="text-slate-800">Point it at your data.</strong> Choose a CSV or
+                        Excel file, or paste a Google Sheets link. The tool works out which columns are
+                        numbers you might total and which are categories you might group by, so
+                        everything after this is picking from dropdowns rather than typing column names.
+                        You can skip this and design the layout first with placeholder numbers.
+                    </li>
+                    <li>
+                        <strong class="text-slate-800">Say what you want.</strong> Type it in plain
+                        words, like <em>revenue by region, total orders, revenue over time</em>, and the
+                        visuals get built and bound for you. Or add them one at a time with the buttons.
+                        Either way you can adjust anything afterwards.
+                    </li>
+                    <li>
+                        <strong class="text-slate-800">Add slicers if people need to explore.</strong> A
+                        slicer is a control on the finished dashboard, so whoever opens it can narrow
+                        every visual at once, by region or date range for example.
+                    </li>
+                    <li>
+                        <strong class="text-slate-800">Hand it over.</strong> <em>Download HTML</em>
+                        gives you one file containing the dashboard and its data, which works on its own
+                        with nothing else installed. The <em>link</em> carries the layout but not the
+                        data, so whoever opens it attaches their own copy.
+                    </li>
+                </ol>
+                <p class="text-xs text-slate-500 mt-3 pt-3 border-t border-slate-100">
+                    Nothing you load is uploaded anywhere. Files are read inside your browser, and a
+                    Google Sheet is fetched straight from Google by your own browser.
+                </p>
+            </div>
+        </div>
 
         <div class="grid grid-cols-1 xl:grid-cols-2 gap-5">
             <div class="space-y-4">
@@ -77,6 +115,24 @@
                         get the layout, with placeholder numbers. Nothing is uploaded anywhere.
                     </p>
                     <input type="file" id="data-input" accept=".csv,.xlsx,.xls,.xlsm,.json" class="block w-full text-xs text-slate-700 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-slate-100 file:text-slate-800 hover:file:bg-slate-200">
+
+                    <div class="flex items-center gap-3 my-3">
+                        <div class="h-px bg-slate-100 flex-1"></div>
+                        <span class="text-[10px] uppercase tracking-wider text-slate-400">or</span>
+                        <div class="h-px bg-slate-100 flex-1"></div>
+                    </div>
+
+                    <label class="field-label" for="sheet-url">Google Sheets link</label>
+                    <div class="flex gap-2">
+                        <input id="sheet-url" class="field font-mono text-[11px]" placeholder="https://docs.google.com/spreadsheets/d/...">
+                        <button onclick="loadSheet()" class="whitespace-nowrap bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold px-3 py-2 rounded-lg transition-colors">Load</button>
+                    </div>
+                    <p class="text-[11px] text-slate-500 mt-1.5">
+                        The sheet has to be readable without signing in: open Share and set General
+                        access to "Anyone with the link". A dashboard built from a sheet re-reads it
+                        every time it is opened, so it stays current.
+                    </p>
+
                     <p id="data-status" class="text-xs text-slate-500 mt-2"></p>
                 </div>
 
@@ -85,6 +141,16 @@
                         <h3 class="text-sm font-medium text-slate-700">2. Visuals</h3>
                         <span id="visual-count" class="text-xs text-slate-500"></span>
                     </div>
+                    <div class="bg-slate-50 border border-slate-200 rounded-lg p-3 mb-3">
+                        <label class="field-label" for="instructions">Describe what you want</label>
+                        <textarea id="instructions" rows="2" class="field resize-y"
+                            placeholder="revenue by region, total orders, revenue over time, let me filter by segment"></textarea>
+                        <div class="flex items-center gap-3 mt-2">
+                            <button onclick="applyInstructions()" class="bg-[#0062F1] hover:bg-[#0050C7] text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors">Build these</button>
+                            <span id="instructions-hint" class="text-[11px] text-slate-500">Separate each one with a comma or a new line.</span>
+                        </div>
+                    </div>
+
                     <div id="visual-list" class="space-y-2 mb-3"></div>
                     <div id="add-buttons" class="flex flex-wrap gap-2"></div>
                 </div>
@@ -132,7 +198,10 @@
 
     <script src="../shared/parse.js"></script>
     <script src="../shared/profile.js"></script>
+    <script src="../shared/match.js"></script>
+    <script src="../shared/sheet-connect.js"></script>
     <script src="../shared/dashboard-spec.js"></script>
+    <script src="../shared/dashboard-parse.js"></script>
     <script src="../shared/dashboard-data.js"></script>
     <script src="../shared/dashboard-render.js"></script>
     <script>
@@ -142,6 +211,12 @@
         let dataset = null;
         let openVisual = null;
         const openAdvanced = new Set();
+
+        function toggleHelp() {
+            const panel = document.getElementById('help-panel');
+            const hidden = panel.classList.toggle('hidden');
+            document.getElementById('help-toggle').textContent = hidden ? 'New here?' : 'Hide help';
+        }
 
         function toggleDetails() {
             const panel = document.getElementById('meta-details');
@@ -224,15 +299,22 @@
             return button;
         }
 
-        function columnsFor(role) {
+        function countsAnything(aggregation) {
+            return aggregation === 'count' || aggregation === 'distinct count';
+        }
+
+        function columnsFor(role, aggregation) {
             if (!dataset) return null;
-            if (role === 'measure') return dataset.measureColumns.length ? dataset.measureColumns : dataset.columns;
+            if (role === 'measure') {
+                if (countsAnything(aggregation)) return dataset.columns;
+                return dataset.measureColumns.length ? dataset.measureColumns : dataset.columns;
+            }
             if (role === 'dimension') return dataset.dimensionColumns.length ? dataset.dimensionColumns : dataset.columns;
             return dataset.columns;
         }
 
-        function columnField(role, current, placeholder, onChange) {
-            const options = columnsFor(role);
+        function columnField(role, current, placeholder, onChange, aggregation) {
+            const options = columnsFor(role, aggregation);
             if (!options) return textField(current, placeholder, onChange);
 
             const values = options.includes(current) ? options : [current].concat(options);
@@ -254,7 +336,7 @@
             row.className = 'flex gap-1.5 items-center';
 
             row.appendChild(columnField('any', filter.field, 'Column', (v) => { filter.field = v; refresh(); }));
-            row.appendChild(selectField(DASHBOARD_FILTER_OPERATORS, filter.op, (v) => { filter.op = v; refresh(false); }));
+            row.appendChild(selectField(DASHBOARD_FILTER_OPERATORS, filter.op, (v) => { filter.op = v; refresh(); }));
 
             const values = distinctValues(filter.field);
             if (values.length > 0 && (filter.op === 'equals' || filter.op === 'not equals')) {
@@ -359,8 +441,14 @@
             const grid = document.createElement('div');
             grid.className = 'grid grid-cols-2 sm:grid-cols-3 gap-2';
 
-            grid.appendChild(labelledField('Measure', columnField('measure', visual.binding.measure, 'Revenue', (v) => { visual.binding.measure = v; refresh(false); })));
-            grid.appendChild(labelledField('Aggregation', selectField(DASHBOARD_AGGREGATIONS, visual.binding.aggregation, (v) => { visual.binding.aggregation = v; refresh(false); })));
+            grid.appendChild(labelledField(countsAnything(visual.binding.aggregation) ? 'Count of' : 'Measure',
+                columnField('measure', visual.binding.measure, 'Revenue', (v) => { visual.binding.measure = v; refresh(false); }, visual.binding.aggregation)));
+            grid.appendChild(labelledField('Aggregation', selectField(DASHBOARD_AGGREGATIONS, visual.binding.aggregation, (v) => {
+                const wasCounting = countsAnything(visual.binding.aggregation);
+                visual.binding.aggregation = v;
+                if (wasCounting !== countsAnything(v)) refresh();
+                else refresh(false);
+            })));
 
             if (shape.needsDimension) {
                 grid.appendChild(labelledField('Break down by', columnField('dimension', visual.binding.dimension, 'Region', (v) => { visual.binding.dimension = v; refresh(false); })));
@@ -485,22 +573,22 @@
                 : `${count} visual${count === 1 ? '' : 's'}`;
         }
 
-        function renderPreview() {
+        function renderPreview(normalized) {
             for (const chart of charts) chart.destroy();
-            charts = dashboardRenderSpec(spec, document.getElementById('preview'), { showNotes: false, showFooter: false, dataset });
+            charts = dashboardRenderSpec(normalized, document.getElementById('preview'), { showNotes: false, showFooter: false, dataset });
         }
 
-        function currentLink() {
+        function currentLink(normalized) {
             const base = window.location.href.replace(/[?#].*$/, '').replace(/index\.html$/, '');
-            return `${base}view.html#${dashboardEncodeSpec(spec)}`;
+            return `${base}view.html#${dashboardEncodeSpec(normalized || dashboardNormalizeSpec(spec))}`;
         }
 
         function refresh(rebuildEditor = true) {
-            spec = dashboardNormalizeSpec(spec);
+            const normalized = dashboardNormalizeSpec(spec);
             if (rebuildEditor) renderEditor();
-            renderPreview();
-            document.getElementById('share-link').value = currentLink();
-            window.history.replaceState(null, '', `#${dashboardEncodeSpec(spec)}`);
+            renderPreview(normalized);
+            document.getElementById('share-link').value = currentLink(normalized);
+            window.history.replaceState(null, '', `#${dashboardEncodeSpec(normalized)}`);
         }
 
         function suggestedBinding() {
@@ -642,13 +730,84 @@
             e.target.value = '';
         });
 
+        async function loadSheet() {
+            const url = document.getElementById('sheet-url').value.trim();
+            if (url === '') {
+                showToast('Paste the link to your Google Sheet first.', 'error');
+                return;
+            }
+
+            const status = document.getElementById('data-status');
+            status.textContent = 'Reading the sheet...';
+
+            try {
+                const parsed = await fetchGoogleSheet(url);
+                dataset = classifyDataset(parsed, 'Google Sheet');
+                dataset.sheetUrl = url;
+                spec.source = { kind: 'googleSheet', url };
+
+                const bits = [`Google Sheet — ${dataset.rowCount.toLocaleString()} rows, ${dataset.columns.length} columns`];
+                if (dataset.dateColumn) bits.push(`date column "${dataset.dateColumn}"`);
+                bits.push('re-read every time the dashboard opens');
+                status.textContent = bits.join(' · ');
+
+                document.getElementById('clear-data').classList.remove('hidden');
+                retargetBindings();
+                refresh();
+                showToast('Sheet connected. The dashboard will re-read it on every open.');
+            } catch (err) {
+                status.textContent = '';
+                showToast(err.message, 'error');
+            }
+        }
+
         function clearDataset() {
             dataset = null;
+            spec.source = null;
             document.getElementById('data-status').textContent = '';
             document.getElementById('data-input').value = '';
+            document.getElementById('sheet-url').value = '';
             document.getElementById('clear-data').classList.add('hidden');
             refresh();
-            showToast('File removed. Back to placeholder numbers.');
+            showToast('Data removed. Back to placeholder numbers.');
+        }
+
+        function applyInstructions() {
+            const text = document.getElementById('instructions').value;
+            if (text.trim() === '') {
+                showToast('Type what you want first, for example "revenue by region".', 'error');
+                return;
+            }
+
+            const catalogue = dataset || { columns: [], measureColumns: [], dimensionColumns: [], dateColumn: null };
+            const result = parseDashboardInstructions(text, catalogue);
+
+            if (result.visuals.length === 0 && result.slicers.length === 0) {
+                showToast('Could not work that out. Try naming a column, like "revenue by region".', 'error');
+                return;
+            }
+
+            for (const visual of result.visuals) {
+                visual.id = makeId();
+                spec.visuals.push(dashboardNormalizeVisual(visual, spec.visuals.length));
+            }
+            for (const slicer of result.slicers) {
+                slicer.id = `s${spec.slicers.length + 1}`;
+                spec.slicers.push(slicer);
+            }
+
+            openVisual = null;
+            document.getElementById('instructions').value = '';
+
+            const hint = document.getElementById('instructions-hint');
+            const built = [];
+            if (result.visuals.length) built.push(`${result.visuals.length} visual${result.visuals.length === 1 ? '' : 's'}`);
+            if (result.slicers.length) built.push(`${result.slicers.length} slicer${result.slicers.length === 1 ? '' : 's'}`);
+            hint.textContent = result.unmatched.length
+                ? `Built ${built.join(' and ')}. Could not understand: ${result.unmatched.join('; ')}`
+                : `Built ${built.join(' and ')}. Adjust anything below.`;
+
+            refresh();
         }
 
         function copyShareLink() {
@@ -678,7 +837,8 @@
         }
 
         function downloadSpecJson() {
-            downloadFile(`${slugify(spec.title)}-request.json`, JSON.stringify(spec, null, 2), 'application/json;charset=utf-8;');
+            const normalized = dashboardNormalizeSpec(spec);
+            downloadFile(`${slugify(normalized.title)}-spec.json`, JSON.stringify(normalized, null, 2), 'application/json;charset=utf-8;');
         }
 
         function safeJson(value) {
@@ -688,17 +848,49 @@
                 .replace(/\u2029/g, "\\u2029");
         }
 
+        function standaloneBoot(normalized, baked, live) {
+            const specJson = safeJson(normalized);
+            const bakedJson = safeJson(baked);
+
+            if (!live) {
+                return `dashboardRenderSpec(dashboardNormalizeSpec(${specJson}), document.getElementById('dashboard'), { dataset: ${bakedJson} });`;
+            }
+
+            return [
+                `var SPEC = dashboardNormalizeSpec(${specJson});`,
+                `var SNAPSHOT = ${bakedJson};`,
+                'var HOST = document.getElementById("dashboard");',
+                'dashboardRenderSpec(SPEC, HOST, { dataset: SNAPSHOT });',
+                'fetchGoogleSheet(SPEC.source.url).then(function (parsed) {',
+                '  var profiles = profileDataset(parsed.columns, parsed.rows);',
+                '  var dateProfile = profiles.filter(function (p) { return p.type === "date"; })[0];',
+                '  dashboardRenderSpec(SPEC, HOST, { dataset: {',
+                '    source: "the connected Google Sheet",',
+                '    columns: parsed.columns,',
+                '    rows: parsed.rows,',
+                '    rowCount: parsed.rows.length,',
+                '    dateColumn: dateProfile ? dateProfile.name : null,',
+                '    selections: {}',
+                '  } });',
+                '}).catch(function () {});'
+            ].join('\n');
+        }
+
         async function downloadStandalone() {
+            const built = dashboardNormalizeSpec(spec);
             try {
+                const live = built.source && built.source.kind === 'googleSheet';
                 const sources = await Promise.all([
                     fetch('../shared/dashboard-spec.js').then((r) => r.text()),
                     fetch('../shared/dashboard-data.js').then((r) => r.text()),
                     fetch('../shared/dashboard-render.js').then((r) => r.text()),
-                    dataset ? fetch('../shared/profile.js').then((r) => r.text()) : Promise.resolve('')
+                    dataset ? fetch('../shared/profile.js').then((r) => r.text()) : Promise.resolve(''),
+                    live ? fetch('../shared/parse.js').then((r) => r.text()) : Promise.resolve(''),
+                    live ? fetch('../shared/sheet-connect.js').then((r) => r.text()) : Promise.resolve('')
                 ]);
 
-                const baked = dataset ? dashboardBakeDataset(spec, dataset) : null;
-                const title = spec.title.replace(/[<>]/g, '');
+                const baked = dataset ? dashboardBakeDataset(built, dataset) : null;
+                const title = built.title.replace(/[<>]/g, '');
 
                 const html = [
                     '<!DOCTYPE html>',
@@ -711,15 +903,17 @@
                     '<style>h1,h2{font-family:\'Lora\',Georgia,serif;}</style>',
                     '</head><body class="bg-slate-50 text-slate-900 font-sans">',
                     '<main class="max-w-6xl mx-auto p-6"><div id="dashboard"></div></main>',
+                    sources[4] ? `<script>${sources[4]}<\/script>` : '',
+                    sources[5] ? `<script>${sources[5]}<\/script>` : '',
                     sources[3] ? `<script>${sources[3]}<\/script>` : '',
                     `<script>${sources[0]}<\/script>`,
                     `<script>${sources[1]}<\/script>`,
                     `<script>${sources[2]}<\/script>`,
-                    `<script>dashboardRenderSpec(dashboardNormalizeSpec(${safeJson(spec)}), document.getElementById('dashboard'), { dataset: ${safeJson(baked)} });<\/script>`,
+                    `<script>${standaloneBoot(built, baked, live)}<\/script>`,
                     '</body></html>'
                 ].filter(Boolean).join('\n');
 
-                downloadFile(`${slugify(spec.title)}.html`, html, 'text/html;charset=utf-8;');
+                downloadFile(`${slugify(built.title)}.html`, html, 'text/html;charset=utf-8;');
 
                 const kb = Math.round(html.length / 1024);
                 if (!dataset) showToast(`Dashboard built (${kb} KB), using placeholder numbers.`);
