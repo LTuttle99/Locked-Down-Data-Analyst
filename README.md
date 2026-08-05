@@ -168,6 +168,14 @@ link. Whoever builds the real thing sees the exact layout that was asked for.
 The built dashboard is the deliverable: this is not a request form that
 something else gets built from.
 
+The builder opens empty and is worked through in three numbered steps: load a
+file, add visuals, add slicers. Visuals are listed one per line showing their
+title and what they measure, and only the one being edited expands. An expanded
+visual shows four fields; width, chart type, notes and filters sit behind "More
+options", and the dashboard description, owner, audience and refresh sit behind
+"More details". Adding a visual names it and points it at sensible columns
+automatically, so a usable dashboard is a few clicks with no typing.
+
 Seven visual kinds are available (KPI tile, trend line, column, bar, donut,
 table, scatter), each laid out at quarter, half, or full width on a twelve
 column grid, plus **slicers**: dropdown, chip list, numeric range, and date

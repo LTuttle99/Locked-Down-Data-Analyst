@@ -27,7 +27,7 @@
             <div class="h-6 w-px bg-slate-100"></div>
             <h2 class="text-lg font-semibold text-[#00133C]">Dashboard Builder</h2>
         </div>
-        <div class="text-xs text-slate-600 bg-slate-50 px-3 py-1 rounded-full border border-slate-200">Request a dashboard</div>
+        <div class="text-xs text-slate-600 bg-slate-50 px-3 py-1 rounded-full border border-slate-200">Build and download</div>
     </header>
 
     <main class="max-w-[1500px] mx-auto p-6">
@@ -39,68 +39,65 @@
 
         <div class="grid grid-cols-1 xl:grid-cols-2 gap-5">
             <div class="space-y-4">
-                <div class="bg-white border border-slate-200 rounded-xl p-5 space-y-3">
-                    <h3 class="text-sm font-medium text-slate-700">The request</h3>
+                <div class="bg-white border border-slate-200 rounded-xl p-5">
+                    <label class="field-label" for="meta-title">Dashboard name</label>
+                    <input id="meta-title" class="field" placeholder="Untitled dashboard">
 
-                    <div>
-                        <label class="field-label" for="meta-title">Dashboard name</label>
-                        <input id="meta-title" class="field" placeholder="Sales Performance">
-                    </div>
+                    <button onclick="toggleDetails()" id="details-toggle" class="text-xs text-[#0062F1] hover:text-[#00133C] font-medium mt-3">More details</button>
 
-                    <div>
-                        <label class="field-label" for="meta-subtitle">What is it for</label>
-                        <textarea id="meta-subtitle" rows="2" class="field resize-y" placeholder="What question should this answer, and when will people look at it?"></textarea>
-                    </div>
-
-                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div id="meta-details" class="hidden space-y-3 mt-3 pt-3 border-t border-slate-100">
                         <div>
-                            <label class="field-label" for="meta-requester">Requested by</label>
-                            <input id="meta-requester" class="field" placeholder="Your name">
+                            <label class="field-label" for="meta-subtitle">Description</label>
+                            <textarea id="meta-subtitle" rows="2" class="field resize-y" placeholder="What question does this answer?"></textarea>
                         </div>
-                        <div>
-                            <label class="field-label" for="meta-audience">Audience</label>
-                            <input id="meta-audience" class="field" placeholder="Leadership">
-                        </div>
-                        <div>
-                            <label class="field-label" for="meta-refresh">Refresh</label>
-                            <select id="meta-refresh" class="field"></select>
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div>
+                                <label class="field-label" for="meta-requester">Owner</label>
+                                <input id="meta-requester" class="field" placeholder="Your name">
+                            </div>
+                            <div>
+                                <label class="field-label" for="meta-audience">Audience</label>
+                                <input id="meta-audience" class="field" placeholder="Leadership">
+                            </div>
+                            <div>
+                                <label class="field-label" for="meta-refresh">Refresh</label>
+                                <select id="meta-refresh" class="field"></select>
+                            </div>
                         </div>
                     </div>
                 </div>
 
                 <div class="bg-white border border-slate-200 rounded-xl p-5">
                     <div class="flex items-center justify-between mb-2">
-                        <h3 class="text-sm font-medium text-slate-700">Data</h3>
+                        <h3 class="text-sm font-medium text-slate-700">1. Your data</h3>
                         <button id="clear-data" onclick="clearDataset()" class="hidden text-xs text-slate-500 hover:text-red-600 font-medium">Remove file</button>
                     </div>
                     <p class="text-xs text-slate-600 mb-3">
-                        Load a CSV or Excel export and the visuals below draw from it, with real column
-                        names to choose from. Without a file you still get the layout, using placeholder
-                        numbers. Nothing is uploaded anywhere.
+                        Load a CSV or Excel file and you pick from its real columns. Skip it and you still
+                        get the layout, with placeholder numbers. Nothing is uploaded anywhere.
                     </p>
                     <input type="file" id="data-input" accept=".csv,.xlsx,.xls,.xlsm,.json" class="block w-full text-xs text-slate-700 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-slate-100 file:text-slate-800 hover:file:bg-slate-200">
                     <p id="data-status" class="text-xs text-slate-500 mt-2"></p>
                 </div>
 
                 <div class="bg-white border border-slate-200 rounded-xl p-5">
-                    <div class="flex items-center justify-between mb-2">
-                        <h3 class="text-sm font-medium text-slate-700">Slicers</h3>
-                        <button onclick="addSlicer()" class="text-xs text-[#0062F1] hover:text-[#00133C] font-medium">+ Add slicer</button>
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-sm font-medium text-slate-700">2. Visuals</h3>
+                        <span id="visual-count" class="text-xs text-slate-500"></span>
                     </div>
-                    <p class="text-xs text-slate-600 mb-3">
-                        Controls that whoever opens the dashboard can use to filter every visual at once.
-                        A dropdown or chip list for categories, a slider for numbers and dates.
-                    </p>
-                    <div id="slicer-list" class="space-y-2"></div>
+                    <div id="visual-list" class="space-y-2 mb-3"></div>
+                    <div id="add-buttons" class="flex flex-wrap gap-2"></div>
                 </div>
 
                 <div class="bg-white border border-slate-200 rounded-xl p-5">
-                    <div class="flex items-center justify-between mb-3">
-                        <h3 class="text-sm font-medium text-slate-700">Visuals</h3>
-                        <span id="visual-count" class="text-xs text-slate-500"></span>
+                    <div class="flex items-center justify-between mb-2">
+                        <h3 class="text-sm font-medium text-slate-700">3. Slicers <span class="font-normal text-slate-400">(optional)</span></h3>
+                        <button onclick="addSlicer()" class="text-xs text-[#0062F1] hover:text-[#00133C] font-medium">+ Add slicer</button>
                     </div>
-                    <div id="add-buttons" class="flex flex-wrap gap-2 mb-4"></div>
-                    <div id="visual-list" class="space-y-3"></div>
+                    <p class="text-xs text-slate-600 mb-3">
+                        Controls that let whoever opens the dashboard filter every visual at once.
+                    </p>
+                    <div id="slicer-list" class="space-y-2"></div>
                 </div>
 
                 <div class="bg-white border border-slate-200 rounded-xl p-5 space-y-3">
@@ -143,6 +140,14 @@
         let charts = [];
         let nextId = 1;
         let dataset = null;
+        let openVisual = null;
+        const openAdvanced = new Set();
+
+        function toggleDetails() {
+            const panel = document.getElementById('meta-details');
+            const hidden = panel.classList.toggle('hidden');
+            document.getElementById('details-toggle').textContent = hidden ? 'More details' : 'Fewer details';
+        }
 
         function showToast(message, tone = 'success') {
             const container = document.getElementById('toast-container');
@@ -302,33 +307,58 @@
 
         function buildVisualEditor(visual, index) {
             const shape = DASHBOARD_VISUAL_KINDS[visual.kind];
+            const open = openVisual === visual.id;
             const card = document.createElement('div');
-            card.className = 'border border-slate-200 rounded-lg p-3 bg-slate-50';
+            card.className = `border rounded-lg bg-slate-50 ${open ? 'border-[#0062F1]' : 'border-slate-200'}`;
 
             const head = document.createElement('div');
-            head.className = 'flex items-center gap-2 mb-3';
+            head.className = 'flex items-center gap-2 p-2.5';
+
+            const toggle = document.createElement('button');
+            toggle.type = 'button';
+            toggle.className = 'flex items-center gap-2 flex-1 min-w-0 text-left';
+            toggle.addEventListener('click', () => {
+                openVisual = open ? null : visual.id;
+                renderEditor();
+            });
+
+            const caret = document.createElement('span');
+            caret.className = 'text-slate-400 text-[10px] w-3 shrink-0';
+            caret.textContent = open ? '▼' : '▶';
+            toggle.appendChild(caret);
 
             const badge = document.createElement('span');
-            badge.className = 'text-[10px] font-semibold uppercase tracking-wider text-[#0062F1] bg-blue-50 border border-blue-200 rounded px-1.5 py-0.5 whitespace-nowrap';
+            badge.className = 'text-[10px] font-semibold uppercase tracking-wider text-[#0062F1] bg-blue-50 border border-blue-200 rounded px-1.5 py-0.5 whitespace-nowrap shrink-0';
             badge.textContent = shape.label;
-            head.appendChild(badge);
+            toggle.appendChild(badge);
 
-            const titleInput = textField(visual.title, 'Visual title', (v) => { visual.title = v; refresh(false); });
-            titleInput.className = 'field font-medium';
-            head.appendChild(titleInput);
+            const summary = document.createElement('span');
+            summary.className = 'text-xs text-slate-700 truncate';
+            summary.textContent = `${visual.title} · ${dashboardBindingSummary(visual)}`;
+            toggle.appendChild(summary);
+
+            head.appendChild(toggle);
 
             const controls = document.createElement('div');
-            controls.className = 'flex gap-1';
+            controls.className = 'flex gap-1 shrink-0';
             controls.appendChild(iconButton('↑', 'Move up', () => moveVisual(index, -1)));
             controls.appendChild(iconButton('↓', 'Move down', () => moveVisual(index, 1)));
             controls.appendChild(iconButton('✕', 'Remove', () => removeVisual(index), 'danger'));
             head.appendChild(controls);
             card.appendChild(head);
 
+            if (!open) return card;
+
+            const body = document.createElement('div');
+            body.className = 'px-2.5 pb-2.5 space-y-2';
+
+            const titleInput = textField(visual.title, 'Visual title', (v) => { visual.title = v; refresh(false); });
+            titleInput.className = 'field font-medium';
+            body.appendChild(labelledField('Title', titleInput));
+
             const grid = document.createElement('div');
             grid.className = 'grid grid-cols-2 sm:grid-cols-3 gap-2';
 
-            grid.appendChild(labelledField('Source table', textField(visual.binding.source, 'Sales', (v) => { visual.binding.source = v; refresh(false); })));
             grid.appendChild(labelledField('Measure', columnField('measure', visual.binding.measure, 'Revenue', (v) => { visual.binding.measure = v; refresh(false); })));
             grid.appendChild(labelledField('Aggregation', selectField(DASHBOARD_AGGREGATIONS, visual.binding.aggregation, (v) => { visual.binding.aggregation = v; refresh(false); })));
 
@@ -345,19 +375,44 @@
                 grid.appendChild(labelledField('Show top', selectField(['5', '6', '8', '10', '15', '20'], String(visual.binding.limit), (v) => { visual.binding.limit = Number(v); refresh(false); })));
             }
 
-            grid.appendChild(labelledField('Width', selectField(DASHBOARD_WIDTHS, visual.width, (v) => { visual.width = v; refresh(false); }, (w) => ({ quarter: 'Quarter', half: 'Half', full: 'Full width' })[w])));
-            grid.appendChild(labelledField('Change type', selectField(Object.keys(DASHBOARD_VISUAL_KINDS), visual.kind, (v) => changeKind(index, v), (k) => DASHBOARD_VISUAL_KINDS[k].label)));
+            body.appendChild(grid);
 
-            card.appendChild(grid);
+            const advanced = document.createElement('div');
+            const advancedOpen = openAdvanced.has(visual.id);
 
-            const notes = document.createElement('textarea');
-            notes.className = 'field resize-y mt-2';
-            notes.rows = 1;
-            notes.placeholder = 'Anything else about this visual (filters, sort order, thresholds)';
-            notes.value = visual.notes;
-            notes.addEventListener('input', () => { visual.notes = notes.value; refresh(false); });
-            card.appendChild(notes);
-            card.appendChild(buildFilterSection(visual));
+            const advancedToggle = document.createElement('button');
+            advancedToggle.type = 'button';
+            advancedToggle.className = 'text-[11px] text-slate-500 hover:text-[#0062F1] font-medium';
+            advancedToggle.textContent = advancedOpen ? 'Fewer options' : 'More options';
+            advancedToggle.addEventListener('click', () => {
+                if (advancedOpen) openAdvanced.delete(visual.id);
+                else openAdvanced.add(visual.id);
+                renderEditor();
+            });
+            advanced.appendChild(advancedToggle);
+
+            if (advancedOpen) {
+                const extra = document.createElement('div');
+                extra.className = 'grid grid-cols-2 sm:grid-cols-3 gap-2 mt-2';
+                extra.appendChild(labelledField('Width', selectField(DASHBOARD_WIDTHS, visual.width, (v) => { visual.width = v; refresh(false); }, (w) => ({ quarter: 'Quarter', half: 'Half', full: 'Full width' })[w])));
+                extra.appendChild(labelledField('Chart type', selectField(Object.keys(DASHBOARD_VISUAL_KINDS), visual.kind, (v) => changeKind(index, v), (k) => DASHBOARD_VISUAL_KINDS[k].label)));
+                if (!dataset) {
+                    extra.appendChild(labelledField('Source table', textField(visual.binding.source, 'Sales', (v) => { visual.binding.source = v; refresh(false); })));
+                }
+                advanced.appendChild(extra);
+
+                const notes = document.createElement('textarea');
+                notes.className = 'field resize-y mt-2';
+                notes.rows = 1;
+                notes.placeholder = 'Notes about this visual';
+                notes.value = visual.notes;
+                notes.addEventListener('input', () => { visual.notes = notes.value; refresh(false); });
+                advanced.appendChild(notes);
+                advanced.appendChild(buildFilterSection(visual));
+            }
+
+            body.appendChild(advanced);
+            card.appendChild(body);
 
             return card;
         }
@@ -412,11 +467,21 @@
 
             const list = document.getElementById('visual-list');
             list.textContent = '';
-            spec.visuals.forEach((visual, index) => list.appendChild(buildVisualEditor(visual, index)));
+
+            if (spec.visuals.length === 0) {
+                const empty = document.createElement('p');
+                empty.className = 'text-xs text-slate-500 bg-slate-50 border border-dashed border-slate-300 rounded-lg px-3 py-4 text-center';
+                empty.textContent = dataset
+                    ? 'Nothing yet. Pick a visual below to start building.'
+                    : 'Nothing yet. Pick a visual below, or load a file first to use your own columns.';
+                list.appendChild(empty);
+            } else {
+                spec.visuals.forEach((visual, index) => list.appendChild(buildVisualEditor(visual, index)));
+            }
 
             const count = spec.visuals.length;
             document.getElementById('visual-count').textContent = count === 0
-                ? 'none yet'
+                ? ''
                 : `${count} visual${count === 1 ? '' : 's'}`;
         }
 
@@ -438,15 +503,46 @@
             window.history.replaceState(null, '', `#${dashboardEncodeSpec(spec)}`);
         }
 
+        function suggestedBinding() {
+            if (!dataset) {
+                return { source: 'Sales', measure: 'Revenue', aggregation: 'sum', dimension: 'Region', measure2: 'Units', grain: 'month', limit: 8 };
+            }
+            const measures = columnsFor('measure');
+            const dimensions = columnsFor('dimension');
+            return {
+                source: dataset.source,
+                measure: measures[0] || dataset.columns[0],
+                aggregation: 'sum',
+                dimension: dimensions[0] || dataset.columns[0],
+                measure2: measures[1] || measures[0] || dataset.columns[0],
+                grain: 'month',
+                limit: 8
+            };
+        }
+
+        function suggestedTitle(kind, binding) {
+            const shape = DASHBOARD_VISUAL_KINDS[kind];
+            if (kind === 'kpi') return `Total ${binding.measure}`;
+            if (kind === 'trend') return `${binding.measure} over time`;
+            if (kind === 'scatter') return `${binding.measure} against ${binding.measure2}`;
+            if (shape.needsDimension) return `${binding.measure} by ${binding.dimension}`;
+            return shape.label;
+        }
+
         function addVisual(kind) {
             const shape = DASHBOARD_VISUAL_KINDS[kind];
+            const binding = suggestedBinding();
+            const id = makeId();
+
             spec.visuals.push(dashboardNormalizeVisual({
-                id: makeId(),
+                id,
                 kind,
-                title: shape.label,
+                title: suggestedTitle(kind, binding),
                 width: shape.defaultWidth,
-                binding: { source: 'Sales', measure: 'Revenue', aggregation: 'sum', dimension: 'Region', measure2: 'Units', grain: 'month', limit: 8 }
+                binding
             }, spec.visuals.length));
+
+            openVisual = id;
             refresh();
         }
 
@@ -476,7 +572,9 @@
         }
 
         function removeVisual(index) {
-            spec.visuals.splice(index, 1);
+            const [gone] = spec.visuals.splice(index, 1);
+            if (gone && openVisual === gone.id) openVisual = null;
+            if (gone) openAdvanced.delete(gone.id);
             refresh();
         }
 
@@ -633,8 +731,12 @@
         }
 
         function resetSpec() {
-            spec = dashboardStarterSpec();
-            nextId = spec.visuals.length + 1;
+            spec = dashboardNormalizeSpec({ title: '', visuals: [], slicers: [] });
+            nextId = 1;
+            openVisual = null;
+            openAdvanced.clear();
+            document.getElementById('meta-title').value = '';
+            document.getElementById('meta-subtitle').value = '';
             refresh();
         }
 
@@ -651,7 +753,7 @@
                 addButtons.appendChild(button);
             }
 
-            spec = dashboardDecodeSpec(window.location.hash) || dashboardStarterSpec();
+            spec = dashboardDecodeSpec(window.location.hash) || dashboardNormalizeSpec({ title: '', visuals: [], slicers: [] });
             nextId = spec.visuals.length + 1;
 
             document.getElementById('meta-title').value = spec.title === 'Untitled dashboard' ? '' : spec.title;
@@ -659,6 +761,8 @@
             document.getElementById('meta-requester').value = spec.requester;
             document.getElementById('meta-audience').value = spec.audience;
             document.getElementById('meta-refresh').value = spec.refresh;
+
+            if (spec.subtitle || spec.requester || spec.audience) toggleDetails();
 
             const bind = (id, key) => {
                 const el = document.getElementById(id);
