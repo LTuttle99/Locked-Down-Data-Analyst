@@ -97,22 +97,26 @@ function dashboardAggregate(rows, measure, aggregation) {
   return numbers.reduce((a, b) => a + b, 0);
 }
 
-function dashboardComputeValue(scopedRows, binding) {
-  const numerator = dashboardAggregate(dashboardApplyFilters(scopedRows, binding.filters), binding.measure, binding.aggregation);
-  if (!binding.divideBy) return numerator;
-
-  const denominator = dashboardAggregate(
-    dashboardApplyFilters(scopedRows, binding.divideBy.filters),
-    binding.divideBy.measure,
-    binding.divideBy.aggregation
+function dashboardRawValue(scopedRows, definition, depth) {
+  const numerator = dashboardAggregate(
+    dashboardApplyFilters(scopedRows, definition.filters),
+    definition.measure,
+    definition.aggregation
   );
 
+  if (!definition.divideBy || depth >= 4) return numerator;
+
+  const denominator = dashboardRawValue(scopedRows, definition.divideBy, depth + 1);
   if (!denominator) return 0;
 
   const ratio = numerator / denominator;
-  if (!Number.isFinite(ratio)) return 0;
+  return Number.isFinite(ratio) ? ratio : 0;
+}
 
-  return dashboardBindingFormat(binding) === "percent" ? ratio * 100 : ratio;
+function dashboardComputeValue(scopedRows, binding) {
+  const raw = dashboardRawValue(scopedRows, binding, 0);
+  if (!binding.divideBy) return raw;
+  return dashboardBindingFormat(binding) === "percent" ? raw * 100 : raw;
 }
 
 function dashboardPeriodKey(date, grain) {
@@ -332,9 +336,13 @@ function dashboardSpecColumns(spec, dataset) {
     if (visual.binding.columns) for (const c of visual.binding.columns) wanted.add(c);
     if (visual.binding.sortBy) wanted.add(visual.binding.sortBy);
     for (const filter of visual.binding.filters) wanted.add(filter.field);
-    if (visual.binding.divideBy) {
-      wanted.add(visual.binding.divideBy.measure);
-      for (const filter of visual.binding.divideBy.filters) wanted.add(filter.field);
+    let divisor = visual.binding.divideBy;
+    let guard = 0;
+    while (divisor && guard < 5) {
+      wanted.add(divisor.measure);
+      for (const filter of divisor.filters) wanted.add(filter.field);
+      divisor = divisor.divideBy;
+      guard++;
     }
   }
   if (dataset && dataset.dateColumn) wanted.add(dataset.dateColumn);

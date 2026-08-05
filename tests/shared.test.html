@@ -1029,6 +1029,118 @@
             assertClose(dashboardResolveFromRows({ kind: 'kpi', binding: both[0] }, data).value, 350, 0.001);
         });
 
+        test('one measure can be divided by another', () => {
+            const spec = dashboardNormalizeSpec({
+                measures: [
+                    { id: 'won', name: 'Won Deals', measure: 'Deal', aggregation: 'count',
+                        filters: [{ field: 'Status', op: 'equals', value: 'Won' }] },
+                    { id: 'closed', name: 'Closed Deals', measure: 'Deal', aggregation: 'count',
+                        filters: [{ field: 'Status', op: 'not equals', value: 'Open' }] },
+                    { id: 'rate', name: 'Win Rate', measure: 'Deal', aggregation: 'count', format: 'percent',
+                        filters: [{ field: 'Status', op: 'equals', value: 'Won' }],
+                        divideBy: { measureRef: 'closed' } }
+                ],
+                visuals: [{ id: 'v1', kind: 'kpi', binding: { measureRef: 'rate' } }]
+            });
+
+            const effective = dashboardEffectiveBinding(spec.visuals[0], spec);
+            assertEqual(effective.divideBy.measureName, 'Closed Deals', 'divisor resolved from the named measure');
+            assertEqual(effective.divideBy.aggregation, 'count');
+            assertEqual(effective.divideBy.filters.length, 1, 'the divisor brings its own filters');
+
+            const out = dashboardResolveFromRows({ kind: 'kpi', binding: effective }, pipelineFixture());
+            assertClose(out.value, 50, 0.001, 'three won out of six closed');
+        });
+
+        test('changing a divisor measure changes everything built on it', () => {
+            const spec = dashboardNormalizeSpec({
+                measures: [
+                    { id: 'base', name: 'All Deals', measure: 'Deal', aggregation: 'count' },
+                    { id: 'rate', name: 'Win Rate', measure: 'Deal', aggregation: 'count', format: 'percent',
+                        filters: [{ field: 'Status', op: 'equals', value: 'Won' }],
+                        divideBy: { measureRef: 'base' } }
+                ],
+                visuals: [{ id: 'v1', kind: 'kpi', binding: { measureRef: 'rate' } }]
+            });
+            const data = pipelineFixture();
+
+            const before = dashboardResolveFromRows({ kind: 'kpi', binding: dashboardEffectiveBinding(spec.visuals[0], spec) }, data).value;
+            assertClose(before, 50, 0.001, 'three of six');
+
+            spec.measures[0].filters = [{ field: 'Status', op: 'equals', value: 'Won' }];
+            const after = dashboardResolveFromRows({ kind: 'kpi', binding: dashboardEffectiveBinding(spec.visuals[0], spec) }, data).value;
+            assertClose(after, 100, 0.001, 'divisor narrowed to Won, so the rate is a hundred');
+        });
+
+        test('a ratio whose denominator is itself a ratio evaluates in the right order', () => {
+            const spec = dashboardNormalizeSpec({
+                measures: [
+                    { id: 'inner', name: 'Inner', measure: 'Revenue', aggregation: 'sum',
+                        divideBy: { measure: 'Deal', aggregation: 'count', filters: [] } },
+                    { id: 'outer', name: 'Outer', measure: 'Revenue', aggregation: 'sum', format: 'number',
+                        divideBy: { measureRef: 'inner' } }
+                ],
+                visuals: [{ id: 'v1', kind: 'kpi', binding: { measureRef: 'outer' } }]
+            });
+            const data = pipelineFixture();
+            const effective = dashboardEffectiveBinding(spec.visuals[0], spec);
+
+            assertTrue(!!effective.divideBy.divideBy, 'the nested ratio survived resolution');
+
+            const out = dashboardResolveFromRows({ kind: 'kpi', binding: effective }, data);
+            assertClose(out.value, 6, 0.001, '2100 over (2100 over 6) is 6');
+        });
+
+        test('a measure that divides by itself does not hang', () => {
+            const spec = dashboardNormalizeSpec({
+                measures: [{ id: 'loop', name: 'Loop', measure: 'Revenue', aggregation: 'sum',
+                    divideBy: { measureRef: 'loop' } }],
+                visuals: [{ id: 'v1', kind: 'kpi', binding: { measureRef: 'loop' } }]
+            });
+            const effective = dashboardEffectiveBinding(spec.visuals[0], spec);
+            const out = dashboardResolveFromRows({ kind: 'kpi', binding: effective }, pipelineFixture());
+            assertTrue(Number.isFinite(out.value), 'returns a finite number instead of looping');
+        });
+
+        test('two measures that divide by each other do not hang', () => {
+            const spec = dashboardNormalizeSpec({
+                measures: [
+                    { id: 'a', name: 'A', measure: 'Revenue', aggregation: 'sum', divideBy: { measureRef: 'b' } },
+                    { id: 'b', name: 'B', measure: 'Cost', aggregation: 'sum', divideBy: { measureRef: 'a' } }
+                ],
+                visuals: [{ id: 'v1', kind: 'kpi', binding: { measureRef: 'a' } }]
+            });
+            const effective = dashboardEffectiveBinding(spec.visuals[0], spec);
+            const out = dashboardResolveFromRows({ kind: 'kpi', binding: effective }, pipelineFixture());
+            assertTrue(Number.isFinite(out.value), 'mutual reference terminates');
+        });
+
+        test('a divisor measure reference survives a round trip', () => {
+            const spec = dashboardNormalizeSpec({
+                measures: [
+                    { id: 'closed', name: 'Closed', measure: 'Deal', aggregation: 'count' },
+                    { id: 'rate', name: 'Rate', measure: 'Deal', aggregation: 'count', format: 'percent',
+                        divideBy: { measureRef: 'closed' } }
+                ],
+                visuals: [{ id: 'v1', kind: 'kpi', binding: { measureRef: 'rate' } }]
+            });
+            assertDeep(dashboardDecodeSpec(dashboardEncodeSpec(spec)), spec);
+        });
+
+        test('a divisor pointing at a deleted measure falls back to its own column', () => {
+            const spec = dashboardNormalizeSpec({
+                measures: [],
+                visuals: [{ id: 'v1', kind: 'kpi', binding: {
+                    measure: 'Deal', aggregation: 'count', format: 'percent',
+                    filters: [{ field: 'Status', op: 'equals', value: 'Won' }],
+                    divideBy: { measureRef: 'gone', measure: 'Deal', aggregation: 'count', filters: [] }
+                } }]
+            });
+            const effective = dashboardEffectiveBinding(spec.visuals[0], spec);
+            const out = dashboardResolveFromRows({ kind: 'kpi', binding: effective }, pipelineFixture());
+            assertClose(out.value, 50, 0.001, 'still computes from the column it kept');
+        });
+
         test('a visual keeps its own dimension and grain when using a measure', () => {
             const spec = dashboardNormalizeSpec({
                 measures: [{ id: 'm1', name: 'Revenue', measure: 'Revenue', aggregation: 'sum' }],

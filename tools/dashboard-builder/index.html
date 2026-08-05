@@ -492,20 +492,11 @@
                 return wrap;
             }
 
-            const grid = document.createElement('div');
-            grid.className = 'grid grid-cols-2 sm:grid-cols-3 gap-2';
-            grid.appendChild(labelledField('Bottom number', columnField('measure', binding.divideBy.measure, 'Revenue', (v) => {
-                binding.divideBy.measure = v; refresh(false);
-            }, binding.divideBy.aggregation)));
-            grid.appendChild(labelledField('Aggregation', selectField(DASHBOARD_AGGREGATIONS, binding.divideBy.aggregation, (v) => {
-                binding.divideBy.aggregation = v; refresh();
-            })));
-            grid.appendChild(labelledField('Show as', selectField(['percent', 'number'], binding.format === 'number' ? 'number' : 'percent', (v) => {
+            wrap.appendChild(buildDivisorFields(binding.divideBy, null));
+
+            wrap.appendChild(labelledField('Show as', selectField(['percent', 'number'], binding.format === 'number' ? 'number' : 'percent', (v) => {
                 binding.format = v; refresh(false);
             }, (f) => (f === 'percent' ? 'Percentage' : 'Plain ratio'))));
-            wrap.appendChild(grid);
-
-            wrap.appendChild(buildFilterList(binding.divideBy.filters, 'Filters, bottom number only'));
 
             const explain = document.createElement('p');
             explain.className = 'text-[10px] text-slate-500 mt-1.5';
@@ -623,12 +614,7 @@
             ratioWrap.appendChild(ratioHead);
 
             if (measure.divideBy) {
-                const ratioGrid = document.createElement('div');
-                ratioGrid.className = 'grid grid-cols-2 gap-2';
-                ratioGrid.appendChild(labelledField('Bottom number', columnField('measure', measure.divideBy.measure, 'Revenue', (v) => { measure.divideBy.measure = v; refresh(false); }, measure.divideBy.aggregation)));
-                ratioGrid.appendChild(labelledField('Aggregation', selectField(DASHBOARD_AGGREGATIONS, measure.divideBy.aggregation, (v) => { measure.divideBy.aggregation = v; refresh(); })));
-                ratioWrap.appendChild(ratioGrid);
-                ratioWrap.appendChild(buildFilterList(measure.divideBy.filters, 'Filters, bottom number only'));
+                ratioWrap.appendChild(buildDivisorFields(measure.divideBy, measure.id));
             }
 
             body.appendChild(ratioWrap);
@@ -651,6 +637,38 @@
             }
 
             spec.measures.forEach((measure, index) => list.appendChild(buildMeasureEditor(measure, index)));
+        }
+
+        function buildDivisorFields(divideBy, ownerMeasureId) {
+            const wrap = document.createElement('div');
+            const usable = spec.measures.filter((m) => m.id !== ownerMeasureId);
+
+            if (usable.length > 0) {
+                const ids = [''].concat(usable.map((m) => m.id));
+                wrap.appendChild(labelledField('Bottom number', selectField(ids, divideBy.measureRef || '', (v) => {
+                    divideBy.measureRef = v || null;
+                    refresh();
+                }, (id) => (id ? (usable.find((m) => m.id === id) || {}).name : 'A column, set below'))));
+            }
+
+            if (divideBy.measureRef && usable.some((m) => m.id === divideBy.measureRef)) {
+                const named = usable.find((m) => m.id === divideBy.measureRef);
+                const note = document.createElement('p');
+                note.className = 'text-[10px] text-slate-500 mt-1';
+                note.textContent = `Dividing by the "${named.name}" measure, including its own filters.`;
+                wrap.appendChild(note);
+                return wrap;
+            }
+
+            const grid = document.createElement('div');
+            grid.className = 'grid grid-cols-2 gap-2 mt-1';
+            grid.appendChild(labelledField(usable.length > 0 ? 'Column' : 'Bottom number',
+                columnField('measure', divideBy.measure, 'Revenue', (v) => { divideBy.measure = v; refresh(false); }, divideBy.aggregation)));
+            grid.appendChild(labelledField('Aggregation', selectField(DASHBOARD_AGGREGATIONS, divideBy.aggregation, (v) => { divideBy.aggregation = v; refresh(); })));
+            wrap.appendChild(grid);
+            wrap.appendChild(buildFilterList(divideBy.filters, 'Filters, bottom number only'));
+
+            return wrap;
         }
 
         function buildColumnPicker(visual) {

@@ -23,6 +23,8 @@ const DASHBOARD_SLICER_TYPES = ["list", "dropdown", "range", "date range"];
 
 const DASHBOARD_FORMATS = ["auto", "percent", "number", "currency"];
 
+const DASHBOARD_MAX_RATIO_DEPTH = 4;
+
 const DASHBOARD_PALETTES = {
   hub: ["#0062F1", "#00133C", "#DC6803", "#059669", "#7C3AED", "#DB2777", "#0891B2", "#CA8A04", "#65A30D", "#E11D48"],
   ocean: ["#0E7490", "#0369A1", "#1E3A8A", "#0D9488", "#155E75", "#3B82F6", "#14B8A6", "#1D4ED8", "#22D3EE", "#312E81"],
@@ -74,18 +76,21 @@ function dashboardNormalizeFilter(raw) {
   };
 }
 
-function dashboardNormalizeDivideBy(raw) {
+function dashboardNormalizeDivideBy(raw, depth = 0) {
   if (!raw || typeof raw !== "object") return null;
 
+  const measureRef = dashboardCleanText(raw.measureRef, 24) || null;
   const measure = dashboardCleanText(raw.measure, 60);
-  if (measure === "") return null;
+  if (measure === "" && !measureRef) return null;
 
   return {
-    measure,
+    measureRef,
+    measure: measure || "Not specified",
     aggregation: dashboardPickOption(raw.aggregation, DASHBOARD_AGGREGATIONS, "count"),
     filters: Array.isArray(raw.filters)
       ? raw.filters.map(dashboardNormalizeFilter).filter(Boolean).slice(0, 8)
-      : []
+      : [],
+    divideBy: depth < DASHBOARD_MAX_RATIO_DEPTH ? dashboardNormalizeDivideBy(raw.divideBy, depth + 1) : null
   };
 }
 
@@ -162,15 +167,44 @@ function dashboardFindMeasure(spec, id) {
   return spec.measures.find((m) => m.id === id) || null;
 }
 
+function dashboardResolveDivideBy(divideBy, spec, seen, depth) {
+  if (!divideBy || depth > DASHBOARD_MAX_RATIO_DEPTH) return null;
+
+  const named = dashboardFindMeasure(spec, divideBy.measureRef);
+  if (!named || seen.has(named.id)) {
+    return Object.assign({}, divideBy, {
+      divideBy: dashboardResolveDivideBy(divideBy.divideBy, spec, seen, depth + 1)
+    });
+  }
+
+  const nextSeen = new Set(seen);
+  nextSeen.add(named.id);
+
+  return {
+    measureRef: divideBy.measureRef,
+    measureName: named.name,
+    measure: named.measure,
+    aggregation: named.aggregation,
+    filters: named.filters,
+    divideBy: dashboardResolveDivideBy(named.divideBy, spec, nextSeen, depth + 1)
+  };
+}
+
 function dashboardEffectiveBinding(visual, spec) {
   const named = dashboardFindMeasure(spec, visual.binding.measureRef);
-  if (!named) return visual.binding;
+  const seen = new Set(named ? [named.id] : []);
+
+  if (!named) {
+    return Object.assign({}, visual.binding, {
+      divideBy: dashboardResolveDivideBy(visual.binding.divideBy, spec, seen, 1)
+    });
+  }
 
   return Object.assign({}, visual.binding, {
     measure: named.measure,
     aggregation: named.aggregation,
     filters: named.filters,
-    divideBy: named.divideBy,
+    divideBy: dashboardResolveDivideBy(named.divideBy, spec, seen, 1),
     format: named.format,
     measureName: named.name
   });
@@ -428,9 +462,13 @@ function dashboardBindingSummary(visual) {
   }
 
   if (b.divideBy) {
-    parts.push(`divided by ${b.divideBy.aggregation} of ${b.divideBy.measure}`);
-    if (b.divideBy.filters.length > 0) {
-      parts.push(`where ${b.divideBy.filters.map((f) => `${f.field} ${f.op} ${f.value}`).join(" or ")}`);
+    if (b.divideBy.measureName) {
+      parts.push(`divided by ${b.divideBy.measureName}`);
+    } else {
+      parts.push(`divided by ${b.divideBy.aggregation} of ${b.divideBy.measure}`);
+      if (b.divideBy.filters.length > 0) {
+        parts.push(`where ${b.divideBy.filters.map((f) => `${f.field} ${f.op} ${f.value}`).join(" or ")}`);
+      }
     }
     if (dashboardBindingFormat(b) === "percent") parts.push("as a percentage");
   }

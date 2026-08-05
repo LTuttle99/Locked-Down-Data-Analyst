@@ -258,6 +258,14 @@ serves a KPI tile and a breakdown by region at once. Edit the measure and every
 visual using it changes together; a dangling reference quietly falls back to
 the visual's own binding.
 
+**Measures compose.** A divisor can point at another measure rather than a raw
+column, so "Won Deals over Closed Deals" is two named measures divided, and
+editing either one updates everything built on it. The denominator may itself
+be a ratio, which `dashboardRawValue` evaluates recursively. Two guards keep
+that safe: resolution tracks which measure ids it has already followed, so a
+measure dividing by itself (or two measures dividing by each other) terminates
+instead of hanging, and both resolution and evaluation stop at a depth of four.
+
 ### Rates and percentages
 
 A binding can divide one aggregate by another, which is how you get anything
