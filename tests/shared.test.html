@@ -1742,6 +1742,43 @@
             assertEqual(found.length, 0, 'no topic matches nonsense');
         });
 
+        test('vanessa answers a short greeting like a person', () => {
+            const answer = vanessaOfflineAnswer('fuzzy-dupes', 'hi');
+            assertTrue(answer.length < 120, 'a greeting gets a greeting, not a manual page');
+            assertTrue(!answer.toLowerCase().includes('threshold'), 'a greeting does not dump tool notes');
+        });
+
+        test('vanessa handles thanks and identity questions', () => {
+            assertTrue(vanessaOfflineAnswer('fuzzy-dupes', 'thanks').length > 0, 'thanks gets a reply');
+            const who = vanessaOfflineAnswer('fuzzy-dupes', 'who are you');
+            assertTrue(who.toLowerCase().includes('vanessa'), 'she introduces herself');
+        });
+
+        test('small talk never hijacks a real question that contains a chatty word', () => {
+            const answer = vanessaOfflineAnswer('fuzzy-dupes', 'hey can you help me pick a similarity threshold');
+            assertTrue(answer.toLowerCase().includes('threshold'), 'the real question wins over the greeting words');
+        });
+
+        test('tell me more walks through the remaining notes instead of repeating', () => {
+            vanessaPendingTopics = [];
+            const first = vanessaOfflineAnswer('dashboard-builder', 'how do I share a dashboard with someone');
+            assertTrue(first.length > 0, 'first answer given');
+            const queued = vanessaPendingTopics.length;
+            if (queued > 0) {
+                const second = vanessaOfflineAnswer('dashboard-builder', 'tell me more');
+                assertTrue(second !== first, 'the follow-up is different text, not a repeat');
+                assertEqual(vanessaPendingTopics.length, queued - 1, 'the queue advances');
+            }
+        });
+
+        test('tell me more with nothing queued says so instead of failing to find a note', () => {
+            vanessaPendingTopics = [];
+            const answer = vanessaOfflineAnswer('unit-converter', 'go on');
+            assertTrue(!answer.includes('more angles'), 'does not offer what it does not have');
+            assertTrue(answer.toLowerCase().includes('everything i have'), 'answers the follow-up gracefully');
+            assertTrue(!answer.toLowerCase().includes('do not have a note'), 'never searches for a topic called "go on"');
+        });
+
         test('vanessa says it does not know rather than inventing an answer', () => {
             const answer = vanessaOfflineAnswer('unit-converter', 'what is the airspeed velocity of an unladen swallow');
             assertTrue(answer.toLowerCase().includes('do not have a note'), 'admits the gap');

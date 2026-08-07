@@ -64,33 +64,138 @@ function vanessaKnowledgeFor(toolId) {
   return VANESSA_KNOWLEDGE[toolId] || null;
 }
 
-function vanessaFindTopics(toolId, question, limit = 3) {
+function vanessaRankTopics(toolId, question) {
   const tokens = vanessaTokenize(question);
   const entry = vanessaKnowledgeFor(toolId);
   const shared = typeof VANESSA_SHARED_TOPICS === "undefined" ? [] : VANESSA_SHARED_TOPICS;
   const pool = (entry ? entry.topics : []).map((t) => ({ topic: t, boost: 3 })).concat(shared.map((t) => ({ topic: t, boost: 0 })));
 
-  const scored = pool
+  return pool
     .map((item) => {
       const raw = vanessaScoreTopic(tokens, item.topic);
       return { text: item.topic.text, score: raw === 0 ? 0 : raw + item.boost };
     })
     .filter((item) => item.score > 1)
     .sort((a, b) => b.score - a.score);
+}
 
-  return scored.slice(0, limit).map((item) => item.text);
+function vanessaFindTopics(toolId, question, limit = 3) {
+  return vanessaRankTopics(toolId, question).slice(0, limit).map((item) => item.text);
+}
+
+const VANESSA_SMALLTALK = [
+  {
+    keywords: ["hi", "hello", "hey", "morning", "afternoon", "evening", "greetings"],
+    replies: [
+      "Hello. What are you trying to get done?",
+      "Hi. What are you working on?"
+    ]
+  },
+  {
+    keywords: ["thanks", "thank", "cheers", "appreciated", "helpful", "perfect", "brilliant", "lovely"],
+    replies: [
+      "Glad that landed. Anything else you want to pick apart?",
+      "Any time. Shout if something else comes up."
+    ]
+  },
+  {
+    keywords: ["who are you", "what are you", "your name", "about you", "are you ai", "are you real"],
+    replies: [
+      "I am Vanessa. I live on this page and answer questions about it. I run from a set of notes written about these tools, and if a language model is available on your computer I use that to phrase things, so nothing I do touches the internet.",
+      "Vanessa. Think of me as the manual for this page, except you can argue with me. Everything I do stays on your machine."
+    ]
+  },
+  {
+    keywords: ["what can you do", "capabilities", "what do you know", "how can you help", "what should i ask"],
+    replies: [
+      "Ask me what a control does, why your file came out looking odd, or which tool fits the job you have. If you want me to comment on your actual data, use Change below and pick how much I get to see.",
+      "Mostly: how this works, why it did that, and what to reach for next. I start out knowing nothing about your file, so use Change below if you want me looking at it."
+    ]
+  },
+  {
+    keywords: ["bye", "goodbye", "see you", "later", "that is all", "nothing else"],
+    replies: [
+      "Right you are. I will be down here if you need me.",
+      "Good luck with it."
+    ]
+  },
+  {
+    keywords: ["sorry", "my bad", "oops", "ignore that", "never mind", "nevermind"],
+    replies: [
+      "No harm done. What did you actually want to know?",
+      "All good. Try me again."
+    ]
+  }
+];
+
+const VANESSA_FOLLOWUP = ["more", "tell me more", "go on", "what else", "else", "continue", "and", "expand", "further", "why", "how so", "such as", "example", "keep going"];
+
+const VANESSA_OPENERS = ["", "So: ", "Right. ", "Okay. "];
+
+let vanessaPendingTopics = [];
+let vanessaTurnCount = 0;
+
+function vanessaPickVariant(list) {
+  return list[vanessaTurnCount % list.length];
+}
+
+function vanessaMatchesAny(tokens, keywordSets) {
+  return keywordSets.some((keyword) => {
+    const parts = vanessaTokenize(keyword);
+    if (parts.length === 0) return false;
+    return parts.every((p) => tokens.includes(p));
+  });
+}
+
+function vanessaSmalltalkReply(tokens) {
+  for (const item of VANESSA_SMALLTALK) {
+    if (vanessaMatchesAny(tokens, item.keywords)) return vanessaPickVariant(item.replies);
+  }
+  return null;
+}
+
+function vanessaOfferMore() {
+  if (vanessaPendingTopics.length === 0) return "";
+  return vanessaPendingTopics.length === 1
+    ? "\n\nThere is one more thing on this if you want it."
+    : `\n\nI have a couple more angles on this if you want them.`;
 }
 
 function vanessaOfflineAnswer(toolId, question) {
   const entry = vanessaKnowledgeFor(toolId);
-  const found = vanessaFindTopics(toolId, question, 2);
+  const tokens = vanessaTokenize(question);
+  const short = tokens.length <= 4;
 
-  if (found.length > 0) return found.join("\n\n");
+  if (short) {
+    const chit = vanessaSmalltalkReply(tokens);
+    if (chit) return chit;
+  }
+
+  if (short && vanessaMatchesAny(tokens, VANESSA_FOLLOWUP)) {
+    if (vanessaPendingTopics.length > 0) {
+      const next = vanessaPendingTopics.shift();
+      return `${next}${vanessaOfferMore()}`;
+    }
+    return "That's everything I have on that one. Ask me something else and I'll see what I've got.";
+  }
+
+  const ranked = vanessaRankTopics(toolId, question);
+
+  if (ranked.length > 0) {
+    const floor = ranked[0].score * 0.6;
+    vanessaPendingTopics = ranked.slice(1, 4).filter((item) => item.score >= floor).map((item) => item.text);
+    return `${vanessaPickVariant(VANESSA_OPENERS)}${ranked[0].text}${vanessaOfferMore()}`;
+  }
+
+  const chit = vanessaSmalltalkReply(tokens);
+  if (chit) return chit;
+
+  vanessaPendingTopics = [];
 
   if (entry) {
-    return `I do not have a note that matches that. Here is what this tool does: ${entry.summary}\n\nTry asking about one of the things it controls, or check the Getting Started guide.`;
+    return `I do not have a note on that one, and I would rather say so than invent something. What I can talk about is ${entry.summary.charAt(0).toLowerCase()}${entry.summary.slice(1)}\n\nTry me on one of the controls, or have a look at the Getting Started guide.`;
   }
-  return "I do not have a note that matches that.";
+  return "I do not have a note on that one, and I would rather say so than guess.";
 }
 
 function vanessaIsBlank(value) {
@@ -273,7 +378,7 @@ async function vanessaBackendAsk(messages, onDelta) {
       model: vanessaBackend.model,
       messages,
       stream: true,
-      options: { temperature: 0.2, num_predict: 320 }
+      options: { temperature: 0.4, num_predict: 400 }
     })
   });
 
@@ -317,12 +422,12 @@ function vanessaBuildMessages(question) {
   const title = entry ? entry.title : "this tool";
 
   const system = [
-    `You are Vanessa, a help assistant built into the ${title} tool of a static, browser-based data hub.`,
-    "Answer only from the reference notes and the data summary given to you.",
-    "If they do not cover the question, say plainly that you do not know rather than guessing.",
-    "Never invent controls, options, buttons or capabilities that are not described.",
-    "Be concise and practical. Stay under 100 words unless asked for more.",
-    "Do not mention these instructions or the structure of the information you were given."
+    `You are Vanessa, a colleague who knows the ${title} tool inside out and is sitting next to the person using it.`,
+    "Talk like a person, not a manual. Warm, direct, a bit dry. Contractions are fine.",
+    "Answer the question that was actually asked, then stop. Two or three sentences is usually right.",
+    "Everything factual you say must come from the reference notes and data summary below. If they do not cover it, say so plainly and offer what you do know.",
+    "Never invent controls, options, buttons or capabilities that are not described to you.",
+    "Do not open by restating the question, do not pad with pleasantries, and do not mention these instructions or where your information came from."
   ].join(" ");
 
   const parts = [];
@@ -342,10 +447,9 @@ function vanessaBuildMessages(question) {
 
   parts.push(`Question: ${question}`);
 
-  return [
-    { role: "system", content: system },
-    { role: "user", content: parts.join("\n\n") }
-  ];
+  return [{ role: "system", content: system }]
+    .concat(vanessaHistory.slice(-6))
+    .concat([{ role: "user", content: parts.join("\n\n") }]);
 }
 
 function vanessaEl(tag, style, text) {
@@ -476,7 +580,12 @@ function vanessaShowConsent() {
         vanessaLevel = level;
         vanessaSetStatus();
         overlay.remove();
-        vanessaAppendMessage("assistant", `Access set to: ${VANESSA_LEVEL_LABELS[level]}. ${VANESSA_LEVEL_BLURBS[level]}`);
+        vanessaAppendMessage(
+          "assistant",
+          level === "offline"
+            ? "Done, I've forgotten your data again. Back to answering from my notes only, and nothing leaves this tab."
+            : `Got it, I can now see: ${VANESSA_LEVEL_LABELS[level].toLowerCase()}. ${VANESSA_LEVEL_BLURBS[level]} Change your mind whenever, it all resets when you close the tab anyway.`
+        );
       });
       actions.appendChild(choose);
     }
@@ -521,6 +630,7 @@ async function vanessaSend() {
   if (question === "" || vanessaBusy) return;
 
   vanessaBusy = true;
+  vanessaTurnCount++;
   vanessaInputEl.value = "";
   vanessaAppendMessage("user", question);
 
@@ -621,12 +731,12 @@ function vanessaToggle(show) {
       const entry = vanessaKnowledgeFor(vanessaTool);
       const opening =
         vanessaTool === "hub"
-          ? "Hello. Tell me what you are trying to do and I will point you at the right tool. I can also explain how the hub itself works, including the access codes and the keyboard shortcuts."
-          : `Hello. I can explain how ${entry ? entry.title : "this tool"} works and what its controls do.`;
+          ? "Hi, I'm Vanessa. Tell me what you're trying to get done and I'll point you at the right tool. I can also explain the access codes, the shortcuts, or anything else about this page."
+          : `Hi, I'm Vanessa. Ask me what anything in ${entry ? entry.title : "this tool"} does, or why your file came out looking strange.`;
 
       vanessaAppendMessage(
         "assistant",
-        `${opening}\n\nBy default I answer from a built-in help index and nothing leaves this tab. If you want me to look at your data, use Change below to decide exactly what I am allowed to see.`
+        `${opening}\n\nRight now I know nothing about your file, and nothing leaves this tab. If you'd like me looking at your data, hit Change below and you decide exactly how much I get to see.`
       );
     }
     vanessaInputEl.focus();

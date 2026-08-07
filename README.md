@@ -184,9 +184,16 @@ does **not** include her, so a downloaded dashboard never carries her.
 
 By default Vanessa needs nothing installed and makes no network request. She matches
 your question against the curated note set for the tool you are on, plus a set of
-notes shared across every tool, and answers with that text verbatim. It is a help
-system rather than a conversation: it will explain what a control does and why a
-file parsed the way it did, and it will say it does not know rather than guess.
+notes shared across every tool.
+
+Even with no model she holds a thread rather than acting as a search box. She handles
+greetings, thanks and "who are you" without dumping a help page at you; when more than
+one note is genuinely relevant she offers the rest and "tell me more" walks through
+them one at a time; and when she runs out she says so instead of serving something
+only loosely related. Follow-up detection is deliberately limited to short inputs, so
+"hey can you help me pick a threshold" is treated as the real question it is rather
+than as a greeting. What she will not do is guess: if nothing matches, she says she
+has no note on it and tells you what she does cover.
 
 ### With a local model, she gets conversational
 
@@ -194,6 +201,12 @@ If [Ollama](https://ollama.com) is running on the same computer, Vanessa detects
 and upgrades. The retrieved notes are still what grounds the answer; the model's job
 is to phrase them against your question rather than to recall anything. This is
 deliberate, and it is what stops a small model inventing controls that do not exist.
+
+The last three exchanges are sent along with each question, so follow-ups that lean on
+what was just said work: ask what the similarity threshold does, then ask "so should I
+raise it or lower it?", and she knows what "it" refers to without you repeating
+yourself. Only the plain question and answer text is kept, not the grounding payload,
+and it is held in memory for the tab and never written to storage.
 
 **Nothing goes over the internet at any level.** The model runs on your machine, so
 "your data never leaves your computer" stays true whatever you allow her to see.

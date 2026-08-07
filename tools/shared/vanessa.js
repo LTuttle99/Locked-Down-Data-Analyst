@@ -64,21 +64,23 @@ function vanessaKnowledgeFor(toolId) {
   return VANESSA_KNOWLEDGE[toolId] || null;
 }
 
-function vanessaFindTopics(toolId, question, limit = 3) {
+function vanessaRankTopics(toolId, question) {
   const tokens = vanessaTokenize(question);
   const entry = vanessaKnowledgeFor(toolId);
   const shared = typeof VANESSA_SHARED_TOPICS === "undefined" ? [] : VANESSA_SHARED_TOPICS;
   const pool = (entry ? entry.topics : []).map((t) => ({ topic: t, boost: 3 })).concat(shared.map((t) => ({ topic: t, boost: 0 })));
 
-  const scored = pool
+  return pool
     .map((item) => {
       const raw = vanessaScoreTopic(tokens, item.topic);
       return { text: item.topic.text, score: raw === 0 ? 0 : raw + item.boost };
     })
     .filter((item) => item.score > 1)
     .sort((a, b) => b.score - a.score);
+}
 
-  return scored.slice(0, limit).map((item) => item.text);
+function vanessaFindTopics(toolId, question, limit = 3) {
+  return vanessaRankTopics(toolId, question).slice(0, limit).map((item) => item.text);
 }
 
 const VANESSA_SMALLTALK = [
@@ -128,12 +130,7 @@ const VANESSA_SMALLTALK = [
 
 const VANESSA_FOLLOWUP = ["more", "tell me more", "go on", "what else", "else", "continue", "and", "expand", "further", "why", "how so", "such as", "example", "keep going"];
 
-const VANESSA_OPENERS = [
-  "",
-  "Short version: ",
-  "Here is the bit that matters. ",
-  "Right, so. "
-];
+const VANESSA_OPENERS = ["", "So: ", "Right. ", "Okay. "];
 
 let vanessaPendingTopics = [];
 let vanessaTurnCount = 0;
@@ -174,16 +171,20 @@ function vanessaOfflineAnswer(toolId, question) {
     if (chit) return chit;
   }
 
-  if (short && vanessaMatchesAny(tokens, VANESSA_FOLLOWUP) && vanessaPendingTopics.length > 0) {
-    const next = vanessaPendingTopics.shift();
-    return `${next}${vanessaOfferMore()}`;
+  if (short && vanessaMatchesAny(tokens, VANESSA_FOLLOWUP)) {
+    if (vanessaPendingTopics.length > 0) {
+      const next = vanessaPendingTopics.shift();
+      return `${next}${vanessaOfferMore()}`;
+    }
+    return "That's everything I have on that one. Ask me something else and I'll see what I've got.";
   }
 
-  const found = vanessaFindTopics(toolId, question, 4);
+  const ranked = vanessaRankTopics(toolId, question);
 
-  if (found.length > 0) {
-    vanessaPendingTopics = found.slice(1);
-    return `${vanessaPickVariant(VANESSA_OPENERS)}${found[0]}${vanessaOfferMore()}`;
+  if (ranked.length > 0) {
+    const floor = ranked[0].score * 0.6;
+    vanessaPendingTopics = ranked.slice(1, 4).filter((item) => item.score >= floor).map((item) => item.text);
+    return `${vanessaPickVariant(VANESSA_OPENERS)}${ranked[0].text}${vanessaOfferMore()}`;
   }
 
   const chit = vanessaSmalltalkReply(tokens);
@@ -579,7 +580,12 @@ function vanessaShowConsent() {
         vanessaLevel = level;
         vanessaSetStatus();
         overlay.remove();
-        vanessaAppendMessage("assistant", `Access set to: ${VANESSA_LEVEL_LABELS[level]}. ${VANESSA_LEVEL_BLURBS[level]}`);
+        vanessaAppendMessage(
+          "assistant",
+          level === "offline"
+            ? "Done, I've forgotten your data again. Back to answering from my notes only, and nothing leaves this tab."
+            : `Got it, I can now see: ${VANESSA_LEVEL_LABELS[level].toLowerCase()}. ${VANESSA_LEVEL_BLURBS[level]} Change your mind whenever, it all resets when you close the tab anyway.`
+        );
       });
       actions.appendChild(choose);
     }
