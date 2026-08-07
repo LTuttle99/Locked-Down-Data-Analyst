@@ -1846,6 +1846,143 @@
             localStorage.removeItem('vanessa_memory');
         });
 
+        test('thinking is split out of the answer and never leaks into it', () => {
+            const out = vanessaSplitThinking('<think>they want the threshold. notes say raise it.</think>Raise it to about 0.85.');
+            assertEqual(out.thinking, 'they want the threshold. notes say raise it.');
+            assertEqual(out.answer, 'Raise it to about 0.85.');
+            assertTrue(!out.answer.includes('<think'), 'no tag residue in the answer');
+        });
+
+        test('a reply with no thinking block is treated as all answer', () => {
+            const out = vanessaSplitThinking('Just the answer, no tags.');
+            assertEqual(out.thinking, '');
+            assertEqual(out.answer, 'Just the answer, no tags.');
+        });
+
+        test('a half streamed thinking block shows no answer yet', () => {
+            const out = vanessaSplitThinking('<think>still working through it');
+            assertEqual(out.answer, '', 'nothing is shown as an answer until the block closes');
+            assertTrue(out.thinking.length > 0, 'the partial thinking is still visible');
+        });
+
+        test('an orphan closing tag never leaks into the answer', () => {
+            const out = vanessaSplitThinking('</think>\n\nUse Lookup and Merge for that.\n\n</think>');
+            assertTrue(!out.answer.includes('think>'), 'no tag residue survives');
+            assertEqual(out.answer, 'Use Lookup and Merge for that.');
+        });
+
+        test('a stray opening tag after the answer does not blank it', () => {
+            const out = vanessaSplitThinking('Answer first. </think> trailing');
+            assertTrue(!out.answer.includes('think>'), 'tags stripped');
+            assertTrue(out.answer.indexOf('trailing') !== -1, 'text after the orphan tag is kept');
+        });
+
+        test('text before an opening think tag is kept as answer', () => {
+            const out = vanessaSplitThinking('Sure. <think>quick check</think>Here you go.');
+            assertEqual(out.thinking, 'quick check');
+            assertTrue(out.answer.includes('Sure.') && out.answer.includes('Here you go.'), 'nothing is dropped');
+        });
+
+        test('the tool catalogue lets her point at other tools but never at herself', () => {
+            const cat = vanessaToolCatalogue('fuzzy-dupes');
+            assertTrue(cat.includes('Lookup and Merge'), 'other tools are listed');
+            assertTrue(!cat.includes('Fuzzy Duplicate Finder'), 'the current tool is excluded');
+            assertTrue(!cat.includes('Data and Analytics Hub'), 'the hub is not a tool to route to');
+        });
+
+        test('every single tool answers a real question about itself', () => {
+            const probes = {
+                'hub': 'which tool do I use to compare two exports',
+                'data-analyzer': 'how does the forecast work',
+                'instant-dashboard': 'why did it pick these charts',
+                'dashboard-builder': 'how do slicers work',
+                'file-diff': 'what is the key column for',
+                'pivot-explorer': 'how do I build a pivot',
+                'data-cleaner': 'how do I remove duplicate rows',
+                'converter': 'how do I turn this into json',
+                'column-stats': 'what does p25 mean here',
+                'sql-workbench': 'can I join two files',
+                'lookup-merge': 'what happens to unmatched rows',
+                'fuzzy-dupes': 'what does the threshold do',
+                'chart-builder': 'how do I save the chart as an image',
+                'data-generator': 'what does the seed do',
+                'code-helper': 'which languages are supported',
+                'json-formatter': 'my json is invalid why',
+                'timestamp-converter': 'is this seconds or milliseconds',
+                'regex-tester': 'why does nothing match',
+                'text-diff': 'lines look identical but show as different',
+                'color-tools': 'what contrast ratio do I need',
+                'text-analyzer': 'how is reading time worked out',
+                'qr-generator': 'my qr code will not scan',
+                'markdown-preview': 'is it safe to paste untrusted markdown',
+                'encode-decode': 'do accents survive base64',
+                'unit-converter': 'why is temperature not a simple multiply',
+                'jwt-decoder': 'does this verify the signature'
+            };
+
+            const ids = Object.keys(probes);
+            assertEqual(ids.length, Object.keys(VANESSA_KNOWLEDGE).length, 'every knowledge entry is probed');
+
+            const failed = [];
+            for (const id of ids) {
+                vanessaPendingTopics = [];
+                const answer = vanessaOfflineAnswer(id, probes[id]);
+                if (answer.toLowerCase().includes('do not have a note')) failed.push(id);
+            }
+            assertDeep(failed, [], 'no tool leaves a reasonable question unanswered');
+        });
+
+        test('every tool can answer what do you do and what does this tool do', () => {
+            const ids = Object.keys(VANESSA_KNOWLEDGE);
+            const selfFail = [];
+            const toolFail = [];
+
+            for (const id of ids) {
+                vanessaPendingTopics = [];
+                if (!vanessaOfflineAnswer(id, 'what do you do').includes("I'm Vanessa")) selfFail.push(id);
+
+                vanessaPendingTopics = [];
+                const about = vanessaOfflineAnswer(id, 'what does this tool do');
+                if (!about.includes(VANESSA_KNOWLEDGE[id].summary.slice(0, 25))) toolFail.push(id);
+            }
+
+            assertDeep(selfFail, [], 'every tool answers "what do you do"');
+            assertDeep(toolFail, [], 'every tool answers "what does this tool do" with its own summary');
+        });
+
+        test('the two basic questions are not confused with each other', () => {
+            vanessaPendingTopics = [];
+            const self = vanessaOfflineAnswer('fuzzy-dupes', 'what do you do');
+            vanessaPendingTopics = [];
+            const tool = vanessaOfflineAnswer('fuzzy-dupes', 'what does this tool do');
+
+            assertTrue(self.includes("I'm Vanessa"), 'a question about her is about her');
+            assertTrue(!tool.includes("I'm Vanessa"), 'a question about the tool is not about her');
+            assertTrue(tool.includes('near duplicate'), 'the tool answer describes the tool');
+        });
+
+        test('phrasings of the same two questions all land', () => {
+            const selfWays = ['what can you do', 'who are you', 'what are you for', 'how can you help'];
+            const toolWays = ['what is this', 'what is this for', 'what am I looking at', 'what does this do'];
+
+            for (const q of selfWays) {
+                vanessaPendingTopics = [];
+                assertTrue(vanessaOfflineAnswer('sql-workbench', q).includes("Vanessa"), `"${q}" is about her`);
+            }
+            for (const q of toolWays) {
+                vanessaPendingTopics = [];
+                const a = vanessaOfflineAnswer('sql-workbench', q);
+                assertTrue(a.includes('SQLite'), `"${q}" describes the tool`);
+            }
+        });
+
+        test('every tool id in the knowledge base is a real tool folder name', () => {
+            const ids = Object.keys(VANESSA_KNOWLEDGE).filter(id => id !== 'hub');
+            for (const id of ids) {
+                assertTrue(/^[a-z][a-z0-9-]*$/.test(id), `${id} looks like a folder name`);
+            }
+        });
+
         test('vanessa says it does not know rather than inventing an answer', () => {
             const answer = vanessaOfflineAnswer('unit-converter', 'what is the airspeed velocity of an unladen swallow');
             assertTrue(answer.toLowerCase().includes('do not have a note'), 'admits the gap');

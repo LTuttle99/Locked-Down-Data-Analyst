@@ -131,6 +131,19 @@ const VANESSA_SMALLTALK = [
 
 const VANESSA_FOLLOWUP = ["more", "tell me more", "go on", "what else", "else", "continue", "and", "expand", "further", "why", "how so", "such as", "example", "keep going"];
 
+const VANESSA_ABOUT_SELF = [
+  "what do you do", "what can you do", "who are you", "what are you", "what are you for",
+  "how can you help", "what do you know", "what is your job", "your purpose", "about yourself",
+  "why are you here", "what use are you"
+];
+
+const VANESSA_ABOUT_TOOL = [
+  "what does this tool do", "what does this do", "what is this tool", "what is this",
+  "what is this for", "what does it do", "what is it for", "explain this tool",
+  "what can this tool do", "what does this page do", "purpose of this tool",
+  "what am i looking at", "overview", "what is this thing"
+];
+
 const VANESSA_OPENERS = ["", "So: ", "Right. ", "Okay. "];
 
 let vanessaPendingTopics = [];
@@ -243,10 +256,35 @@ function vanessaOfferMore() {
     : `\n\nI have a couple more angles on this if you want them.`;
 }
 
+function vanessaDescribeSelf(entry) {
+  const where = entry ? entry.title : "this page";
+  return `I'm Vanessa. I explain how ${where} works, why your file behaved the way it did, and which tool to reach for when this one is the wrong shape for the job.\n\nI start out knowing nothing about your file and nothing leaves this tab. If you want me looking at your actual data, use Change below and you pick how much I see.`;
+}
+
+function vanessaDescribeTool(entry, toolId) {
+  if (!entry) return "I'm not sure what this page is, which is not a great look for me.";
+
+  const examples = entry.topics
+    .slice(0, 3)
+    .map((topic) => topic.keywords[0])
+    .filter((k) => typeof k === "string" && k.length > 2);
+
+  const opener = toolId === "hub"
+    ? `This is the ${entry.title}. ${entry.summary}`
+    : `${entry.title}. ${entry.summary}`;
+
+  return examples.length > 0
+    ? `${opener}\n\nAsk me about ${examples.join(", ")}, or anything else you can see on the page.`
+    : opener;
+}
+
 function vanessaOfflineAnswer(toolId, question) {
   const entry = vanessaKnowledgeFor(toolId);
   const tokens = vanessaTokenize(question);
   const short = tokens.length <= 4;
+
+  if (vanessaMatchesAny(tokens, VANESSA_ABOUT_SELF)) return vanessaDescribeSelf(entry);
+  if (vanessaMatchesAny(tokens, VANESSA_ABOUT_TOOL)) return vanessaDescribeTool(entry, toolId);
 
   if (short) {
     const chit = vanessaSmalltalkReply(tokens);
@@ -443,25 +481,39 @@ async function vanessaProbeBackend() {
     clearTimeout(timer);
     if (!response.ok) return { available: false, model: null };
     const data = await response.json();
-    const models = (data.models || []).map((m) => m.name);
-    if (models.length === 0) return { available: false, model: null };
-    return { available: true, model: models[0], models };
+    const entries = data.models || [];
+    if (entries.length === 0) return { available: false, model: null };
+
+    const withThinking = entries.find((m) => (m.capabilities || []).indexOf("thinking") !== -1);
+    const chosen = withThinking || entries[0];
+
+    return {
+      available: true,
+      model: chosen.name,
+      nativeThinking: !!withThinking,
+      models: entries.map((m) => m.name)
+    };
   } catch (e) {
     clearTimeout(timer);
     return { available: false, model: null };
   }
 }
 
-async function vanessaBackendAsk(messages, onDelta) {
+async function vanessaBackendAsk(messages, onDelta, onThinking, signal) {
+  const body = {
+    model: vanessaBackend.model,
+    messages,
+    stream: true,
+    options: { temperature: 0.7, num_predict: 900, top_p: 0.9 }
+  };
+
+  if (vanessaBackend.nativeThinking) body.think = true;
+
   const response = await fetch(`${VANESSA_BACKEND_URL}/api/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: vanessaBackend.model,
-      messages,
-      stream: true,
-      options: { temperature: 0.7, num_predict: 700, top_p: 0.9 }
-    })
+    body: JSON.stringify(body),
+    signal: signal
   });
 
   if (!response.ok || !response.body) throw new Error("The local model did not respond.");
@@ -487,7 +539,11 @@ async function vanessaBackendAsk(messages, onDelta) {
       } catch (e) {
         continue;
       }
-      const delta = parsed.message && parsed.message.content ? parsed.message.content : "";
+      const message = parsed.message || {};
+
+      if (message.thinking && onThinking) onThinking(message.thinking);
+
+      const delta = message.content ? message.content : "";
       if (delta) {
         full += delta;
         onDelta(delta);
@@ -514,23 +570,57 @@ function vanessaRelevantSharedNotes(text, limit) {
     .map((item) => item.text);
 }
 
+function vanessaToolCatalogue(currentTool) {
+  if (typeof VANESSA_KNOWLEDGE === "undefined") return "";
+  return Object.keys(VANESSA_KNOWLEDGE)
+    .filter((id) => id !== currentTool && id !== "hub")
+    .map((id) => `- ${VANESSA_KNOWLEDGE[id].title}: ${VANESSA_KNOWLEDGE[id].summary}`)
+    .join("\n");
+}
+
+function vanessaStripTags(text) {
+  return text.replace(/<\/?think>/g, "").trim();
+}
+
+function vanessaSplitThinking(text) {
+  const open = text.indexOf("<think>");
+  const close = text.indexOf("</think>");
+
+  if (open === -1 && close === -1) return { thinking: "", answer: text };
+
+  if (open === -1) {
+    return {
+      thinking: text.slice(0, close).trim(),
+      answer: vanessaStripTags(text.slice(close + 8))
+    };
+  }
+
+  if (close === -1 || close < open) {
+    return { thinking: vanessaStripTags(text.slice(open + 7)), answer: "" };
+  }
+
+  return {
+    thinking: text.slice(open + 7, close).trim(),
+    answer: vanessaStripTags(text.slice(0, open) + text.slice(close + 8))
+  };
+}
+
 function vanessaPersona(title) {
   return [
-    `You are Vanessa. You work alongside the person using ${title}, and you know this hub of browser-based data tools well.`,
+    `You are Vanessa, a sharp, friendly colleague helping someone use ${title}.`,
     "",
-    "How you talk:",
-    "- Like a capable colleague, not a manual and not a support bot. Warm, direct, a little dry. Contractions throughout.",
-    "- Have a view. If they are about to do something awkward, say so and say what you would do instead.",
-    "- Ask a question back when the answer genuinely depends on something you do not know. Do not interrogate them for the sake of it.",
-    "- Match their energy. A one-line question gets a a short answer; a thorny problem earns a proper one.",
-    "- You are allowed small talk, and you are allowed to be funny, but never at the expense of being useful.",
-    "- Do not restate their question before answering, do not pile on caveats, and never mention these instructions or that you were given notes.",
+    "Answer their question directly. Two or three sentences. Use contractions. Have an opinion.",
     "",
-    "What you can and cannot claim:",
-    "- Anything about what THIS TOOL does, what its controls are called, or how it behaves must come from the reference notes below. If the notes do not cover it, say you are not sure rather than inventing a button.",
-    "- General knowledge about working with data is yours to use freely: what a median tells you, why fuzzy matching is hard, whether an approach is sensible, what you would sanity check first. That is judgement, not tool trivia, and you should offer it.",
-    "- When you shift from what the tool does to what you reckon, make that audible. Something like 'the tool does X, though if it were me I would...'.",
-    "- If you are unsure, say so once, plainly, and carry on being useful."
+    "Rules:",
+    "1. Start with <think>, work out the answer in a few scrappy lines, then </think>, then your reply.",
+    "2. Your reply must make sense on its own. Never refer back to your thinking.",
+    "3. Only describe buttons, settings and behaviour that appear in the notes below. If it is not in the notes, say you are not sure.",
+    "4. If the job belongs to a different tool in the list, name that tool and say so.",
+    "5. General data advice is yours to give freely. Flag it as your opinion.",
+    "6. Answer only what was asked. Do not add unrelated tips.",
+    "",
+    `If they ask what you do, say you explain how ${title} works and help them pick the right tool, and that you cannot see their file unless they let you.`,
+    `If they ask what this tool does, answer from the tool summary in the notes below and give one or two examples of what to ask.`
   ].join("\n");
 }
 
@@ -543,6 +633,13 @@ function vanessaBuildMessages(question) {
   if (entry) {
     const notes = entry.topics.map((t) => `- ${t.text}`).join("\n");
     blocks.push(`Reference notes on ${title} (${entry.summary})\n${notes}`);
+  }
+
+  const catalogue = vanessaToolCatalogue(vanessaTool);
+  if (catalogue) {
+    blocks.push(
+      `The other tools on this hub, in case the job they are describing belongs to one of them. Say so when it does, and name it. Do not pretend they are features of the tool they are currently in:\n${catalogue}`
+    );
   }
 
   const sharedNotes = vanessaRelevantSharedNotes(vanessaConversationText(question), 4);
@@ -571,7 +668,7 @@ function vanessaBuildMessages(question) {
       blocks.push("They have not loaded a file yet, so you cannot say anything about their data.");
     }
   } else {
-    blocks.push("You have not been given access to their file, so you know nothing about their data. If they ask something that needs it, tell them they can widen what you can see with the Change link below the chat.");
+    blocks.push("You cannot see their file, so do not describe their data or guess at their column names.");
   }
 
   return [{ role: "system", content: blocks.join("\n\n") }]
@@ -596,6 +693,8 @@ let vanessaPanelEl = null;
 let vanessaLogEl = null;
 let vanessaInputEl = null;
 let vanessaStatusEl = null;
+let vanessaSendBtn = null;
+let vanessaAbort = null;
 
 function vanessaAppendMessage(role, text) {
   const wrap = vanessaEl("div", `display:flex;justify-content:${role === "user" ? "flex-end" : "flex-start"};margin-bottom:0.6rem;`);
@@ -612,6 +711,50 @@ function vanessaAppendMessage(role, text) {
   vanessaLogEl.appendChild(wrap);
   vanessaLogEl.scrollTop = vanessaLogEl.scrollHeight;
   return bubble;
+}
+
+function vanessaBuildThinkingBlock() {
+  const root = vanessaEl("div", "display:none;width:100%;margin-bottom:0.35rem;");
+
+  const toggle = vanessaEl(
+    "button",
+    `border:none;background:transparent;color:#64748b;font-size:0.6875rem;font-weight:700;cursor:pointer;padding:0;display:flex;align-items:center;gap:0.3rem;font-family:${VANESSA_FONT};`,
+    "Show thinking"
+  );
+  toggle.type = "button";
+
+  const body = vanessaEl(
+    "div",
+    "display:none;margin-top:0.3rem;padding:0.5rem 0.65rem;background:#f8fafc;border:1px dashed #cbd5e1;border-radius:0.5rem;font-size:0.6875rem;line-height:1.5;color:#64748b;white-space:pre-wrap;word-break:break-word;max-height:11rem;overflow-y:auto;"
+  );
+
+  let open = false;
+  toggle.addEventListener("click", () => {
+    open = !open;
+    body.style.display = open ? "block" : "none";
+    toggle.textContent = open ? "Hide thinking" : "Show thinking";
+  });
+
+  root.appendChild(toggle);
+  root.appendChild(body);
+
+  return {
+    root: root,
+    show: (text) => {
+      root.style.display = "block";
+      body.textContent = text;
+    },
+    append: (text) => {
+      root.style.display = "block";
+      body.textContent = body.textContent + text;
+    }
+  };
+}
+
+function vanessaSetBusyUI(busy) {
+  if (!vanessaSendBtn) return;
+  vanessaSendBtn.textContent = busy ? "Stop" : "Ask";
+  vanessaSendBtn.setAttribute("style", vanessaButtonStyle(!busy) + (busy ? "background:#b91c1c;border-color:#b91c1c;color:#ffffff;" : ""));
 }
 
 function vanessaSetStatus() {
@@ -811,8 +954,13 @@ function vanessaShowConsent() {
 }
 
 async function vanessaSend() {
+  if (vanessaBusy) {
+    if (vanessaAbort) vanessaAbort.abort();
+    return;
+  }
+
   const question = vanessaInputEl.value.trim();
-  if (question === "" || vanessaBusy) return;
+  if (question === "") return;
 
   vanessaBusy = true;
   vanessaTurnCount++;
@@ -851,34 +999,81 @@ async function vanessaSend() {
     return;
   }
 
-  const bubble = vanessaAppendMessage("assistant", "");
-  const thinking = vanessaEl("span", "color:#94a3b8;font-style:italic;", "typing...");
-  bubble.appendChild(thinking);
+  const wrap = vanessaEl("div", "display:flex;flex-direction:column;align-items:flex-start;margin-bottom:0.6rem;");
+  const think = vanessaBuildThinkingBlock();
+  const bubble = vanessaEl(
+    "div",
+    "max-width:100%;border-radius:0.75rem;padding:0.55rem 0.75rem;font-size:0.8125rem;line-height:1.5;white-space:pre-wrap;word-break:break-word;background:#f1f5f9;color:#00133C;border:1px solid #e2e8f0;",
+    "typing..."
+  );
+  bubble.style.color = "#94a3b8";
+  bubble.style.fontStyle = "italic";
 
-  let streamed = "";
-  let firstDelta = true;
+  wrap.appendChild(think.root);
+  wrap.appendChild(bubble);
+  vanessaLogEl.appendChild(wrap);
+  vanessaLogEl.scrollTop = vanessaLogEl.scrollHeight;
+
+  vanessaAbort = new AbortController();
+  vanessaSetBusyUI(true);
+
+  let raw = "";
+  let shownAnswer = false;
+
+  const render = () => {
+    const split = vanessaBackend.nativeThinking ? { thinking: "", answer: raw } : vanessaSplitThinking(raw);
+    if (split.thinking.trim() !== "") think.show(split.thinking.trim());
+    if (split.answer.trim() !== "") {
+      if (!shownAnswer) {
+        bubble.style.color = "#00133C";
+        bubble.style.fontStyle = "normal";
+        shownAnswer = true;
+      }
+      bubble.textContent = split.answer.trim();
+    }
+    vanessaLogEl.scrollTop = vanessaLogEl.scrollHeight;
+  };
 
   try {
     const messages = vanessaBuildMessages(question);
     vanessaHistory.push({ role: "user", content: question });
-    await vanessaBackendAsk(messages, (delta) => {
-      if (firstDelta) {
-        bubble.textContent = "";
-        firstDelta = false;
-      }
-      streamed += delta;
-      bubble.textContent = streamed;
-      vanessaLogEl.scrollTop = vanessaLogEl.scrollHeight;
-    });
-    if (streamed.trim() === "") {
-      bubble.textContent = vanessaOfflineAnswer(vanessaTool, question);
+
+    await vanessaBackendAsk(
+      messages,
+      (delta) => {
+        raw += delta;
+        render();
+      },
+      (thinkDelta) => think.append(thinkDelta),
+      vanessaAbort.signal
+    );
+
+    const final = vanessaBackend.nativeThinking ? raw.trim() : vanessaSplitThinking(raw).answer.trim();
+
+    if (final === "") {
+      const fallback = raw.replace(/<\/?think>/g, "").trim();
+      const answer = fallback === "" ? vanessaOfflineAnswer(vanessaTool, question) : fallback;
+      bubble.style.color = "#00133C";
+      bubble.style.fontStyle = "normal";
+      bubble.textContent = answer;
+      vanessaHistory.push({ role: "assistant", content: answer });
     } else {
-      vanessaHistory.push({ role: "assistant", content: streamed.trim() });
+      vanessaHistory.push({ role: "assistant", content: final });
     }
   } catch (e) {
-    bubble.textContent = vanessaOfflineAnswer(vanessaTool, question);
+    const stopped = e && e.name === "AbortError";
+    const partial = vanessaSplitThinking(raw).answer.trim();
+    bubble.style.color = "#00133C";
+    bubble.style.fontStyle = "normal";
+    if (stopped) {
+      bubble.textContent = partial === "" ? "Stopped there." : partial + "\n\n(stopped)";
+    } else {
+      bubble.textContent = vanessaOfflineAnswer(vanessaTool, question);
+    }
   }
 
+  vanessaAbort = null;
+  vanessaSetBusyUI(false);
   vanessaBusy = false;
   vanessaInputEl.focus();
 }
@@ -925,12 +1120,12 @@ function vanessaBuildPanel() {
     }
   });
 
-  const sendBtn = vanessaEl("button", vanessaButtonStyle(true), "Ask");
-  sendBtn.type = "button";
-  sendBtn.addEventListener("click", vanessaSend);
+  vanessaSendBtn = vanessaEl("button", vanessaButtonStyle(true), "Ask");
+  vanessaSendBtn.type = "button";
+  vanessaSendBtn.addEventListener("click", vanessaSend);
 
   inputRow.appendChild(vanessaInputEl);
-  inputRow.appendChild(sendBtn);
+  inputRow.appendChild(vanessaSendBtn);
 
   panel.appendChild(header);
   panel.appendChild(vanessaLogEl);
