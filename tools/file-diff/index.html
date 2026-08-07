@@ -272,5 +272,14 @@
             downloadCSV('diff_changed.csv', cols, rows);
         }
     </script>
+    <script src="../shared/profile.js"></script>
+    <script src="../shared/vanessa-knowledge.js"></script>
+    <script src="../shared/vanessa.js"></script>
+    <script>
+        vanessaInit({
+            tool: 'file-diff',
+            getDataset: () => dataA
+        });
+    </script>
 </body>
 </html>

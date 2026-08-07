@@ -303,5 +303,14 @@
             else downloadExcel('cleaned_data.xlsx', cleanedData.columns, cleanedData.rows);
         }
     </script>
+    <script src="../shared/profile.js"></script>
+    <script src="../shared/vanessa-knowledge.js"></script>
+    <script src="../shared/vanessa.js"></script>
+    <script>
+        vanessaInit({
+            tool: 'data-cleaner',
+            getDataset: () => fileData
+        });
+    </script>
 </body>
 </html>

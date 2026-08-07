@@ -1435,7 +1435,15 @@
                     `<script>${sources[1]}<\/script>`,
                     `<script>${sources[2]}<\/script>`,
                     `<script>${standaloneBoot(built, baked, live)}<\/script>`,
-                    '</body></html>'
+                    '    <script src="../shared/vanessa-knowledge.js"></script>
+    <script src="../shared/vanessa.js"></script>
+    <script>
+        vanessaInit({
+            tool: 'dashboard-builder',
+            getDataset: () => dataset
+        });
+    </script>
+</body></html>'
                 ].filter(Boolean).join('\n');
 
                 downloadFile(`${slugify(built.title)}.html`, html, 'text/html;charset=utf-8;');

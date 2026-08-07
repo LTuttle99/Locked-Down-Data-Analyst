@@ -306,5 +306,14 @@
             showToast(`Removed ${drop.size.toLocaleString()} rows, kept ${kept.length.toLocaleString()}.`, false);
         }
     </script>
+    <script src="../shared/profile.js"></script>
+    <script src="../shared/vanessa-knowledge.js"></script>
+    <script src="../shared/vanessa.js"></script>
+    <script>
+        vanessaInit({
+            tool: 'fuzzy-dupes',
+            getDataset: () => fileData
+        });
+    </script>
 </body>
 </html>

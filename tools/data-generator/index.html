@@ -281,5 +281,14 @@
 
         loadPreset('orders');
     </script>
+    <script src="../shared/profile.js"></script>
+    <script src="../shared/vanessa-knowledge.js"></script>
+    <script src="../shared/vanessa.js"></script>
+    <script>
+        vanessaInit({
+            tool: 'data-generator',
+            getDataset: () => generated
+        });
+    </script>
 </body>
 </html>

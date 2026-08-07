@@ -97,5 +97,14 @@
             else downloadJSON(`${baseName}.json`, fileData.rows);
         }
     </script>
+    <script src="../shared/profile.js"></script>
+    <script src="../shared/vanessa-knowledge.js"></script>
+    <script src="../shared/vanessa.js"></script>
+    <script>
+        vanessaInit({
+            tool: 'converter',
+            getDataset: () => fileData
+        });
+    </script>
 </body>
 </html>

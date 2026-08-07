@@ -124,8 +124,10 @@ library's output through `tools/shared/sanitize.js` before rendering.
   [TLDR Data](https://tldr.tech). It's a plain link, not a live feed:
   newsletter platforms don't allow fetching their RSS/Atom feeds from browser
   JavaScript (no CORS support), and routing around that with a third-party
-  proxy would mean this hub — which otherwise makes zero external network
-  calls — pings a proxy server on every page load. Update the headline/blurb
+  proxy would mean this hub pings a proxy server on every page load. (The only
+  outbound calls the hub makes today are the CDN loads for Tailwind, Chart.js,
+  SheetJS and friends, plus a Google Sheets fetch when you paste a sheet link.
+  None of them carry your data.) Update the headline/blurb
   and `href` directly in the root `index.html` whenever you want to change
   what it points to.
 - **Access code gate** — every visit (and every refresh) opens on a
@@ -160,6 +162,95 @@ library's output through `tools/shared/sanitize.js` before rendering.
   gate entirely, since there's no backend to actually check credentials
   against. Real per-person restriction would need a server with
   authentication, which is a different architecture than this static site.
+
+## Vanessa (`tools/shared/vanessa.js`)
+
+Vanessa is an assistant on every tool and on the hub landing page. She is one shared
+component, the same way `sanitize.js` and `parse.js` are: `tools/shared/vanessa.js`
+holds the engine and UI, and `tools/shared/vanessa-knowledge.js` holds a curated help
+note set per tool. Each tool adds two script tags and one
+`vanessaInit({ tool, getDataset })` call, which is the only per-tool code.
+
+On the hub she has no data to see, so she stays at the lowest level and does one
+thing well: you describe what you are trying to do and she names the tool for it.
+Her `vanessaInit` there is called from inside the access gate's success path rather
+than on load, so she never appears over the keypad and a wrong code does not summon
+her. Data Analyzer carries its own inlined copy under
+`tools/data-analyzer/js/` so it stays fully self-contained, the same reason it
+duplicates the parsing and SQL logic. Dashboard Builder's `view.html` deliberately
+does **not** include her, so a downloaded dashboard never carries her.
+
+### She answers with no model at all
+
+By default Vanessa needs nothing installed and makes no network request. She matches
+your question against the curated note set for the tool you are on, plus a set of
+notes shared across every tool, and answers with that text verbatim. It is a help
+system rather than a conversation: it will explain what a control does and why a
+file parsed the way it did, and it will say it does not know rather than guess.
+
+### With a local model, she gets conversational
+
+If [Ollama](https://ollama.com) is running on the same computer, Vanessa detects it
+and upgrades. The retrieved notes are still what grounds the answer; the model's job
+is to phrase them against your question rather than to recall anything. This is
+deliberate, and it is what stops a small model inventing controls that do not exist.
+
+**Nothing goes over the internet at any level.** The model runs on your machine, so
+"your data never leaves your computer" stays true whatever you allow her to see.
+
+Setup, per machine:
+
+```bash
+brew install ollama
+ollama pull llama3.2
+OLLAMA_ORIGINS='https://your-site.azurestaticapps.net' ollama serve
+```
+
+`OLLAMA_ORIGINS` is the only non-obvious step. Ollama allows `localhost` origins out
+of the box, so it works during local development with no configuration, but it
+returns `403` to the deployed site until that origin is allowed. Nobody has to do any
+of this: without Ollama, Vanessa silently stays in her built-in help mode.
+
+### What she can see, and when
+
+Consent is asked separately at each level, starts at the lowest, applies to the
+current tab only, and is never written to storage, so it is gone on refresh and never
+carried between visits. Every level has a **Show what would be sent** button that
+prints the literal payload before you agree to anything.
+
+| Level | What is transmitted to the local model |
+|---|---|
+| Built-in help only | Nothing. No request is made at all. |
+| My questions | Your typed question and the tool's name. No part of your file. |
+| Column names and types | Also column names, inferred types, distinct and blank counts, row and column counts. No cell values. |
+| Summary statistics | Also min, max, mean and median per numeric column, plus the actual value labels for `category` and `boolean` columns with 25 or fewer distinct values. Identifier and free-text columns contribute a count and nothing else. |
+| Sample rows | Also up to five real rows, with cells over 80 characters truncated. |
+
+The label ceiling is the part worth understanding. "Distinct value counts" naively
+implemented means sending every distinct customer name you have, just deduplicated,
+which is raw data wearing an aggregate label. So labels are sent only where the
+column is low cardinality enough to be a genuine category. `VANESSA_LABEL_MAX`
+controls the ceiling and `VANESSA_SAMPLE_ROWS` the sample size.
+
+One request is made regardless of level: a single `GET` to `127.0.0.1:11434/api/tags`
+on page load, to find out whether a model exists. It carries no data, and if it fails
+for any reason Vanessa stays in help-only mode without showing an error.
+
+### Things to know
+
+- **Answer quality tracks model size.** A 3B model grounded on the notes is reliable
+  for how-does-this-work questions and weak at reasoning about your specific numbers.
+  A larger model is a straight upgrade if the machine has the memory for it.
+- **Browser support.** Verified working in Chromium: an `https` page is allowed to
+  call `http://localhost` because browsers treat localhost as a trustworthy origin.
+  Safari is stricter about this and is expected to fail, which is why detection is a
+  silent probe rather than an error path.
+- **She cannot act.** Vanessa has no tools and cannot change tool state. Her output
+  is written with `textContent`, never `innerHTML`, so a cell value that contains
+  markup or instructions renders as literal text.
+- **The seam.** `vanessaBackendAsk` is the only function that talks to a model.
+  Swapping in a hosted provider later means changing that one function, though doing
+  so would move data off the machine and this section would need rewriting.
 
 ## Dashboard Builder (`tools/dashboard-builder/`)
 
@@ -361,9 +452,11 @@ A fully static, backend-free version of the original FastAPI Data Analyzer.
 Every bit of analysis that used to run in `app.py`/`analyzer.py` on a server
 now runs client-side in the browser (`tools/data-analyzer/js/*.js`).
 
-Nothing is uploaded anywhere. Files you pick are parsed and analyzed entirely
-in your own browser tab; there's no server to send data to — which is also
-what keeps this safe to share as a team hub with no login and no backend.
+Files you pick are parsed and analyzed entirely in your own browser tab and are
+never uploaded. There is no server to send them to, which is what keeps this safe
+to share as a team hub with no login and no backend. The one component that can be
+given access to your data is Vanessa, and she only ever talks to a model running on
+the same computer. See "Vanessa" below for exactly what she can see and when.
 
 ## Testing
 
@@ -379,7 +472,7 @@ profiling behind Instant Dashboard, and Dashboard Builder (spec round trips,
 clamping of untrusted specs, every aggregation and filter operator, slicer
 stacking, time grain grouping, and what each bake mode embeds). It loads the
 exact files the tools load, so a failure here means a failure in every tool
-that depends on that module (108 assertions).
+that depends on that module (183 assertions).
 
 `tests/data-analyzer.test.html` is a small, self-contained in-browser test
 suite for the Data Analyzer's engine — regression math, seasonal forecasting,

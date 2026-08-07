@@ -275,5 +275,14 @@
             downloadCSV('pivot_export.csv', cols, rows);
         }
     </script>
+    <script src="../shared/profile.js"></script>
+    <script src="../shared/vanessa-knowledge.js"></script>
+    <script src="../shared/vanessa.js"></script>
+    <script>
+        vanessaInit({
+            tool: 'pivot-explorer',
+            getDataset: () => fileData
+        });
+    </script>
 </body>
 </html>

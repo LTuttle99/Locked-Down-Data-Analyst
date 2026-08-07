@@ -302,5 +302,14 @@
         document.getElementById('sort-desc').addEventListener('change', render);
         document.getElementById('chart-title').addEventListener('input', render);
     </script>
+    <script src="../shared/profile.js"></script>
+    <script src="../shared/vanessa-knowledge.js"></script>
+    <script src="../shared/vanessa.js"></script>
+    <script>
+        vanessaInit({
+            tool: 'chart-builder',
+            getDataset: () => fileData
+        });
+    </script>
 </body>
 </html>

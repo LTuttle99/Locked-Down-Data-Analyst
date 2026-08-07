@@ -39,6 +39,8 @@
     <script src="../tools/shared/dashboard-data.js"></script>
     <script src="../tools/shared/sheet-connect.js"></script>
     <script src="../tools/shared/dashboard-parse.js"></script>
+    <script src="../tools/shared/vanessa-knowledge.js"></script>
+    <script src="../tools/shared/vanessa.js"></script>
 
     <script>
         const results = [];
@@ -1616,6 +1618,148 @@
             assertEqual(spec.visuals.length, 3);
             assertTrue(spec.visuals.every(v => v.title !== ''), 'every visual got named');
             assertDeep(dashboardDecodeSpec(dashboardEncodeSpec(spec)), spec);
+        });
+
+        const vanessaColumns = ['customer_id', 'region', 'revenue', 'notes'];
+        const vanessaRows = [];
+        for (let i = 1; i <= 40; i++) {
+            vanessaRows.push({
+                customer_id: `CUST-${i}`,
+                region: i % 2 ? 'North' : 'South',
+                revenue: i * 10,
+                notes: `note ${i}`
+            });
+        }
+        const vanessaData = { columns: vanessaColumns, rows: vanessaRows };
+        const vanessaColumn = (payload, name) => payload.columns.find(c => c.name === name);
+
+        test('vanessa level order runs from offline up to sample', () => {
+            assertEqual(vanessaLevelIndex('offline'), 0);
+            assertTrue(vanessaLevelIndex('ask') < vanessaLevelIndex('structure'), 'ask is below structure');
+            assertTrue(vanessaLevelIndex('structure') < vanessaLevelIndex('aggregate'), 'structure is below aggregate');
+            assertTrue(vanessaLevelIndex('aggregate') < vanessaLevelIndex('sample'), 'aggregate is below sample');
+            assertEqual(vanessaLevelIndex('nonsense'), 0, 'an unknown level must fall back to the safest one');
+        });
+
+        test('vanessa sends no part of the file below the structure level', () => {
+            for (const level of ['offline', 'ask']) {
+                const payload = vanessaBuildPayload(level, vanessaData, 'what does this do');
+                assertEqual(payload.columns, undefined, `${level} must not carry columns`);
+                assertEqual(payload.rowCount, undefined, `${level} must not carry a row count`);
+                assertEqual(payload.sampleRows, undefined, `${level} must not carry rows`);
+                assertEqual(payload.question, 'what does this do');
+            }
+        });
+
+        test('vanessa structure level carries names and types but never a cell value', () => {
+            const payload = vanessaBuildPayload('structure', vanessaData, 'q');
+            assertEqual(payload.rowCount, 40);
+            assertEqual(payload.columnCount, 4);
+            assertEqual(payload.columns.length, 4);
+            assertEqual(payload.sampleRows, undefined, 'structure must not carry rows');
+
+            assertTrue(payload.columns.every(c => c.values === undefined), 'no value labels at structure level');
+            assertTrue(payload.columns.every(c => c.min === undefined), 'no statistics at structure level');
+
+            const serialized = JSON.stringify(payload);
+            assertTrue(!serialized.includes('CUST-1'), 'an identifier value must not leak');
+            assertTrue(!serialized.includes('note 1'), 'a text value must not leak');
+            assertTrue(!serialized.includes('North'), 'a category value must not leak');
+        });
+
+        test('vanessa aggregate level adds statistics and low cardinality labels only', () => {
+            const payload = vanessaBuildPayload('aggregate', vanessaData, 'q');
+
+            const revenue = vanessaColumn(payload, 'revenue');
+            assertEqual(revenue.min, 10);
+            assertEqual(revenue.max, 400);
+            assertEqual(revenue.mean, 205);
+            assertEqual(revenue.median, 205);
+
+            const region = vanessaColumn(payload, 'region');
+            assertTrue(Array.isArray(region.values), 'a two value category gets its labels');
+            assertEqual(region.values.length, 2);
+            assertEqual(region.values[0].count, 20);
+
+            assertEqual(vanessaColumn(payload, 'customer_id').values, undefined, 'identifier columns never send labels');
+            assertEqual(vanessaColumn(payload, 'notes').values, undefined, '40 distinct values is over the label ceiling');
+            assertEqual(payload.sampleRows, undefined, 'aggregate must not carry rows');
+
+            const serialized = JSON.stringify(payload);
+            assertTrue(serialized.includes('North'), 'the low cardinality label is the point of this level');
+            assertTrue(!serialized.includes('CUST-1'), 'an identifier value must not leak at aggregate level');
+            assertTrue(!serialized.includes('note 1'), 'a high cardinality text value must not leak at aggregate level');
+        });
+
+        test('vanessa sample level carries real rows and caps how many', () => {
+            const payload = vanessaBuildPayload('sample', vanessaData, 'q');
+            assertEqual(payload.sampleRows.length, 5, 'sample rows are capped');
+            assertEqual(payload.sampleRows[0].customer_id, 'CUST-1');
+            assertEqual(payload.sampleRows[0].region, 'North');
+            assertTrue(payload.sampleRows.length < vanessaRows.length, 'never the whole file');
+        });
+
+        test('vanessa truncates a long cell rather than sending all of it', () => {
+            const long = 'x'.repeat(500);
+            const payload = vanessaBuildPayload('sample', { columns: ['a'], rows: [{ a: long }] }, 'q');
+            assertTrue(payload.sampleRows[0].a.length < 100, 'a long cell is trimmed');
+            assertTrue(payload.sampleRows[0].a.endsWith('...'), 'trimming is visible');
+        });
+
+        test('vanessa builds a payload with no data loaded without throwing', () => {
+            const payload = vanessaBuildPayload('sample', null, 'q');
+            assertEqual(payload.question, 'q');
+            assertEqual(payload.columns, undefined);
+            assertEqual(payload.sampleRows, undefined);
+        });
+
+        test('vanessa tokenizer drops punctuation and single characters', () => {
+            assertDeep(vanessaTokenize('Why is my THRESHOLD too low?'), ['why', 'is', 'my', 'threshold', 'too', 'low']);
+            assertDeep(vanessaTokenize('a, b, cc'), ['cc']);
+            assertDeep(vanessaTokenize(null), []);
+        });
+
+        test('vanessa finds the right help topic for a tool question', () => {
+            const found = vanessaFindTopics('fuzzy-dupes', 'too many false matches, how do I change the threshold', 3);
+            assertTrue(found.length > 0, 'a matching topic is found');
+            assertTrue(found.join(' ').toLowerCase().includes('threshold'), 'the threshold note is retrieved');
+        });
+
+        test('vanessa falls back to shared topics for a general question', () => {
+            const found = vanessaFindTopics('unit-converter', 'is my data private, does anything get uploaded', 3);
+            assertTrue(found.length > 0, 'shared privacy topic is reachable from any tool');
+            assertTrue(found.join(' ').toLowerCase().includes('browser'), 'the privacy note is retrieved');
+        });
+
+        test('a tool specific note outranks a shared note that shares a common word', () => {
+            const found = vanessaFindTopics('fuzzy-dupes', 'which column should I run the duplicate check on', 2);
+            assertTrue(found.length > 0, 'something is retrieved');
+            assertTrue(found[0].toLowerCase().includes('vendor') || found[0].toLowerCase().includes('identifier'), 'the tool note about choosing a column wins over the shared note about duplicate headers');
+        });
+
+        test('an unmatched tool topic is never returned just for being tool specific', () => {
+            const found = vanessaFindTopics('fuzzy-dupes', 'zzzz qqqq wwww', 3);
+            assertEqual(found.length, 0, 'no topic matches nonsense');
+        });
+
+        test('vanessa says it does not know rather than inventing an answer', () => {
+            const answer = vanessaOfflineAnswer('unit-converter', 'what is the airspeed velocity of an unladen swallow');
+            assertTrue(answer.toLowerCase().includes('do not have a note'), 'admits the gap');
+        });
+
+        test('every tool card id in the knowledge base has a title and topics', () => {
+            const ids = Object.keys(VANESSA_KNOWLEDGE);
+            assertTrue(ids.length >= 20, 'the knowledge base covers the tool set');
+            for (const id of ids) {
+                const entry = VANESSA_KNOWLEDGE[id];
+                assertTrue(typeof entry.title === 'string' && entry.title !== '', `${id} has a title`);
+                assertTrue(typeof entry.summary === 'string' && entry.summary !== '', `${id} has a summary`);
+                assertTrue(Array.isArray(entry.topics) && entry.topics.length > 0, `${id} has topics`);
+                for (const topic of entry.topics) {
+                    assertTrue(Array.isArray(topic.keywords) && topic.keywords.length > 0, `${id} topic has keywords`);
+                    assertTrue(typeof topic.text === 'string' && topic.text !== '', `${id} topic has text`);
+                }
+            }
         });
 
         const passed = results.filter(r => r.pass).length;

@@ -109,9 +109,10 @@
                 Welcome to the Data and <span class="text-[#DC6803]">Analytics</span> Hub
             </h2>
             <p class="text-base text-slate-600 leading-relaxed">
-                Please select a tool to get started. Everything here runs entirely in your browser —
-                nothing you upload is sent to a server, so every tool is free to use, has no login,
-                and your files never leave your machine.
+                Please select a tool to get started. Everything here runs entirely in your browser, so
+                every tool is free to use and has no login, and the files you load never leave your
+                computer. Vanessa, the assistant built into each tool, is the only part that can be
+                given access to your data, she asks first, and she never sends anything over the internet.
             </p>
         </section>
 
@@ -516,7 +517,7 @@
     </main>
 
     <footer id="hub-footer" inert class="max-w-6xl mx-auto px-8 py-8 text-xs text-slate-500 border-t border-slate-200 mt-4 space-y-1">
-        <p>Hosted as a static site — no backend, no accounts, no cost. Your data stays in your own browser tab.</p>
+        <p>Hosted as a static site with no backend, no accounts and no cost. Your data stays on your own computer.</p>
         <p>Have a suggestion, or spot something that needs fixing? Email <a href="mailto:logannt04@gmail.com" class="text-[#0062F1] hover:text-[#00133C] font-medium">Logann</a>.</p>
     </footer>
 
@@ -715,6 +716,7 @@
                         document.getElementById('hub-main').removeAttribute('inert');
                         document.getElementById('hub-footer').removeAttribute('inert');
                         searchInput.focus();
+                        vanessaInit({ tool: 'hub' });
                     }, 200);
                 }, 1300);
                 return;
@@ -927,6 +929,9 @@
         gateEl.style.transition = 'opacity 0.2s ease-out';
         document.querySelector('.pin-key').focus();
     </script>
+
+    <script src="tools/shared/vanessa-knowledge.js"></script>
+    <script src="tools/shared/vanessa.js"></script>
 
 </body>
 </html>

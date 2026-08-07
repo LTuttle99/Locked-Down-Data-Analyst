@@ -3458,5 +3458,16 @@
         applyPanelLayout();
         renderCustomizeList();
     </script>
+    <script src="js/vanessa-knowledge.js"></script>
+    <script src="js/vanessa.js"></script>
+    <script>
+        vanessaInit({
+            tool: 'data-analyzer',
+            getDataset: () => {
+                const analyzer = ACTIVE_FILE_ID ? FILES.get(ACTIVE_FILE_ID) : null;
+                return analyzer ? { columns: analyzer.columns, rows: analyzer.rows } : null;
+            }
+        });
+    </script>
 </body>
 </html>
