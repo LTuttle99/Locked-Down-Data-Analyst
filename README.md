@@ -249,6 +249,32 @@ One request is made regardless of level: a single `GET` to `127.0.0.1:11434/api/
 on page load, to find out whether a model exists. It carries no data, and if it fails
 for any reason Vanessa stays in help-only mode without showing an error.
 
+### Remembering between visits
+
+Everything above dies with the tab. There is one deliberate exception, off by default:
+turn on **Remembering between visits** under Change and anything you explicitly ask her
+to keep is written to `localStorage` under `vanessa_memory`, scoped per tool.
+
+The capture is deliberate rather than clever. She stores a line only when you open with
+an explicit instruction: "remember that...", "note that...", "from now on...", "keep in
+mind...". A normal question is never stored, and neither is anything she or the model
+produced. There is no model-driven extraction deciding what is worth keeping, which
+means the rule is one you can read, predict and test rather than trust.
+
+- **The consent level is never stored.** She always restarts at the bottom and asks
+  again, every visit. That was the point of the tiers and memory does not get to
+  undo it. There is a test asserting no level name ever appears in storage.
+- Everything held is listed in the Change panel with a Forget button each and a
+  Forget everything button, so it is inspectable rather than accumulating invisibly.
+- Capped at 20 entries per tool and 240 characters each, deduplicated case
+  insensitively, and a corrupt or hand-edited store degrades to empty instead of
+  throwing.
+
+Worth saying plainly: this is the one place where something you told Vanessa outlives
+the tab, on a site whose whole pitch is that nothing does. It is opt-in, per tool, and
+visible, but if you would not write it on a sticky note on the monitor, do not ask her
+to remember it. Anyone with access to the browser profile can read `localStorage`.
+
 ### Things to know
 
 - **Answer quality tracks model size.** A 3B model grounded on the notes is reliable

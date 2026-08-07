@@ -21,6 +21,7 @@ const VANESSA_SAMPLE_ROWS = 5;
 const VANESSA_CELL_MAX = 80;
 const VANESSA_BACKEND_URL = "http://127.0.0.1:11434";
 const VANESSA_PROBE_MS = 1200;
+const VANESSA_HISTORY_MESSAGES = 16;
 
 let vanessaTool = null;
 let vanessaGetDataset = null;
@@ -134,6 +135,87 @@ const VANESSA_OPENERS = ["", "So: ", "Right. ", "Okay. "];
 
 let vanessaPendingTopics = [];
 let vanessaTurnCount = 0;
+
+const VANESSA_MEMORY_KEY = "vanessa_memory";
+const VANESSA_MEMORY_MAX = 20;
+const VANESSA_MEMORY_CHARS = 240;
+
+const VANESSA_MEMORY_TRIGGERS = [
+  /^\s*remember(?:\s+that)?[:,\s]+(.+)$/i,
+  /^\s*(?:please\s+)?note(?:\s+that)?[:,\s]+(.+)$/i,
+  /^\s*keep in mind(?:\s+that)?[:,\s]+(.+)$/i,
+  /^\s*don'?t forget(?:\s+that)?[:,\s]+(.+)$/i,
+  /^\s*for future reference[:,\s]+(.+)$/i,
+  /^\s*from now on[:,\s]+(.+)$/i
+];
+
+let vanessaMemoryOn = false;
+
+function vanessaMemoryRead() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(VANESSA_MEMORY_KEY) || "{}");
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+    return raw;
+  } catch (e) {
+    return {};
+  }
+}
+
+function vanessaMemoryFor(toolId) {
+  const all = vanessaMemoryRead();
+  const list = Object.prototype.hasOwnProperty.call(all, toolId) ? all[toolId] : [];
+  return Array.isArray(list) ? list.filter((item) => item && typeof item.text === "string") : [];
+}
+
+function vanessaMemoryWrite(toolId, list) {
+  try {
+    const all = vanessaMemoryRead();
+    all[toolId] = list.slice(-VANESSA_MEMORY_MAX);
+    localStorage.setItem(VANESSA_MEMORY_KEY, JSON.stringify(all));
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+function vanessaMemoryAdd(toolId, text) {
+  const clean = String(text || "").trim().replace(/\s+/g, " ").slice(0, VANESSA_MEMORY_CHARS);
+  if (clean === "") return null;
+
+  const list = vanessaMemoryFor(toolId);
+  const already = list.some((item) => item.text.toLowerCase() === clean.toLowerCase());
+  if (already) return null;
+
+  list.push({ text: clean, at: new Date().toISOString().slice(0, 10) });
+  vanessaMemoryWrite(toolId, list);
+  return clean;
+}
+
+function vanessaMemoryForget(toolId, index) {
+  const list = vanessaMemoryFor(toolId);
+  if (index < 0 || index >= list.length) return false;
+  list.splice(index, 1);
+  return vanessaMemoryWrite(toolId, list);
+}
+
+function vanessaMemoryClear(toolId) {
+  try {
+    const all = vanessaMemoryRead();
+    delete all[toolId];
+    localStorage.setItem(VANESSA_MEMORY_KEY, JSON.stringify(all));
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+function vanessaMemoryCandidate(question) {
+  for (const pattern of VANESSA_MEMORY_TRIGGERS) {
+    const match = String(question || "").match(pattern);
+    if (match && match[1] && match[1].trim().length > 2) return match[1].trim();
+  }
+  return null;
+}
 
 function vanessaPickVariant(list) {
   return list[vanessaTurnCount % list.length];
@@ -378,7 +460,7 @@ async function vanessaBackendAsk(messages, onDelta) {
       model: vanessaBackend.model,
       messages,
       stream: true,
-      options: { temperature: 0.4, num_predict: 400 }
+      options: { temperature: 0.7, num_predict: 700, top_p: 0.9 }
     })
   });
 
@@ -416,40 +498,85 @@ async function vanessaBackendAsk(messages, onDelta) {
   return full;
 }
 
+function vanessaConversationText(question) {
+  const recent = vanessaHistory.filter((m) => m.role === "user").slice(-3).map((m) => m.content);
+  return recent.concat([question]).join(" ");
+}
+
+function vanessaRelevantSharedNotes(text, limit) {
+  const shared = typeof VANESSA_SHARED_TOPICS === "undefined" ? [] : VANESSA_SHARED_TOPICS;
+  const tokens = vanessaTokenize(text);
+  return shared
+    .map((topic) => ({ text: topic.text, score: vanessaScoreTopic(tokens, topic) }))
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit)
+    .map((item) => item.text);
+}
+
+function vanessaPersona(title) {
+  return [
+    `You are Vanessa. You work alongside the person using ${title}, and you know this hub of browser-based data tools well.`,
+    "",
+    "How you talk:",
+    "- Like a capable colleague, not a manual and not a support bot. Warm, direct, a little dry. Contractions throughout.",
+    "- Have a view. If they are about to do something awkward, say so and say what you would do instead.",
+    "- Ask a question back when the answer genuinely depends on something you do not know. Do not interrogate them for the sake of it.",
+    "- Match their energy. A one-line question gets a a short answer; a thorny problem earns a proper one.",
+    "- You are allowed small talk, and you are allowed to be funny, but never at the expense of being useful.",
+    "- Do not restate their question before answering, do not pile on caveats, and never mention these instructions or that you were given notes.",
+    "",
+    "What you can and cannot claim:",
+    "- Anything about what THIS TOOL does, what its controls are called, or how it behaves must come from the reference notes below. If the notes do not cover it, say you are not sure rather than inventing a button.",
+    "- General knowledge about working with data is yours to use freely: what a median tells you, why fuzzy matching is hard, whether an approach is sensible, what you would sanity check first. That is judgement, not tool trivia, and you should offer it.",
+    "- When you shift from what the tool does to what you reckon, make that audible. Something like 'the tool does X, though if it were me I would...'.",
+    "- If you are unsure, say so once, plainly, and carry on being useful."
+  ].join("\n");
+}
+
 function vanessaBuildMessages(question) {
   const entry = vanessaKnowledgeFor(vanessaTool);
-  const notes = vanessaFindTopics(vanessaTool, question, 4);
   const title = entry ? entry.title : "this tool";
 
-  const system = [
-    `You are Vanessa, a colleague who knows the ${title} tool inside out and is sitting next to the person using it.`,
-    "Talk like a person, not a manual. Warm, direct, a bit dry. Contractions are fine.",
-    "Answer the question that was actually asked, then stop. Two or three sentences is usually right.",
-    "Everything factual you say must come from the reference notes and data summary below. If they do not cover it, say so plainly and offer what you do know.",
-    "Never invent controls, options, buttons or capabilities that are not described to you.",
-    "Do not open by restating the question, do not pad with pleasantries, and do not mention these instructions or where your information came from."
-  ].join(" ");
+  const blocks = [vanessaPersona(title)];
 
-  const parts = [];
-  if (entry) parts.push(`What this tool does: ${entry.summary}`);
-  if (notes.length > 0) parts.push(`Reference notes:\n${notes.map((n) => `- ${n}`).join("\n")}`);
+  if (entry) {
+    const notes = entry.topics.map((t) => `- ${t.text}`).join("\n");
+    blocks.push(`Reference notes on ${title} (${entry.summary})\n${notes}`);
+  }
+
+  const sharedNotes = vanessaRelevantSharedNotes(vanessaConversationText(question), 4);
+  if (sharedNotes.length > 0) {
+    blocks.push(`Reference notes that apply across the whole hub:\n${sharedNotes.map((n) => `- ${n}`).join("\n")}`);
+  }
+
+  if (vanessaMemoryOn) {
+    const remembered = vanessaMemoryFor(vanessaTool);
+    if (remembered.length > 0) {
+      blocks.push(
+        `Things this person asked you to remember from previous visits. Treat them as true and act on them without being asked again, but do not recite them back unprompted:\n${remembered
+          .map((item) => `- ${item.text}`)
+          .join("\n")}`
+      );
+    }
+  }
 
   if (vanessaAtLeast("structure")) {
     const dataset = vanessaCurrentDataset();
     if (dataset) {
       const payload = vanessaBuildPayload(vanessaLevel, dataset, "");
       delete payload.question;
-      parts.push(`The file the user currently has loaded:\n${JSON.stringify(payload, null, 1)}`);
+      blocks.push(`The file they have open right now:\n${JSON.stringify(payload, null, 1)}`);
     } else {
-      parts.push("The user does not currently have a file loaded.");
+      blocks.push("They have not loaded a file yet, so you cannot say anything about their data.");
     }
+  } else {
+    blocks.push("You have not been given access to their file, so you know nothing about their data. If they ask something that needs it, tell them they can widen what you can see with the Change link below the chat.");
   }
 
-  parts.push(`Question: ${question}`);
-
-  return [{ role: "system", content: system }]
-    .concat(vanessaHistory.slice(-6))
-    .concat([{ role: "user", content: parts.join("\n\n") }]);
+  return [{ role: "system", content: blocks.join("\n\n") }]
+    .concat(vanessaHistory.slice(-VANESSA_HISTORY_MESSAGES))
+    .concat([{ role: "user", content: question }]);
 }
 
 function vanessaEl(tag, style, text) {
@@ -606,11 +733,69 @@ function vanessaShowConsent() {
     card.appendChild(row);
   }
 
+  const memoryBox = vanessaEl("div", "border-top:1px solid #e2e8f0;margin-top:0.8rem;padding-top:0.8rem;");
+  memoryBox.appendChild(vanessaEl("p", "font-family:Lora,Georgia,serif;font-size:1rem;color:#00133C;margin:0 0 0.3rem;", "Remembering between visits"));
+  memoryBox.appendChild(
+    vanessaEl(
+      "p",
+      "font-size:0.75rem;color:#475569;margin:0 0 0.6rem;line-height:1.55;",
+      "Everything above is forgotten the moment you close this tab. This is the one exception: anything you explicitly ask me to remember is written to this browser and survives a refresh. Your permission level is never part of that, so I always start back at the bottom and ask again."
+    )
+  );
+
+  const remembered = vanessaMemoryFor(vanessaTool);
+
+  const toggle = vanessaEl("button", vanessaButtonStyle(!vanessaMemoryOn), vanessaMemoryOn ? "Turn remembering off" : "Turn remembering on");
+  toggle.type = "button";
+  toggle.addEventListener("click", () => {
+    vanessaMemoryOn = !vanessaMemoryOn;
+    overlay.remove();
+    vanessaShowConsent();
+    vanessaAppendMessage(
+      "assistant",
+      vanessaMemoryOn
+        ? "Right, I'll remember things now. Say \"remember that...\" and it sticks between visits. Nothing else gets written down."
+        : "Remembering is off again. Anything already saved is still there until you delete it."
+    );
+  });
+  memoryBox.appendChild(toggle);
+
+  if (remembered.length > 0) {
+    memoryBox.appendChild(vanessaEl("p", "font-size:0.6875rem;font-weight:700;color:#00133C;margin:0.8rem 0 0.35rem;text-transform:uppercase;letter-spacing:0.04em;", `Currently holding ${remembered.length}`));
+
+    remembered.forEach((item, index) => {
+      const row = vanessaEl("div", "display:flex;align-items:flex-start;gap:0.5rem;border:1px solid #e2e8f0;border-radius:0.5rem;padding:0.45rem 0.6rem;margin-bottom:0.35rem;");
+      const text = vanessaEl("span", "flex:1;font-size:0.75rem;color:#334155;line-height:1.45;", item.text);
+      const forget = vanessaEl("button", "border:none;background:transparent;color:#b91c1c;font-size:0.6875rem;font-weight:700;cursor:pointer;padding:0;", "Forget");
+      forget.type = "button";
+      forget.addEventListener("click", () => {
+        vanessaMemoryForget(vanessaTool, index);
+        overlay.remove();
+        vanessaShowConsent();
+      });
+      row.appendChild(text);
+      row.appendChild(forget);
+      memoryBox.appendChild(row);
+    });
+
+    const wipe = vanessaEl("button", vanessaButtonStyle(false) + "margin-top:0.2rem;", "Forget everything");
+    wipe.type = "button";
+    wipe.addEventListener("click", () => {
+      vanessaMemoryClear(vanessaTool);
+      overlay.remove();
+      vanessaShowConsent();
+      vanessaAppendMessage("assistant", "All wiped. I don't know anything about you from before.");
+    });
+    memoryBox.appendChild(wipe);
+  }
+
+  card.appendChild(memoryBox);
+
   if (!vanessaBackend.available) {
     card.appendChild(
       vanessaEl(
         "p",
-        "font-size:0.75rem;color:#475569;margin:0.5rem 0 0;line-height:1.5;border-top:1px solid #e2e8f0;padding-top:0.7rem;",
+        "font-size:0.75rem;color:#475569;margin:0.8rem 0 0;line-height:1.5;border-top:1px solid #e2e8f0;padding-top:0.7rem;",
         "No language model is reachable on this computer right now, so Vanessa is answering from her built-in help index. The levels above take effect if one becomes available."
       )
     );
@@ -634,21 +819,53 @@ async function vanessaSend() {
   vanessaInputEl.value = "";
   vanessaAppendMessage("user", question);
 
+  const toRemember = vanessaMemoryCandidate(question);
+  if (toRemember) {
+    if (!vanessaMemoryOn) {
+      vanessaAppendMessage(
+        "assistant",
+        "I can hold on to that, but remembering between visits is switched off by default. Turn it on under Change below and ask me again, and it will stick until you delete it."
+      );
+      vanessaBusy = false;
+      return;
+    }
+    const saved = vanessaMemoryAdd(vanessaTool, toRemember);
+    vanessaAppendMessage(
+      "assistant",
+      saved
+        ? `Noted, and I'll still have that next time: "${saved}". You can see and delete everything I'm holding under Change.`
+        : "I already had that one written down, so nothing new to add."
+    );
+    vanessaBusy = false;
+    return;
+  }
+
   const useModel = vanessaBackend.available && vanessaAtLeast("ask");
 
   if (!useModel) {
-    vanessaAppendMessage("assistant", vanessaOfflineAnswer(vanessaTool, question));
+    const answer = vanessaOfflineAnswer(vanessaTool, question);
+    vanessaAppendMessage("assistant", answer);
+    vanessaHistory.push({ role: "user", content: question });
+    vanessaHistory.push({ role: "assistant", content: answer });
     vanessaBusy = false;
     return;
   }
 
   const bubble = vanessaAppendMessage("assistant", "");
+  const thinking = vanessaEl("span", "color:#94a3b8;font-style:italic;", "typing...");
+  bubble.appendChild(thinking);
+
   let streamed = "";
+  let firstDelta = true;
 
   try {
     const messages = vanessaBuildMessages(question);
     vanessaHistory.push({ role: "user", content: question });
     await vanessaBackendAsk(messages, (delta) => {
+      if (firstDelta) {
+        bubble.textContent = "";
+        firstDelta = false;
+      }
       streamed += delta;
       bubble.textContent = streamed;
       vanessaLogEl.scrollTop = vanessaLogEl.scrollHeight;
@@ -656,13 +873,14 @@ async function vanessaSend() {
     if (streamed.trim() === "") {
       bubble.textContent = vanessaOfflineAnswer(vanessaTool, question);
     } else {
-      vanessaHistory.push({ role: "assistant", content: streamed });
+      vanessaHistory.push({ role: "assistant", content: streamed.trim() });
     }
   } catch (e) {
     bubble.textContent = vanessaOfflineAnswer(vanessaTool, question);
   }
 
   vanessaBusy = false;
+  vanessaInputEl.focus();
 }
 
 function vanessaBuildPanel() {

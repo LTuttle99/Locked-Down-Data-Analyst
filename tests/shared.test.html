@@ -1779,6 +1779,73 @@
             assertTrue(!answer.toLowerCase().includes('do not have a note'), 'never searches for a topic called "go on"');
         });
 
+        test('vanessa only treats an explicit instruction as something to remember', () => {
+            assertEqual(vanessaMemoryCandidate('remember that I always use 0.85'), 'I always use 0.85');
+            assertEqual(vanessaMemoryCandidate('Remember: our vendor column is called supplier'), 'our vendor column is called supplier');
+            assertEqual(vanessaMemoryCandidate('from now on skip the suffix stripping'), 'skip the suffix stripping');
+            assertEqual(vanessaMemoryCandidate('what does the threshold do'), null, 'an ordinary question is never stored');
+            assertEqual(vanessaMemoryCandidate('I remember when this was broken'), null, 'remember mid-sentence is not an instruction');
+            assertEqual(vanessaMemoryCandidate('remember'), null, 'a bare trigger with no content stores nothing');
+        });
+
+        test('vanessa memory round trips, dedupes and can be forgotten', () => {
+            vanessaMemoryClear('test-tool');
+            assertDeep(vanessaMemoryFor('test-tool'), []);
+
+            assertEqual(vanessaMemoryAdd('test-tool', 'the key column is supplier_id'), 'the key column is supplier_id');
+            assertEqual(vanessaMemoryFor('test-tool').length, 1);
+
+            assertEqual(vanessaMemoryAdd('test-tool', 'The Key Column Is Supplier_id'), null, 'case insensitive duplicate is refused');
+            assertEqual(vanessaMemoryFor('test-tool').length, 1, 'no duplicate stored');
+
+            vanessaMemoryAdd('test-tool', 'we work in GBP');
+            assertEqual(vanessaMemoryFor('test-tool').length, 2);
+
+            vanessaMemoryForget('test-tool', 0);
+            assertEqual(vanessaMemoryFor('test-tool').length, 1);
+            assertEqual(vanessaMemoryFor('test-tool')[0].text, 'we work in GBP');
+
+            vanessaMemoryClear('test-tool');
+            assertDeep(vanessaMemoryFor('test-tool'), []);
+        });
+
+        test('memory is scoped per tool and never bleeds across', () => {
+            vanessaMemoryClear('tool-a');
+            vanessaMemoryClear('tool-b');
+            vanessaMemoryAdd('tool-a', 'only for A');
+            assertEqual(vanessaMemoryFor('tool-a').length, 1);
+            assertEqual(vanessaMemoryFor('tool-b').length, 0, 'tool B cannot see tool A memories');
+            vanessaMemoryClear('tool-a');
+        });
+
+        test('memory is capped and long entries are truncated', () => {
+            vanessaMemoryClear('cap-tool');
+            for (let i = 0; i < 30; i++) vanessaMemoryAdd('cap-tool', 'fact number ' + i);
+            assertTrue(vanessaMemoryFor('cap-tool').length <= 20, 'the store is bounded');
+            vanessaMemoryClear('cap-tool');
+            vanessaMemoryAdd('cap-tool', 'x'.repeat(900));
+            assertTrue(vanessaMemoryFor('cap-tool')[0].text.length <= 240, 'a long entry is trimmed');
+            vanessaMemoryClear('cap-tool');
+        });
+
+        test('the consent level is never written to storage', () => {
+            vanessaMemoryClear('leak-tool');
+            vanessaMemoryAdd('leak-tool', 'a harmless fact');
+            const raw = localStorage.getItem('vanessa_memory');
+            assertTrue(!raw.includes('aggregate'), 'no consent level in storage');
+            assertTrue(!raw.includes('sample'), 'no consent level in storage');
+            assertTrue(!raw.includes('structure'), 'no consent level in storage');
+            vanessaMemoryClear('leak-tool');
+        });
+
+        test('a corrupt memory store degrades to empty instead of throwing', () => {
+            localStorage.setItem('vanessa_memory', 'not json at all');
+            assertDeep(vanessaMemoryFor('anything'), [], 'junk is ignored');
+            localStorage.setItem('vanessa_memory', '["an array not an object"]');
+            assertDeep(vanessaMemoryFor('anything'), [], 'wrong shape is ignored');
+            localStorage.removeItem('vanessa_memory');
+        });
+
         test('vanessa says it does not know rather than inventing an answer', () => {
             const answer = vanessaOfflineAnswer('unit-converter', 'what is the airspeed velocity of an unladen swallow');
             assertTrue(answer.toLowerCase().includes('do not have a note'), 'admits the gap');
