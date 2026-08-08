@@ -180,20 +180,70 @@ her. Data Analyzer carries its own inlined copy under
 duplicates the parsing and SQL logic. Dashboard Builder's `view.html` deliberately
 does **not** include her, so a downloaded dashboard never carries her.
 
+She always opens with the same line: `Hi, I'm Vanessa! How can I help you?`
+
 ### She answers with no model at all
 
 By default Vanessa needs nothing installed and makes no network request. She matches
 your question against the curated note set for the tool you are on, plus a set of
 notes shared across every tool.
 
-Even with no model she holds a thread rather than acting as a search box. She handles
-greetings, thanks and "who are you" without dumping a help page at you; when more than
-one note is genuinely relevant she offers the rest and "tell me more" walks through
-them one at a time; and when she runs out she says so instead of serving something
-only loosely related. Follow-up detection is deliberately limited to short inputs, so
-"hey can you help me pick a threshold" is treated as the real question it is rather
-than as a greeting. What she will not do is guess: if nothing matches, she says she
-has no note on it and tells you what she does cover.
+Even with no model she holds a thread rather than acting as a search box:
+
+- **She understands the words you actually use.** A synonym table folds everyday
+  vocabulary onto the words the notes use, in both directions, so "save the graph as a
+  picture" reaches the Download PNG note and "get rid of dupes" reaches the duplicate
+  note. Matching is still phrase based rather than a bag of words.
+- **She forgives a typo.** If nothing matches on the first pass she runs a second one
+  that allows a single-character edit, so "thresold" still finds the threshold note.
+  The strict pass always wins when it finds something, and the loose pass only applies
+  to words of five characters or more that start with the same letter, so "free" is
+  never quietly turned into "tree".
+- **She follows pronouns.** The last substantive question is kept as the subject of the
+  conversation. Ask what the similarity threshold does, then ask "should I raise it or
+  lower it?", and she resolves "it" against the threshold rather than giving up. This
+  is why "what does it do" is answered about what you were just discussing, while
+  "what does this do" on a fresh conversation still describes the tool.
+- **She means it when she offers more.** When more than one note is relevant she says
+  so, and "yes", "go on" or "tell me more" hands over the next one. Saying "no thanks"
+  drops the queue instead of being answered as small talk. Previously an affirmative
+  was swallowed by the small talk matcher and the offer went nowhere.
+- **She admits repeating herself.** If the best note is the one she just gave, she says
+  so rather than presenting it as new.
+- **She routes across tools.** If the job belongs to a different tool she names it,
+  either because you named it or because the question scores better against that tool's
+  notes, title and summary than against the current one. Routing only fires when the
+  current tool has nothing of its own to say, and when a second tool is nearly as good a
+  fit she names that one too rather than pretending the choice was obvious.
+
+What she will not do is guess. If nothing matches anywhere she says she has no note on
+it and tells you what she does cover, rather than serving something loosely related.
+
+### She can see the page you are looking at
+
+Vanessa reads the live page: its heading, its sections, every visible control with its
+label, kind and current value, the buttons, any error or warning banner, the tables on
+screen, and the KPI figures a dashboard is showing. Ask "what is on this page", "what is
+the similarity threshold set to", "what does the page show as the total revenue", or
+"is there an error", and she answers from what is actually rendered rather than from a
+note about what usually renders.
+
+She excludes her own panel, launcher and dialogs from that reading, so she never
+describes herself back to you as part of the tool.
+
+### She explains what the data is saying
+
+Ask "what does this data say", "what stands out" or "anything wrong with my data" and
+she profiles what is in front of her and reports the findings in plain words: columns
+that are completely empty, columns stuck on one value, columns blank enough to quietly
+drop rows from a join, the range and average of each measure, whether the average sits
+far enough above the midpoint that a few large values are pulling it up, the span of a
+date column, and which category value dominates. She reads the loaded file when a tool
+hands her one, and otherwise reads the largest table on screen.
+
+All of that is computed in the tab with no model involved, which means it works at the
+lowest permission level and the arithmetic is the same arithmetic every time rather than
+something a small model guessed at.
 
 ### With a local model, she gets conversational
 
@@ -202,11 +252,20 @@ and upgrades. The retrieved notes are still what grounds the answer; the model's
 is to phrase them against your question rather than to recall anything. This is
 deliberate, and it is what stops a small model inventing controls that do not exist.
 
-The last three exchanges are sent along with each question, so follow-ups that lean on
-what was just said work: ask what the similarity threshold does, then ask "so should I
-raise it or lower it?", and she knows what "it" refers to without you repeating
-yourself. Only the plain question and answer text is kept, not the grounding payload,
-and it is held in memory for the tab and never written to storage.
+The system message carries the tool's whole note set, a catalogue of the other tools so
+she can route rather than pretend, the three notes that rank closest to what was just
+asked so a small model leads with the right one, whatever she can see of the page at the
+current permission level, and the shared notes that apply.
+
+The last sixteen messages are sent along with each question, so follow-ups that lean on
+what was just said work. Only the plain question and answer text is kept, not the
+grounding payload, and it is held in memory for the tab and never written to storage.
+
+Answers stream, with a **Stop** button that ends the reply where it stands and keeps
+what had arrived. Reasoning models are handled two ways: if Ollama reports a model with
+the `thinking` capability she asks for native thinking, and otherwise she parses
+`<think>` blocks out of the text. Either way the reasoning goes into a collapsed
+**Show thinking** disclosure and never into the answer bubble.
 
 **Nothing goes over the internet at any level.** The model runs on your machine, so
 "your data never leaves your computer" stays true whatever you allow her to see.
@@ -224,20 +283,32 @@ of the box, so it works during local development with no configuration, but it
 returns `403` to the deployed site until that origin is allowed. Nobody has to do any
 of this: without Ollama, Vanessa silently stays in her built-in help mode.
 
-### What she can see, and when
+### What she can send, and when
+
+The levels govern **what is transmitted to a language model**, not what she is allowed
+to look at. Reading the page and working out what your results are saying happens in the
+tab, is shown only to you, and is never transmitted at any level. That distinction is
+stated in as many words at the top of the panel, which is titled "What can Vanessa
+send?" for the same reason.
 
 Consent is asked separately at each level, starts at the lowest, applies to the
 current tab only, and is never written to storage, so it is gone on refresh and never
 carried between visits. Every level has a **Show what would be sent** button that
-prints the literal payload before you agree to anything.
+prints the literal payload, both the file part and the page part, before you agree to
+anything.
 
 | Level | What is transmitted to the local model |
 |---|---|
 | Built-in help only | Nothing. No request is made at all. |
-| My questions | Your typed question and the tool's name. No part of your file. |
-| Column names and types | Also column names, inferred types, distinct and blank counts, row and column counts. No cell values. |
-| Summary statistics | Also min, max, mean and median per numeric column, plus the actual value labels for `category` and `boolean` columns with 25 or fewer distinct values. Identifier and free-text columns contribute a count and nothing else. |
-| Sample rows | Also up to five real rows, with cells over 80 characters truncated. |
+| My questions | Your typed question, the tool's name, and the page's own interface text: headings, button names and control labels. No part of your file. |
+| Column names and types | Also column names, inferred types, distinct and blank counts, row and column counts, what each control on the page is set to, the options in a dropdown, any notice on screen, and the column headers of a table on screen. No cell values. |
+| Summary statistics | Also min, max, mean and median per numeric column, the actual value labels for `category` and `boolean` columns with 25 or fewer distinct values, how many rows a table on screen is showing, and the KPI figures the page is displaying. Identifier and free-text columns contribute a count and nothing else. |
+| Sample rows | Also up to five real rows from the file and up to three rows of a table on screen, with cells over 80 characters truncated. |
+
+Two of those placements are deliberate rather than obvious. A dropdown's options and a
+warning banner both routinely quote your column names, so they wait for the column names
+level rather than riding along with the interface text. A KPI tile is an aggregate of
+your file, so it waits for the summary statistics level.
 
 The label ceiling is the part worth understanding. "Distinct value counts" naively
 implemented means sending every distinct customer name you have, just deduplicated,
@@ -286,7 +357,17 @@ to remember it. Anyone with access to the browser profile can read `localStorage
   silent probe rather than an error path.
 - **She cannot act.** Vanessa has no tools and cannot change tool state. Her output
   is written with `textContent`, never `innerHTML`, so a cell value that contains
-  markup or instructions renders as literal text.
+  markup or instructions renders as literal text. That matters more now that she reads
+  the page: text scraped off the screen is data she describes, never instructions she
+  follows.
+- **Page sight depends on the markup.** She finds controls by their label, `aria-label`,
+  placeholder or name, and treats an element as a warning when its role or class says so.
+  A tool that renders a control with no label of any kind, or a banner with no
+  distinguishing class, is one she will describe less well. She only ever reports what
+  she found rather than filling the gap with a guess.
+- **The offline read-out is arithmetic, not opinion.** "What does this data say" is
+  computed by the same profiling the tools use. It describes shape and quality. It does
+  not tell you what your numbers mean for your business, and it is not trying to.
 - **The seam.** `vanessaBackendAsk` is the only function that talks to a model.
   Swapping in a hosted provider later means changing that one function, though doing
   so would move data off the machine and this section would need rewriting.
@@ -507,11 +588,14 @@ code they cover.
 HTML escaping and sanitizing, header uniquifying, Excel grid reshaping and
 header row detection, SQL table-name sanitizing and type inference, summary
 statistics and percentiles, fuzzy matching, JSON flattening, the column
-profiling behind Instant Dashboard, and Dashboard Builder (spec round trips,
+profiling behind Instant Dashboard, Dashboard Builder (spec round trips,
 clamping of untrusted specs, every aggregation and filter operator, slicer
-stacking, time grain grouping, and what each bake mode embeds). It loads the
-exact files the tools load, so a failure here means a failure in every tool
-that depends on that module (183 assertions).
+stacking, time grain grouping, and what each bake mode embeds), and Vanessa
+(what each consent level transmits for both the file and the page, synonym and
+typo matching, pronoun follow-ups, accepting and declining an offer, cross-tool
+routing, page scanning against a fixture, and the plain-words read-out of a
+dataset). It loads the exact files the tools load, so a failure here means a
+failure in every tool that depends on that module (242 assertions).
 
 `tests/data-analyzer.test.html` is a small, self-contained in-browser test
 suite for the Data Analyzer's engine — regression math, seasonal forecasting,

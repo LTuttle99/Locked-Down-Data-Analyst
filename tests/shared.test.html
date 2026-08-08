@@ -2047,6 +2047,368 @@
             }
         });
 
+        test('vanessa maps everyday synonyms onto the words the notes actually use', () => {
+            assertEqual(vanessaCanon('graph'), 'chart', 'graph and chart are the same idea');
+            assertEqual(vanessaCanon('graphs'), 'chart', 'a plural still resolves');
+            assertEqual(vanessaCanon('dedupe'), 'duplicate');
+            assertEqual(vanessaCanon('spreadsheet'), 'excel');
+            assertEqual(vanessaCanon('threshold'), 'threshold', 'a word with no synonym is left alone');
+            assertEqual(vanessaCanon('freeze'), 'freeze', 'a near miss is never folded into another word');
+        });
+
+        test('a question phrased in different words still finds the note', () => {
+            vanessaResetConversation();
+            const a = vanessaOfflineAnswer('chart-builder', 'how do I save the graph as a picture');
+            assertTrue(a.includes('PNG'), 'save/graph/picture reaches the download note');
+
+            vanessaResetConversation();
+            const b = vanessaOfflineAnswer('data-cleaner', 'how do I get rid of dupes');
+            assertTrue(b.toLowerCase().includes('duplicate'), 'dupes reaches the duplicate note');
+        });
+
+        test('a synonym stuffed topic does not outscore a topic that is genuinely about the word', () => {
+            vanessaResetConversation();
+            const a = vanessaOfflineAnswer('fuzzy-dupes', 'help me pick a threshold');
+            assertTrue(a.toLowerCase().includes('threshold'), 'the threshold note still wins');
+        });
+
+        test('vanessa forgives a typo rather than giving up', () => {
+            assertTrue(vanessaNearWord('threshold', 'thresold'), 'one dropped letter is still the word');
+            assertTrue(!vanessaNearWord('count', 'mount'), 'a different first letter is a different word');
+            assertTrue(!vanessaNearWord('free', 'tree'), 'short words are never guessed at');
+
+            vanessaResetConversation();
+            const a = vanessaOfflineAnswer('fuzzy-dupes', 'what does the thresold do');
+            assertTrue(a.toLowerCase().includes('threshold'), 'a misspelt question still lands');
+        });
+
+        test('an exact match is preferred over a typo match', () => {
+            vanessaResetConversation();
+            const a = vanessaOfflineAnswer('fuzzy-dupes', 'what does the threshold do');
+            assertTrue(a.toLowerCase().includes('threshold'), 'the loose pass never runs when the strict one worked');
+        });
+
+        test('saying yes to an offer delivers what was offered', () => {
+            vanessaResetConversation();
+            const first = vanessaOfflineAnswer('fuzzy-dupes', 'why are there so many false matches on company names');
+            assertTrue(vanessaPendingTopics.length > 0, 'she has something queued to offer');
+
+            const queued = vanessaPendingTopics[0];
+            const second = vanessaOfflineAnswer('fuzzy-dupes', 'yes please');
+
+            assertTrue(second.includes(queued), 'yes hands over the queued note');
+            assertTrue(second !== first, 'yes is not answered with small talk');
+        });
+
+        test('saying no to an offer drops it instead of ignoring the answer', () => {
+            vanessaResetConversation();
+            vanessaOfflineAnswer('fuzzy-dupes', 'why are there so many false matches on company names');
+            assertTrue(vanessaPendingTopics.length > 0, 'something is queued');
+
+            const answer = vanessaOfflineAnswer('fuzzy-dupes', 'no thanks');
+            assertEqual(vanessaPendingTopics.length, 0, 'the queue is cleared');
+            assertTrue(answer.toLowerCase().includes('leave that there'), 'she acknowledges the refusal');
+        });
+
+        test('a follow-up that says "it" is resolved against what was just discussed', () => {
+            vanessaResetConversation();
+            vanessaOfflineAnswer('fuzzy-dupes', 'what does the threshold do');
+            const answer = vanessaOfflineAnswer('fuzzy-dupes', 'should I raise it or lower it');
+
+            assertTrue(answer.toLowerCase().includes('threshold'), '"it" still means the threshold');
+            assertTrue(!answer.toLowerCase().includes('do not have a note'), 'a pronoun is never a dead end');
+        });
+
+        test('a follow-up still works when the question it follows was misspelt', () => {
+            vanessaResetConversation();
+            const first = vanessaOfflineAnswer('fuzzy-dupes', 'what does the thresold do');
+            assertTrue(first.toLowerCase().includes('threshold'), 'the misspelt question landed');
+
+            const second = vanessaOfflineAnswer('fuzzy-dupes', 'should I raise it or lower it');
+            assertTrue(second.toLowerCase().includes('threshold'), 'the follow-up resolves against a misspelt subject');
+            assertTrue(!second.toLowerCase().includes('do not have a note'), 'a typo upstream is not a dead end downstream');
+        });
+
+        test('a control that already shows its value is not made to say it twice', () => {
+            const root = document.createElement('div');
+            root.innerHTML = `
+                <label for="t">Similarity threshold: 85%</label>
+                <input id="t" type="range" value="85">
+                <label for="c">Compare this column</label>
+                <select id="c"><option>company</option></select>`;
+
+            const described = vanessaDescribePage(vanessaScanPage(root));
+            assertTrue(!described.includes('85% (slider, currently 85)'), 'the value is not repeated back');
+            assertTrue(described.includes('Compare this column (dropdown, currently company)'), 'a value not in the label is still shown');
+        });
+
+        test('a pronoun follow-up with no subject yet does not invent one', () => {
+            vanessaResetConversation();
+            const answer = vanessaOfflineAnswer('unit-converter', 'so should I raise it');
+            assertTrue(!answer.toLowerCase().includes('temperature is an offset'), 'nothing is pulled out of thin air');
+        });
+
+        test('repeating the same note is acknowledged rather than pretended to be new', () => {
+            vanessaResetConversation();
+            vanessaOfflineAnswer('fuzzy-dupes', 'what does the threshold do');
+            const again = vanessaOfflineAnswer('fuzzy-dupes', 'and what does it do exactly');
+            assertTrue(again.toLowerCase().includes('threshold'), 'the note still answers it');
+            assertTrue(again.startsWith('Same note as before'), 'she owns up to repeating herself');
+        });
+
+        test('a question about another tool is routed to that tool by name', () => {
+            vanessaResetConversation();
+            const answer = vanessaOfflineAnswer('data-cleaner', 'should I use the fuzzy duplicate finder instead');
+            assertTrue(answer.includes('Fuzzy Duplicate Finder'), 'the named tool is named back');
+        });
+
+        test('a job that belongs elsewhere is routed even when the tool is not named', () => {
+            vanessaResetConversation();
+            const chart = vanessaOfflineAnswer('unit-converter', 'can I make a chart from this');
+            assertTrue(chart.toLowerCase().includes('chart'), 'she points at a charting tool');
+            assertTrue(!chart.toLowerCase().includes('do not have a note'), 'routing beats giving up');
+
+            vanessaResetConversation();
+            const join = vanessaOfflineAnswer('regex-tester', 'how do I join two files');
+            assertTrue(join.includes('SQL Workbench') || join.includes('Lookup and Merge'), 'joining files is routed');
+        });
+
+        test('routing never fires when the current tool can answer', () => {
+            const own = [
+                ['fuzzy-dupes', 'what does the threshold do'],
+                ['sql-workbench', 'can I join two files'],
+                ['chart-builder', 'which chart type should I pick'],
+                ['data-cleaner', 'how do I remove duplicate rows']
+            ];
+            for (const [id, q] of own) {
+                vanessaResetConversation();
+                const answer = vanessaOfflineAnswer(id, q);
+                assertTrue(!answer.includes('rather than this page'), `"${q}" is answered by ${id} itself`);
+            }
+        });
+
+        test('a genuine miss is still admitted rather than routed somewhere random', () => {
+            vanessaResetConversation();
+            const answer = vanessaOfflineAnswer('unit-converter', 'what is the airspeed velocity of an unladen swallow');
+            assertTrue(answer.toLowerCase().includes('do not have a note'), 'she still admits the gap');
+        });
+
+        const vanessaFixture = () => {
+            const root = document.createElement('div');
+            root.innerHTML = `
+                <h1>Fuzzy Duplicate Finder</h1>
+                <h2>Settings</h2>
+                <label for="col">Column to check</label>
+                <select id="col"><option>customer_name</option><option>vendor</option></select>
+                <label for="thr">Similarity threshold</label>
+                <input id="thr" type="range" value="0.85">
+                <button>Run check</button>
+                <button>Export CSV</button>
+                <p class="text-red-600">Two columns could not be read.</p>
+                <table>
+                    <thead><tr><th>value</th><th>matches</th></tr></thead>
+                    <tbody>
+                        <tr><td>Acme Inc</td><td>3</td></tr>
+                        <tr><td>Acme Ltd</td><td>2</td></tr>
+                    </tbody>
+                </table>`;
+            return root;
+        };
+
+        test('vanessa reads the controls, buttons and notices off the page', () => {
+            const page = vanessaScanPage(vanessaFixture());
+
+            assertEqual(page.heading, 'Fuzzy Duplicate Finder');
+            assertTrue(page.sections.includes('Settings'), 'section headings are picked up');
+            assertEqual(page.controls.length, 2, 'both controls are seen');
+
+            const dropdown = page.controls.find(c => c.kind === 'dropdown');
+            assertEqual(dropdown.label, 'Column to check');
+            assertEqual(dropdown.value, 'customer_name', 'the selected option is read');
+            assertDeep(dropdown.options, ['customer_name', 'vendor']);
+
+            const slider = page.controls.find(c => c.kind === 'slider');
+            assertEqual(slider.label, 'Similarity threshold');
+            assertEqual(slider.value, '0.85');
+
+            assertDeep(page.buttons, ['Run check', 'Export CSV']);
+            assertDeep(page.notices, ['Two columns could not be read.']);
+            assertEqual(page.tables.length, 1);
+            assertDeep(page.tables[0].columns, ['value', 'matches']);
+            assertEqual(page.tables[0].rowCount, 2);
+        });
+
+        test('vanessa never reads her own panel as part of the page', () => {
+            const root = document.createElement('div');
+            root.innerHTML = `
+                <h1>Real Page</h1>
+                <button>Real button</button>
+                <div data-vanessa="1"><button>Ask</button><button>Change</button></div>`;
+
+            const page = vanessaScanPage(root);
+            assertDeep(page.buttons, ['Real button'], 'her own buttons are excluded');
+        });
+
+        test('what leaves the tab about the page climbs the same consent ladder', () => {
+            const page = vanessaScanPage(vanessaFixture());
+
+            assertEqual(vanessaPageContext('offline', page), null, 'offline transmits nothing at all');
+
+            const ask = vanessaPageContext('ask', page);
+            assertTrue(Array.isArray(ask.buttons) && ask.buttons.length === 2, 'button names are interface, not data');
+            assertEqual(ask.controls[0].label, 'Column to check', 'control labels are interface');
+            assertEqual(ask.controls[0].value, undefined, 'no control value at ask level');
+            assertEqual(ask.controls[0].options, undefined, 'no column names at ask level');
+            assertEqual(ask.notices, undefined, 'a notice can quote the file, so it waits');
+            assertEqual(ask.tables, undefined, 'no table at ask level');
+
+            const structure = vanessaPageContext('structure', page);
+            assertEqual(structure.controls[0].value, 'customer_name', 'the selection is structure');
+            assertDeep(structure.tables[0].columns, ['value', 'matches']);
+            assertEqual(structure.tables[0].rowsOnScreen, undefined, 'counts wait for aggregate');
+            assertEqual(structure.tables[0].firstRows, undefined, 'no cells at structure level');
+
+            const aggregate = vanessaPageContext('aggregate', page);
+            assertEqual(aggregate.tables[0].rowsOnScreen, 2, 'row counts are an aggregate');
+            assertEqual(aggregate.tables[0].firstRows, undefined, 'still no cells');
+
+            const sample = vanessaPageContext('sample', page);
+            assertTrue(Array.isArray(sample.tables[0].firstRows), 'cells only at the top level');
+            assertDeep(sample.tables[0].firstRows[0], ['Acme Inc', '3']);
+        });
+
+        test('no cell value from the page escapes below the sample level', () => {
+            const page = vanessaScanPage(vanessaFixture());
+            for (const level of ['ask', 'structure', 'aggregate']) {
+                const serialized = JSON.stringify(vanessaPageContext(level, page));
+                assertTrue(!serialized.includes('Acme Inc'), `${level} must not carry a table cell`);
+            }
+        });
+
+        test('vanessa can say what a named control is currently set to', () => {
+            const page = vanessaScanPage(vanessaFixture());
+            const found = vanessaFindControl(page, vanessaTokenize('what is the similarity threshold set to'));
+            assertEqual(found.label, 'Similarity threshold');
+            assertEqual(found.value, '0.85');
+
+            const other = vanessaFindControl(page, vanessaTokenize('which column am I checking'));
+            assertEqual(other.label, 'Column to check');
+        });
+
+        test('vanessa describes the page in terms of what is actually on it', () => {
+            const described = vanessaDescribePage(vanessaScanPage(vanessaFixture()));
+            assertTrue(described.includes('Fuzzy Duplicate Finder'), 'she names the page');
+            assertTrue(described.includes('Similarity threshold'), 'she lists the controls');
+            assertTrue(described.includes('Run check'), 'she lists the buttons');
+            assertTrue(described.includes('Two columns could not be read.'), 'she surfaces the notice');
+        });
+
+        test('vanessa reads a table on the page back as rows she can reason about', () => {
+            const data = vanessaReadTableData(vanessaFixture());
+            assertDeep(data.columns, ['value', 'matches']);
+            assertEqual(data.rows.length, 2);
+            assertEqual(data.rows[0].value, 'Acme Inc');
+            assertEqual(data.rows[1].matches, '2');
+        });
+
+        test('vanessa explains what the data is saying rather than just listing it', () => {
+            const columns = ['order_id', 'region', 'revenue', 'notes', 'archived'];
+            const rows = [];
+            for (let i = 0; i < 40; i++) {
+                rows.push({
+                    order_id: 'ORD-' + i,
+                    region: i < 32 ? 'North' : 'South',
+                    revenue: i === 39 ? 5000 : 10,
+                    notes: i % 4 === 0 ? '' : 'note ' + i,
+                    archived: ''
+                });
+            }
+
+            const notes = vanessaDataObservations(columns, rows).join(' ');
+
+            assertTrue(notes.includes('archived') && notes.includes('completely empty'), 'an empty column is called out');
+            assertTrue(notes.includes('notes') && notes.includes('percent blank'), 'a patchy column is called out');
+            assertTrue(notes.includes('revenue'), 'the numeric column is described');
+            assertTrue(notes.includes('pulling it up'), 'one huge value is explained, not just reported');
+            assertTrue(notes.includes('North'), 'the dominant category is named');
+            assertTrue(notes.includes('dominated by one value'), 'concentration is interpreted');
+        });
+
+        test('a clean dataset is reported as clean rather than padded with warnings', () => {
+            const columns = ['region', 'revenue'];
+            const rows = [];
+            for (let i = 0; i < 20; i++) rows.push({ region: i % 2 === 0 ? 'North' : 'South', revenue: 100 + i });
+
+            const notes = vanessaDataObservations(columns, rows).join(' ');
+            assertTrue(!notes.includes('completely empty'), 'nothing is invented');
+            assertTrue(!notes.includes('percent blank'), 'no blank warning on a full column');
+            assertTrue(notes.includes('revenue'), 'the measure is still described');
+        });
+
+        test('the read-out survives a dataset with nothing usable in it', () => {
+            assertDeep(vanessaDataObservations([], []), [], 'no columns means no claims');
+            const notes = vanessaDataObservations(['a'], [{ a: '' }, { a: '' }]);
+            assertTrue(notes.join(' ').includes('completely empty'), 'an all blank column is still described');
+        });
+
+        test('numbers are formatted for a person rather than dumped raw', () => {
+            assertEqual(vanessaFormatNumber(1234567), '1,234,567');
+            assertEqual(vanessaFormatNumber(205.5), '205.5');
+            assertEqual(vanessaFormatNumber(0), '0');
+            assertEqual(vanessaFormatNumber(null), '');
+        });
+
+        test('a hover colour on a button is never mistaken for a warning', () => {
+            const root = document.createElement('div');
+            root.innerHTML = `
+                <button class="border-slate-300 hover:border-red-400 hover:text-red-500">New file</button>
+                <p class="text-red-600">The key column is missing.</p>`;
+
+            const page = vanessaScanPage(root);
+            assertDeep(page.notices, ['The key column is missing.'], 'only the real notice counts');
+            assertDeep(page.buttons, ['New file'], 'the button is still a button');
+        });
+
+        test('vanessa reads the figures a dashboard is showing', () => {
+            const root = document.createElement('div');
+            root.innerHTML = `
+                <div><p>Rows</p><p>60</p></div>
+                <div><p>Total revenue</p><p>17.6K</p></div>
+                <div><p>Average revenue</p><p>293</p></div>
+                <table><thead><tr><th>Column</th><th>Distinct</th></tr></thead>
+                    <tbody><tr><td>region</td><td>4</td></tr></tbody></table>`;
+
+            const stats = vanessaReadStats(root);
+            const labels = stats.map(s => s.label);
+
+            assertTrue(labels.includes('Total revenue'), 'a shortened figure like 17.6K is still a figure');
+            assertTrue(labels.includes('Rows'), 'a plain count is picked up');
+            assertTrue(!labels.includes('region'), 'table cells are not scraped as tiles');
+
+            const found = vanessaFindStat({ stats: stats }, vanessaTokenize('what is the total revenue'));
+            assertEqual(found.label, 'Total revenue');
+            assertEqual(found.value, '17.6K');
+        });
+
+        test('figures on screen only leave the tab at the aggregate level', () => {
+            const root = document.createElement('div');
+            root.innerHTML = '<div><p>Total revenue</p><p>17.6K</p></div>';
+            const page = vanessaScanPage(root);
+
+            assertEqual(vanessaPageContext('ask', page).figuresOnScreen, undefined, 'a computed figure is not interface');
+            assertEqual(vanessaPageContext('structure', page).figuresOnScreen, undefined, 'still not at structure');
+            assertTrue(Array.isArray(vanessaPageContext('aggregate', page).figuresOnScreen), 'a KPI is an aggregate');
+        });
+
+        test('she opens with the same greeting every time', () => {
+            assertEqual(VANESSA_GREETING, "Hi, I'm Vanessa! How can I help you?");
+        });
+
+        test('page sight stays switched off until vanessa is actually on a page', () => {
+            assertEqual(vanessaPageAnswer('what is on this page', vanessaTokenize('what is on this page')), null, 'no panel means no page answers');
+            assertEqual(vanessaPageAside(), '', 'and no aside either');
+        });
+
         const passed = results.filter(r => r.pass).length;
         const total = results.length;
 
