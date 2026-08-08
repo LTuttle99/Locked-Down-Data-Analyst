@@ -1976,6 +1976,50 @@
             }
         });
 
+        test('pattern matching is phrase based, not a loose bag of words', () => {
+            assertTrue(vanessaMatchesAny('what can i do here', ['what can i do']), 'a real phrase matches');
+            assertTrue(!vanessaMatchesAny('what does the threshold do', ['what do i do']), 'single letters must not be dropped into a loose match');
+            assertTrue(!vanessaMatchesAny('i do not understand', ['and']), 'a word inside another word is not a match');
+            assertTrue(vanessaMatchesAny('tell me more please', ['more']), 'a whole word inside a sentence matches');
+            assertTrue(!vanessaMatchesAny('', ['help']), 'empty input matches nothing');
+        });
+
+        test('orientation questions are answered on every tool', () => {
+            const ways = ['what can i do here', 'where do i start', 'what are my options', 'what now', 'im stuck', 'help'];
+            const misses = [];
+            for (const id of Object.keys(VANESSA_KNOWLEDGE)) {
+                for (const q of ways) {
+                    vanessaPendingTopics = [];
+                    if (vanessaOfflineAnswer(id, q).toLowerCase().includes('do not have a note')) misses.push(id + ' :: ' + q);
+                }
+            }
+            assertDeep(misses, [], 'no orientation question goes unanswered anywhere');
+        });
+
+        test('privacy questions get a straight answer about what she can see', () => {
+            for (const q of ['can you see my data', 'is my data safe', 'does anything get uploaded', 'where does my data go']) {
+                vanessaPendingTopics = [];
+                const a = vanessaOfflineAnswer('fuzzy-dupes', q);
+                assertTrue(a.toLowerCase().includes('see'), `"${q}" is answered`);
+                assertTrue(!a.toLowerCase().includes('do not have a note'), `"${q}" is never a miss`);
+            }
+        });
+
+        test('broad orientation patterns never hijack a specific question', () => {
+            const specific = [
+                ['fuzzy-dupes', 'what does the threshold do', 'threshold'],
+                ['fuzzy-dupes', 'help me pick a threshold', 'threshold'],
+                ['sql-workbench', 'can i join two files', 'join'],
+                ['column-stats', 'what does p25 mean', 'interpolated'],
+                ['jwt-decoder', 'does this verify the signature', 'verif']
+            ];
+            for (const [id, q, expect] of specific) {
+                vanessaPendingTopics = [];
+                const a = vanessaOfflineAnswer(id, q).toLowerCase();
+                assertTrue(a.includes(expect), `"${q}" still gets its specific note`);
+            }
+        });
+
         test('every tool id in the knowledge base is a real tool folder name', () => {
             const ids = Object.keys(VANESSA_KNOWLEDGE).filter(id => id !== 'hub');
             for (const id of ids) {

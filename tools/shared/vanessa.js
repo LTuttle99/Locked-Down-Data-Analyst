@@ -86,14 +86,14 @@ function vanessaFindTopics(toolId, question, limit = 3) {
 
 const VANESSA_SMALLTALK = [
   {
-    keywords: ["hi", "hello", "hey", "morning", "afternoon", "evening", "greetings"],
+    keywords: ["hi", "hello", "hey", "morning", "afternoon", "evening", "greetings", "yo", "sup", "howdy", "hiya", "how are you", "you there", "anyone there"],
     replies: [
       "Hello. What are you trying to get done?",
       "Hi. What are you working on?"
     ]
   },
   {
-    keywords: ["thanks", "thank", "cheers", "appreciated", "helpful", "perfect", "brilliant", "lovely"],
+    keywords: ["thanks", "thank", "cheers", "appreciated", "helpful", "perfect", "brilliant", "lovely", "great", "awesome", "nice one", "that helps", "got it", "makes sense", "good stuff"],
     replies: [
       "Glad that landed. Anything else you want to pick apart?",
       "Any time. Shout if something else comes up."
@@ -129,19 +129,51 @@ const VANESSA_SMALLTALK = [
   }
 ];
 
-const VANESSA_FOLLOWUP = ["more", "tell me more", "go on", "what else", "else", "continue", "and", "expand", "further", "why", "how so", "such as", "example", "keep going"];
+const VANESSA_FOLLOWUP = [
+  "more", "tell me more", "go on", "what else", "else", "continue", "and", "expand",
+  "further", "why", "how so", "such as", "example", "keep going", "then", "next",
+  "anything else", "what other", "elaborate", "explain more", "go deeper", "in detail",
+  "say more", "carry on", "and then", "ok and", "yes and", "more please"
+];
 
 const VANESSA_ABOUT_SELF = [
   "what do you do", "what can you do", "who are you", "what are you", "what are you for",
-  "how can you help", "what do you know", "what is your job", "your purpose", "about yourself",
-  "why are you here", "what use are you"
+  "how can you help", "how can you assist", "what do you know", "what is your job",
+  "your purpose", "about yourself", "about you", "why are you here", "what use are you",
+  "are you ai", "are you a bot", "are you a robot", "are you real", "are you human",
+  "what is your name", "who is vanessa", "what is vanessa", "tell me about you",
+  "introduce yourself", "how do you work", "what model are you", "who made you",
+  "what are you good at", "why do you exist", "what do you actually do"
+];
+
+const VANESSA_ABOUT_PRIVACY = [
+  "can you see my data", "do you see my data", "what can you see", "can you see my file",
+  "do you see my file", "are you reading my data", "is my data safe", "is my data private",
+  "do you send my data", "where does my data go", "is this private", "do you upload",
+  "does anything get uploaded", "who sees this", "are you spying", "do you store my data",
+  "do you keep my data", "is anything sent", "does my data leave", "are you tracking me",
+  "what do you know about my file", "can you read my file", "do you have access"
 ];
 
 const VANESSA_ABOUT_TOOL = [
   "what does this tool do", "what does this do", "what is this tool", "what is this",
   "what is this for", "what does it do", "what is it for", "explain this tool",
   "what can this tool do", "what does this page do", "purpose of this tool",
-  "what am i looking at", "overview", "what is this thing"
+  "what am i looking at", "overview", "what is this thing", "what is this page",
+  "what can i do", "what can i do here", "what do i do", "what do i do here",
+  "what should i do", "what should i do here", "what am i supposed to do",
+  "where do i start", "where do i begin", "how do i start", "how do i begin",
+  "show me around", "give me a tour", "what are my options", "what are the options",
+  "what can this page do", "what is the point", "what is the point of this",
+  "why would i use this", "when would i use this", "what is it good for",
+  "what does this screen do", "tell me about this tool", "describe this tool"
+];
+
+const VANESSA_ABOUT_TOOL_WEAK = [
+  "how does this work", "how do i use this", "how do you use this", "help", "help me",
+  "getting started", "get started", "confused", "lost", "stuck", "no idea",
+  "how does it work", "guide me", "walk me through", "explain", "i need help",
+  "not sure", "dont understand", "do not understand", "what now", "now what"
 ];
 
 const VANESSA_OPENERS = ["", "So: ", "Right. ", "Okay. "];
@@ -234,17 +266,26 @@ function vanessaPickVariant(list) {
   return list[vanessaTurnCount % list.length];
 }
 
-function vanessaMatchesAny(tokens, keywordSets) {
+function vanessaPhrase(text) {
+  const words = String(text === null || text === undefined ? "" : text)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .split(" ")
+    .filter(Boolean);
+  return ` ${words.join(" ")} `;
+}
+
+function vanessaMatchesAny(tokensOrText, keywordSets) {
+  const haystack = Array.isArray(tokensOrText) ? ` ${tokensOrText.join(" ")} ` : vanessaPhrase(tokensOrText);
   return keywordSets.some((keyword) => {
-    const parts = vanessaTokenize(keyword);
-    if (parts.length === 0) return false;
-    return parts.every((p) => tokens.includes(p));
+    const needle = vanessaPhrase(keyword);
+    return needle.trim() !== "" && haystack.indexOf(needle) !== -1;
   });
 }
 
-function vanessaSmalltalkReply(tokens) {
+function vanessaSmalltalkReply(question) {
   for (const item of VANESSA_SMALLTALK) {
-    if (vanessaMatchesAny(tokens, item.keywords)) return vanessaPickVariant(item.replies);
+    if (vanessaMatchesAny(question, item.keywords)) return vanessaPickVariant(item.replies);
   }
   return null;
 }
@@ -278,20 +319,35 @@ function vanessaDescribeTool(entry, toolId) {
     : opener;
 }
 
+function vanessaDescribePrivacy() {
+  const level = VANESSA_LEVEL_LABELS[vanessaLevel].toLowerCase();
+
+  const head = vanessaLevel === "offline"
+    ? "Right now I can see nothing at all. I'm answering from a set of notes built into this page, and no request leaves this tab."
+    : `Right now I'm set to "${level}". ${VANESSA_LEVEL_BLURBS[vanessaLevel]}`;
+
+  const tail = vanessaBackend.available
+    ? "When I do send something, it goes to a language model running on this same computer. Nothing goes over the internet, and nothing reaches me, my makers, or anyone else."
+    : "There's no language model reachable on this machine at the moment, so nothing is being sent anywhere regardless.";
+
+  return `${head}\n\n${tail}\n\nUse Change below to see the exact text I would send, or to take access away again. It resets to the lowest level every time you close the tab.`;
+}
+
 function vanessaOfflineAnswer(toolId, question) {
   const entry = vanessaKnowledgeFor(toolId);
   const tokens = vanessaTokenize(question);
   const short = tokens.length <= 4;
 
-  if (vanessaMatchesAny(tokens, VANESSA_ABOUT_SELF)) return vanessaDescribeSelf(entry);
-  if (vanessaMatchesAny(tokens, VANESSA_ABOUT_TOOL)) return vanessaDescribeTool(entry, toolId);
+  if (vanessaMatchesAny(question, VANESSA_ABOUT_PRIVACY)) return vanessaDescribePrivacy();
+  if (vanessaMatchesAny(question, VANESSA_ABOUT_SELF)) return vanessaDescribeSelf(entry);
+  if (vanessaMatchesAny(question, VANESSA_ABOUT_TOOL)) return vanessaDescribeTool(entry, toolId);
 
   if (short) {
-    const chit = vanessaSmalltalkReply(tokens);
+    const chit = vanessaSmalltalkReply(question);
     if (chit) return chit;
   }
 
-  if (short && vanessaMatchesAny(tokens, VANESSA_FOLLOWUP)) {
+  if (short && vanessaMatchesAny(question, VANESSA_FOLLOWUP)) {
     if (vanessaPendingTopics.length > 0) {
       const next = vanessaPendingTopics.shift();
       return `${next}${vanessaOfferMore()}`;
@@ -307,10 +363,12 @@ function vanessaOfflineAnswer(toolId, question) {
     return `${vanessaPickVariant(VANESSA_OPENERS)}${ranked[0].text}${vanessaOfferMore()}`;
   }
 
-  const chit = vanessaSmalltalkReply(tokens);
+  const chit = vanessaSmalltalkReply(question);
   if (chit) return chit;
 
   vanessaPendingTopics = [];
+
+  if (vanessaMatchesAny(question, VANESSA_ABOUT_TOOL_WEAK)) return vanessaDescribeTool(entry, toolId);
 
   if (entry) {
     return `I do not have a note on that one, and I would rather say so than invent something. What I can talk about is ${entry.summary.charAt(0).toLowerCase()}${entry.summary.slice(1)}\n\nTry me on one of the controls, or have a look at the Getting Started guide.`;
