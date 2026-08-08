@@ -36,8 +36,56 @@ const VANESSA_SHARED_TOPICS = [
     text: "The hub opens on a numeric access code keypad, and each code unlocks a different set of tools. It is a convenience filter rather than access control: it only covers the landing page, and anyone with a tool's direct URL can open it. There is no backend to check credentials against."
   },
   {
-    keywords: ["download", "export", "save", "csv out", "output"],
-    text: "Results can be downloaded straight back out as CSV, Excel or JSON depending on the tool. The download is generated in the browser from the data already in memory."
+    keywords: ["download", "export", "save", "csv out", "output", "get it out", "send it", "share result"],
+    text: "Results can be downloaded straight back out as CSV, Excel or JSON depending on the tool. The download is generated in the browser from the data already in memory, so it never goes near a server."
+  },
+  {
+    keywords: ["not working", "broken", "error", "failed", "fails", "nothing happens", "does nothing", "crash", "crashed", "bug", "wrong", "stuck"],
+    text: "When a tool misbehaves, three things cause most of it: the file did not parse the way you expected, the column you picked is not the type the tool wants, or the browser tab has run out of memory on a very large file. Reloading the page clears all state and starts you clean, and picking a smaller file is the fastest way to tell whether size is the problem."
+  },
+  {
+    keywords: ["blank", "empty result", "no results", "nothing shown", "nothing showed", "no output", "no rows", "came back empty"],
+    text: "An empty result usually means the filters or the key column knocked everything out rather than the tool failing. Check that the column you chose actually holds the values you think it does, and that any threshold or filter is not set so tight that nothing survives it."
+  },
+  {
+    keywords: ["upload", "how do i load", "add file", "choose file", "open file", "import", "drag", "drop"],
+    text: "Use the file picker on the page, or drag the file onto it where the tool supports that. The file is read straight from your disk by the browser and is never uploaded, which is why it works with no login and no waiting."
+  },
+  {
+    keywords: ["file size", "too big", "large file", "limit", "how many rows", "maximum", "max rows"],
+    text: "There is no hard row limit, because there is no server imposing one. The practical ceiling is your browser tab's memory. Tens of thousands of rows are comfortable, hundreds of thousands will feel slow, and a file big enough to exhaust the tab will simply stop responding. If that happens, split the file or work on a sample."
+  },
+  {
+    keywords: ["free", "cost", "price", "pay", "subscription", "licence", "license", "account", "sign up", "log in", "login", "password"],
+    text: "It is free and there is nothing to sign up for. There are no accounts and no passwords because there is no server holding anything. The access code on the landing page just decides which tools you see; it is not a login."
+  },
+  {
+    keywords: ["slow", "taking forever", "frozen", "freeze", "hanging", "spinning", "unresponsive", "lag"],
+    text: "Everything is computed in your browser tab, so speed is bound by your machine rather than a server. Big files, pairwise comparisons and SQL over many rows are the usual causes. Closing other heavy tabs helps more than you would think, and cutting the file down is the reliable fix."
+  },
+  {
+    keywords: ["start over", "reset", "clear", "undo", "go back", "remove file", "wrong file", "start again"],
+    text: "Reloading the page clears everything and starts you fresh, since all state lives in the tab. There is no undo history: nothing is written to your file, so the safe move is always to reload and load the file again."
+  },
+  {
+    keywords: ["offline", "no internet", "wifi", "connection", "disconnected", "on a plane"],
+    text: "The analysis itself needs no connection, but the page loads a few libraries from a CDN when it opens, so a completely offline machine may not render everything. Once a tool has loaded, the actual work carries on without a connection."
+  },
+  {
+    keywords: ["browser", "chrome", "safari", "firefox", "edge", "which browser", "supported"],
+    text: "Any current browser works for the tools themselves. My own language model connection is the fussy part: it relies on the browser allowing a page to talk to a program on your own machine, which Chrome and Firefox permit and Safari is stricter about. If I am quiet in Safari, that is why, and everything else still works."
+  },
+  {
+    keywords: ["remember", "memory", "forget", "next time", "save my settings", "preferences", "do you remember"],
+    text: "By default I forget everything the moment you close the tab, including whatever access you granted me. There is an opt-in setting under Change that lets me keep short notes between visits, but only ones you explicitly ask me to remember, and you can see and delete every one of them."
+  },
+  {
+    keywords: ["why are you slow", "you are slow", "taking long", "how long", "waiting for you", "your speed"],
+    text: "When I use a language model it is running on your own computer rather than in a data centre, so it goes at the speed of your machine. A small model on a laptop writes at roughly reading pace. The upside of that trade is that nothing you show me ever leaves the room."
+  },
+  {
+    keywords: ["are you wrong", "you are wrong", "that is wrong", "incorrect", "you made that up", "hallucinate", "trust you", "can i trust"],
+    text: "Treat what I say about your specific numbers as a starting point rather than a result, especially anything involving arithmetic. I am grounded in written notes about these tools, so I am reliable on how things work; I am much weaker at reasoning over your actual data. If something I say looks off, it may well be, and the tool's own output is the authority."
   }
 ];
 

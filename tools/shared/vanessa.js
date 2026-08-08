@@ -48,13 +48,23 @@ function vanessaTokenize(text) {
     .filter((t) => t.length > 1);
 }
 
+const VANESSA_WORD_ENDINGS = ["s", "es", "d", "ed", "ing", "er", "ers"];
+
+function vanessaSameWord(a, b) {
+  if (a === b) return true;
+  const long = a.length > b.length ? a : b;
+  const short = a.length > b.length ? b : a;
+  if (short.length < 3 || !long.startsWith(short)) return false;
+  return VANESSA_WORD_ENDINGS.indexOf(long.slice(short.length)) !== -1;
+}
+
 function vanessaScoreTopic(tokens, topic) {
   if (tokens.length === 0) return 0;
   let score = 0;
   for (const keyword of topic.keywords) {
     const parts = vanessaTokenize(keyword);
     if (parts.length === 0) continue;
-    const hit = parts.every((p) => tokens.some((t) => t === p || (t.length > 3 && p.length > 3 && (t.startsWith(p) || p.startsWith(t)))));
+    const hit = parts.every((p) => tokens.some((t) => vanessaSameWord(t, p)));
     if (hit) score += parts.length > 1 ? 3 : 2;
   }
   return score;
@@ -86,14 +96,63 @@ function vanessaFindTopics(toolId, question, limit = 3) {
 
 const VANESSA_SMALLTALK = [
   {
-    keywords: ["hi", "hello", "hey", "morning", "afternoon", "evening", "greetings", "yo", "sup", "howdy", "hiya", "how are you", "you there", "anyone there"],
+    keywords: ["how are you", "how are u", "how r u", "hows it going", "how is it going", "how are things", "you ok", "are you ok", "you good", "you alright", "how you doing", "how are you doing", "hows your day", "how is your day", "whats up", "what is up", "sup"],
+    replies: [
+      "Perfectly fine, in the way a help system is fine. More to the point, what are you working on?",
+      "No complaints, I don't have the equipment for them. What are you trying to get done?"
+    ]
+  },
+  {
+    keywords: ["hi", "hello", "hey", "morning", "afternoon", "evening", "greetings", "yo", "howdy", "hiya", "you there", "anyone there", "hello there", "is anyone there", "test", "testing"],
     replies: [
       "Hello. What are you trying to get done?",
       "Hi. What are you working on?"
     ]
   },
   {
-    keywords: ["thanks", "thank", "cheers", "appreciated", "helpful", "perfect", "brilliant", "lovely", "great", "awesome", "nice one", "that helps", "got it", "makes sense", "good stuff"],
+    keywords: ["do you sleep", "do you eat", "do you dream", "are you alive", "do you have feelings", "do you get bored", "do you like", "whats your favourite", "whats your favorite", "do you have a favourite", "how old are you", "where do you live", "do you get tired"],
+    replies: [
+      "None of that applies to me, I'm afraid. I'm a set of notes with opinions. Ask me something about the tool and I get much more interesting.",
+      "I don't do any of that. What I do is explain this page, which is admittedly a narrower life. What are you after?"
+    ]
+  },
+  {
+    keywords: ["you are useless", "youre useless", "this is useless", "you are rubbish", "youre rubbish", "you are bad", "youre terrible", "you suck", "you are annoying", "hate this", "this is rubbish", "this is terrible", "waste of time", "you are wrong", "stupid"],
+    replies: [
+      "Fair enough. Tell me what you actually wanted and I'll have another go, or say what I got wrong and I'll not repeat it.",
+      "Noted, and probably deserved. What were you trying to find out?"
+    ]
+  },
+  {
+    keywords: ["sorry", "my bad", "oops", "ignore that", "never mind", "nevermind", "typo", "meant to say", "disregard"],
+    replies: [
+      "No harm done. What did you actually want to know?",
+      "All good. Try me again."
+    ]
+  },
+  {
+    keywords: ["ok", "okay", "sure", "right", "cool", "fine", "alright", "gotcha", "understood", "makes sense", "fair enough", "i see", "ah", "hmm", "interesting"],
+    replies: [
+      "Anything else you want to poke at?",
+      "Say the word if you want to go further on that."
+    ]
+  },
+  {
+    keywords: ["lol", "haha", "funny", "tell me a joke", "make me laugh", "be funny", "you are funny", "amusing"],
+    replies: [
+      "I'd tell you a joke about duplicate rows, but you'd have heard it twice. Anyway. What are we doing?",
+      "My material is all data cleaning, so it's a tough room. What did you need?"
+    ]
+  },
+  {
+    keywords: ["i am confused", "im confused", "confusing", "i dont get it", "i do not get it", "makes no sense", "doesnt make sense", "does not make sense", "what do you mean", "huh", "come again", "you lost me"],
+    replies: [
+      "That's on me. Which bit lost you? I'll take it slower or come at it differently.",
+      "Let me try again. Point at the part that didn't land and I'll rephrase it."
+    ]
+  },
+  {
+    keywords: ["thanks", "thank", "cheers", "appreciated", "helpful", "perfect", "brilliant", "lovely", "great", "awesome", "nice one", "that helps", "that helped", "got it", "good stuff", "you are great", "youre great", "well done", "legend", "you are a star", "life saver", "lifesaver"],
     replies: [
       "Glad that landed. Anything else you want to pick apart?",
       "Any time. Shout if something else comes up."
@@ -121,38 +180,189 @@ const VANESSA_SMALLTALK = [
     ]
   },
   {
-    keywords: ["sorry", "my bad", "oops", "ignore that", "never mind", "nevermind"],
+    keywords: ["sorry", "my bad", "i apologize", "i apologise", "my mistake", "oops", "apologies", "sorry about that", "i didnt mean", "typo", "meant to say"],
     replies: [
       "No harm done. What did you actually want to know?",
       "All good. Try me again."
     ]
+  },
+  {
+    keywords: ["never mind", "nevermind", "forget it", "forget that", "skip that", "ignore that", "disregard", "not important", "doesnt matter", "does not matter", "change the subject", "different question"],
+    replies: [
+      "Dropped. What would you rather look at?",
+      "Consider it forgotten. What else?"
+    ]
+  },
+  {
+    keywords: ["yes", "yeah", "yep", "yup", "sure", "of course", "definitely", "absolutely", "correct", "thats right", "that is right", "sounds good", "for sure", "indeed", "please do", "go ahead"],
+    replies: [
+      "Right, what next?",
+      "Good. Where do you want to take it?"
+    ]
+  },
+  {
+    keywords: ["no", "nope", "nah", "not really", "no thanks", "i dont think so", "not at all", "negative", "i disagree", "not quite"],
+    replies: [
+      "Fair. What is it you're actually after?",
+      "Noted. Point me at the right thing."
+    ]
+  },
+  {
+    keywords: ["say that again", "repeat that", "can you repeat", "one more time", "come again", "didnt catch that", "did not catch", "pardon", "what did you say"],
+    replies: [
+      "Ask me the original question again and I'll put it a different way.",
+      "Happy to go again. Re-ask it and I'll rephrase."
+    ]
+  },
+  {
+    keywords: ["are you sure", "is that true", "is that right", "is that correct", "really", "seriously", "are you certain", "prove it"],
+    replies: [
+      "On how the tool behaves, yes, that comes from written notes. On anything about your actual numbers, check it against the tool's own output, because that is where I'm weakest.",
+      "Reasonably. Anything I say about the tool is grounded; anything about your specific data deserves a second look."
+    ]
+  },
+  {
+    keywords: ["that doesnt make sense", "that does not make sense", "thats not what i asked", "that is not what i asked", "you misunderstood", "you didnt answer", "you did not answer", "not what i meant"],
+    replies: [
+      "My fault. Ask it again in your own words and I'll aim better.",
+      "Let's reset. What was the actual question?"
+    ]
+  },
+  {
+    keywords: ["how old are you", "when were you created", "when were you made", "whats your age", "what is your age"],
+    replies: [
+      "I'm a file on this site, so about as old as the last deploy. Not a useful number.",
+      "No age to speak of. I get replaced whenever someone pushes a change."
+    ]
+  },
+  {
+    keywords: ["where are you", "where do you live", "where are you from", "whats your location", "are you in the cloud", "are you on a server", "where do you run"],
+    replies: [
+      "Right here in this browser tab, and if there's a model helping me it's on your machine too. None of me lives in a data centre.",
+      "In your browser. That's rather the whole point of me."
+    ]
+  },
+  {
+    keywords: ["im bored", "i am bored", "entertain me", "nothing to do", "keep me entertained", "amuse me"],
+    replies: [
+      "Load a messy file and let's find out what's wrong with it. That's my idea of a good time.",
+      "I'm poor entertainment, but I'm good at working out why your data looks wrong. Fancy it?"
+    ]
+  },
+  {
+    keywords: ["whats the weather", "is it going to rain", "hows the weather", "is it sunny", "temperature outside", "what time is it", "whats the time", "todays date", "what day is it", "what year is it"],
+    replies: [
+      "No idea, I can't see out. I only know about this page.",
+      "Outside my remit entirely. Ask me about the tool and I'm better company."
+    ]
+  },
+  {
+    keywords: ["what do you like", "your hobbies", "do you have hobbies", "what do you do for fun", "favourite food", "favorite food", "do you like pizza", "what music", "favourite song", "favorite song", "do you listen to music"],
+    replies: [
+      "None of that applies to me, but I'll happily talk about badly formatted spreadsheets, which is the closest thing I have to a passion.",
+      "I don't have any of that. Data quality is the only thing I hold opinions about."
+    ]
+  },
+  {
+    keywords: ["motivate me", "i need motivation", "encourage me", "pep talk", "i need encouragement", "cheer me up"],
+    replies: [
+      "The file is probably less broken than it looks. Start with one column, work out what's actually in it, and the rest usually follows.",
+      "Most data problems are three small problems wearing a trenchcoat. Take the top one."
+    ]
+  },
+  {
+    keywords: ["i got it working", "it worked", "that worked", "i fixed it", "sorted it", "figured it out", "i did it"],
+    replies: [
+      "Good. What's next?",
+      "Nice. Anything else you want to tidy up while you're here?"
+    ]
+  },
+  {
+    keywords: ["i give up", "im done", "this is too hard", "i cant do this", "i quit", "rough day", "bad day"],
+    replies: [
+      "Before you do, tell me the last thing that failed. Half of these turn out to be one wrong column.",
+      "Fair enough, it's tedious work. Describe what's going wrong and I'll narrow it down."
+    ]
+  },
+  {
+    keywords: ["what do you think", "your opinion", "do you have opinions", "your take", "do you agree", "what would you do", "what do you reckon"],
+    replies: [
+      "I do have opinions and I'll give them, but say what you're weighing up first so mine is worth something.",
+      "Happy to say what I'd do. What's the choice you're stuck on?"
+    ]
+  },
+  {
+    keywords: ["recommend", "recommendation", "any suggestions", "what do you suggest", "what should i use", "which should i pick"],
+    replies: [
+      "Tell me what you're trying to end up with and I'll point you at the tool for it.",
+      "Describe the outcome you want and I'll name the tool."
+    ]
+  },
+  {
+    keywords: ["and you", "what about you", "how about yourself", "and yourself", "you too"],
+    replies: [
+      "Nothing to report, which is the ideal state for a help system. What are we doing?",
+      "All quiet on my end. What are you working on?"
+    ]
+  },
+  {
+    keywords: ["feedback", "report an issue", "report a bug", "suggest an improvement", "who do i tell", "can i complain"],
+    replies: [
+      "The footer on the hub has an email address for exactly that. Worth saying what you expected and what happened instead.",
+      "There's a contact link at the bottom of the hub. Expected versus actual is the useful thing to include."
+    ]
+  },
+  {
+    keywords: ["ping", "are you working", "is this working", "can you hear me", "are you online", "still there", "you alive"],
+    replies: [
+      "Here and working. Ask away.",
+      "Still here. What do you need?"
+    ]
   }
 ];
 
-const VANESSA_FOLLOWUP = [
-  "more", "tell me more", "go on", "what else", "else", "continue", "and", "expand",
-  "further", "why", "how so", "such as", "example", "keep going", "then", "next",
-  "anything else", "what other", "elaborate", "explain more", "go deeper", "in detail",
-  "say more", "carry on", "and then", "ok and", "yes and", "more please"
+const VANESSA_FOLLOWUP_PHRASE = [
+  "tell me more", "go on", "what else", "anything else", "what other", "keep going",
+  "carry on", "say more", "explain more", "go deeper", "in detail", "and then",
+  "ok and", "yes and", "more please", "such as", "for example", "give me an example",
+  "like what", "how so", "and after that", "what next", "whats next", "anything more",
+  "is that all", "that it", "is that it", "more on that", "more detail"
 ];
 
+const VANESSA_FOLLOWUP_WORD = ["more", "else", "continue", "expand", "further", "elaborate", "next", "then", "why", "and"];
+
 const VANESSA_ABOUT_SELF = [
-  "what do you do", "what can you do", "who are you", "what are you", "what are you for",
-  "how can you help", "how can you assist", "what do you know", "what is your job",
-  "your purpose", "about yourself", "about you", "why are you here", "what use are you",
-  "are you ai", "are you a bot", "are you a robot", "are you real", "are you human",
-  "what is your name", "who is vanessa", "what is vanessa", "tell me about you",
-  "introduce yourself", "how do you work", "what model are you", "who made you",
-  "what are you good at", "why do you exist", "what do you actually do"
+  "what do you do", "what can you do", "what could you do", "what will you do",
+  "who are you", "what are you", "what are you for", "what r u", "who r u",
+  "how can you help", "how can you assist", "how do you help",
+  "what do you know", "what is your job", "what is your role", "your purpose",
+  "about yourself", "about you", "why are you here", "what use are you",
+  "are you ai", "are you an ai", "are you a bot", "are you a robot", "are you real",
+  "are you human", "are you a person", "are you chatgpt", "are you gpt", "are you claude",
+  "what is your name", "whats your name", "who is vanessa", "what is vanessa",
+  "who are u", "tell me about you", "tell me about yourself", "introduce yourself",
+  "how do you work", "how were you made", "what model are you", "which model",
+  "who made you", "who built you", "who created you", "what are you good at",
+  "what are you bad at", "why do you exist", "what do you actually do",
+  "what is the point of you", "are you useful", "do you actually help",
+  "what are your limits", "what can you not do", "what cant you do"
 ];
 
 const VANESSA_ABOUT_PRIVACY = [
-  "can you see my data", "do you see my data", "what can you see", "can you see my file",
-  "do you see my file", "are you reading my data", "is my data safe", "is my data private",
-  "do you send my data", "where does my data go", "is this private", "do you upload",
-  "does anything get uploaded", "who sees this", "are you spying", "do you store my data",
-  "do you keep my data", "is anything sent", "does my data leave", "are you tracking me",
-  "what do you know about my file", "can you read my file", "do you have access"
+  "can you see my data", "can you see my file", "can you see this", "can you see it",
+  "do you see my data", "do you see my file", "what can you see", "what do you see",
+  "are you reading my data", "are you reading my file", "can you read my file",
+  "can you read my data", "do you have access", "do you have my data",
+  "is my data safe", "is my data private", "is my data secure", "is this safe",
+  "is this private", "is this secure", "is it safe", "is it private",
+  "do you send my data", "do you send anything", "is anything sent", "does my data leave",
+  "does anything leave", "where does my data go", "where does it go", "where is it sent",
+  "do you upload", "does anything get uploaded", "is anything uploaded", "do you upload my file",
+  "who sees this", "who can see", "who has access", "are you spying", "are you tracking me",
+  "do you track", "do you store my data", "do you keep my data", "do you save my data",
+  "do you log", "is this confidential", "gdpr", "what do you know about my file",
+  "am i sharing", "does this go to the cloud", "is this going anywhere",
+  "does this leave my computer", "does it leave my machine", "is it local"
 ];
 
 const VANESSA_ABOUT_TOOL = [
@@ -170,10 +380,16 @@ const VANESSA_ABOUT_TOOL = [
 ];
 
 const VANESSA_ABOUT_TOOL_WEAK = [
-  "how does this work", "how do i use this", "how do you use this", "help", "help me",
-  "getting started", "get started", "confused", "lost", "stuck", "no idea",
-  "how does it work", "guide me", "walk me through", "explain", "i need help",
-  "not sure", "dont understand", "do not understand", "what now", "now what"
+  "how does this work", "how does it work", "how do i use this", "how do you use this",
+  "how do i use it", "how does this thing work", "help", "help me", "i need help",
+  "getting started", "get started", "how to start", "confused", "lost", "stuck",
+  "no idea", "i have no idea", "not sure", "unsure", "dont understand",
+  "do not understand", "dont know", "do not know", "i dont know", "i do not know",
+  "guide me", "walk me through", "talk me through", "explain", "explain this",
+  "what now", "now what", "where to begin", "first step", "first steps",
+  "point me", "any ideas", "any suggestions", "suggestions", "advice",
+  "what would you do", "what should i try", "where should i look", "give me a hint",
+  "im new", "i am new", "new here", "never used this", "first time"
 ];
 
 const VANESSA_OPENERS = ["", "So: ", "Right. ", "Okay. "];
@@ -284,10 +500,22 @@ function vanessaMatchesAny(tokensOrText, keywordSets) {
 }
 
 function vanessaSmalltalkReply(question) {
+  const haystack = vanessaPhrase(question);
+  let best = null;
+  let bestLength = 0;
+
   for (const item of VANESSA_SMALLTALK) {
-    if (vanessaMatchesAny(question, item.keywords)) return vanessaPickVariant(item.replies);
+    for (const keyword of item.keywords) {
+      const needle = vanessaPhrase(keyword);
+      if (needle.trim() === "" || haystack.indexOf(needle) === -1) continue;
+      if (needle.length > bestLength) {
+        bestLength = needle.length;
+        best = item;
+      }
+    }
   }
-  return null;
+
+  return best ? vanessaPickVariant(best.replies) : null;
 }
 
 function vanessaOfferMore() {
@@ -336,7 +564,7 @@ function vanessaDescribePrivacy() {
 function vanessaOfflineAnswer(toolId, question) {
   const entry = vanessaKnowledgeFor(toolId);
   const tokens = vanessaTokenize(question);
-  const short = tokens.length <= 4;
+  const short = tokens.length <= 6;
 
   if (vanessaMatchesAny(question, VANESSA_ABOUT_PRIVACY)) return vanessaDescribePrivacy();
   if (vanessaMatchesAny(question, VANESSA_ABOUT_SELF)) return vanessaDescribeSelf(entry);
@@ -347,7 +575,11 @@ function vanessaOfflineAnswer(toolId, question) {
     if (chit) return chit;
   }
 
-  if (short && vanessaMatchesAny(question, VANESSA_FOLLOWUP)) {
+  const isFollowUp =
+    vanessaMatchesAny(question, VANESSA_FOLLOWUP_PHRASE) ||
+    (tokens.length <= 2 && vanessaMatchesAny(question, VANESSA_FOLLOWUP_WORD));
+
+  if (short && isFollowUp) {
     if (vanessaPendingTopics.length > 0) {
       const next = vanessaPendingTopics.shift();
       return `${next}${vanessaOfferMore()}`;
